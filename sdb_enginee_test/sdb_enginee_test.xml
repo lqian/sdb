@@ -1,0 +1,8 @@
+<testsuites>
+	<testsuite name="AllTests" tests="4">
+		<testcase classname="AllTests" name="sdb_common_char_buff_test"/>
+		<testcase classname="AllTests" name="sdb_common_buffer_str_test"/>
+		<testcase classname="AllTests" name="sdb_table_description_test"/>
+		<testcase classname="AllTests" name="sdb_test_sdb"/>
+	</testsuite>
+</testsuites>
