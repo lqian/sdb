@@ -8,7 +8,7 @@
 #ifndef CHAR_BUFFER_H
 #define CHAR_BUFFER_H
 
-#include <string>
+#include <string.h>
 #include <iostream>
 #include "encoding.h"
 
@@ -321,7 +321,7 @@ public:
 		pop_pos = other.pop_pos;
 		push_pos = other.push_pos;
 		buffer = new char[b_size];
-		std::memcpy(buffer, other.buffer, b_size);
+		memcpy(buffer, other.buffer, b_size);
 		return *this;
 	}
 

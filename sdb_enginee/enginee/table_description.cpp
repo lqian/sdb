@@ -22,7 +22,7 @@ bool table_description::exists() {
 bool table_description::load_from_file() {
 	bool loaded = false;
 	if (exists()) {
-		ifstream in(file_name, ios_base::in | ios_base::binary);
+		ifstream in(file_name.c_str(), ios_base::in | ios_base::binary);
 		if (in.is_open()) {
 
 			//read all stream to char_buffer;
@@ -82,7 +82,7 @@ bool table_description::write_to_file(bool refresh) {
 	bool writed = false;
 	if (refresh || !exists()) {
 
-		std::ofstream out(file_name, ios_base::out | ios_base::binary);
+		std::ofstream out(file_name.c_str(), ios_base::out | ios_base::binary);
 
 		if (out.is_open()) {
 			common::char_buffer table_desc_buffer(512);
@@ -129,7 +129,7 @@ void table_description::delete_field(const string & field_name) {
 	// delete from map
 	field_desc_map.erase(field_name);
 
-	for (auto it = field_desc_list.begin(); it != field_desc_list.end(); it++) {
+	for (std::list<field_description>::iterator it = field_desc_list.begin(); it != field_desc_list.end(); it++) {
 		if (it->get_field_name() == field_name && !it->is_deleted()) {
 			it->set_deleted(true);
 		}

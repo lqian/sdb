@@ -72,6 +72,8 @@ private:
 
 	sdb_status status;
 
+	std::string db_meta_file;
+
 public:
 	explicit sdb(const char *dir, const char * name);
 	explicit sdb(const std::string & dir, const std::string &name);
@@ -79,6 +81,7 @@ public:
 			dir(other.dir), name(other.name), charset(other.charset), status(
 					other.status) {
 		full_path = dir + "/" + name;
+		db_meta_file = full_path.append("/").append(sdb_meta_file);
 	}
 	virtual ~ sdb();
 	bool exists();

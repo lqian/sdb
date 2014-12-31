@@ -12,7 +12,7 @@
 #include <iostream>
 #include <fstream>
 #include <sys/stat.h>
-#include <string>
+#include <string.h>
 #include <errno.h>
 
 #include "table_description.h"
@@ -26,6 +26,7 @@ sdb::sdb(const std::string &dir, const std::string &name) {
 	this->dir = dir;
 	this->full_path = dir + "/" + name;
 	this->status = sdb_ready;
+	this->db_meta_file = full_path.append("/").append(sdb_meta_file);
 }
 
 sdb::sdb(const char *dir, const char* name) {
@@ -33,6 +34,7 @@ sdb::sdb(const char *dir, const char* name) {
 	this->dir = std::string(dir);
 	this->full_path = this->dir + "/" + this->name;
 	this->status = sdb_ready;
+	this->db_meta_file = full_path.append("/").append(sdb_meta_file);
 }
 
 sdb::~sdb() {
@@ -45,9 +47,11 @@ bool sdb::exists() {
 		closedir(p_dir);
 
 		ifstream in_stream;
-		in_stream.open(full_path + "/" + sdb_meta_file, ios_base::in);
+
+		in_stream.open(db_meta_file.c_str(), ios_base::in);
 		char * db_name = new char[MAX_DB_NAME_SIZE];
 		in_stream.getline(db_name, MAX_DB_NAME_SIZE);
+
 
 		return strcmp(db_name, this->name.c_str()) == 0;
 	}
@@ -58,7 +62,7 @@ bool sdb::open(const bool & read_only) {
 	bool success = true;
 	ifstream in_stream;
 
-	in_stream.open(full_path + "/" + sdb_meta_file, ios_base::in);
+	in_stream.open(db_meta_file.c_str(), ios_base::in);
 	char * db_name = new char[MAX_DB_NAME_SIZE];
 	in_stream.getline(db_name, MAX_DB_NAME_SIZE);
 
@@ -84,7 +88,7 @@ bool sdb::init() {
 	} else {
 
 		ofstream out;
-		out.open(full_path + "/" + sdb_meta_file);
+		out.open(this->db_meta_file.c_str());
 
 		if (!out.is_open()) {
 			success = false;

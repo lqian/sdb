@@ -96,7 +96,7 @@ public:
 	}
 
 	const field_description & get_field_description(const std::string& s) {
-		auto its = field_desc_map.find(s);
+		std::map<std::string, field_description>::iterator its = field_desc_map.find(s);
 		if (its != field_desc_map.end()) {
 			return its->second;
 		} else {
