@@ -101,7 +101,7 @@ bool sdb::init() {
 
 bool sdb::exist_table(const char * table_name) {
 	table_description tbl_desc(*this, table_name);
-	return access(tbl_desc.getTableFileName().c_str(), F_OK) != -1;
+	return tbl_desc.exists();
 }
 
 bool sdb::exist_table(std::string & table_name) {

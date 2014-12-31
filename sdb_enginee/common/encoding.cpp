@@ -34,6 +34,15 @@ char* to_chars(const int &i) {
 	return pc;
 }
 
+char* to_chars(const short &i) {
+	char * pv = (char *) &i;
+	char * pc = new char[SHORT_CHARS];
+	for (int j = 0; j < SHORT_CHARS; j++) {
+		pc[j] = pv[j];
+	}
+	return pc;
+}
+
 char* to_chars(const long &l) {
 	char * pv = (char *) &l;
 	char * pc = new char[LONG_CHARS];
@@ -61,6 +70,12 @@ float to_float(const char* p_chars) {
 	return f;
 }
 int to_int(const char* p_chars) {
+	int * pi = (int *) p_chars;
+	int i(*pi);
+	return i;
+}
+
+short to_short(const char* p_chars) {
 	int * pi = (int *) p_chars;
 	int i(*pi);
 	return i;

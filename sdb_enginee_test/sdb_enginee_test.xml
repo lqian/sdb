@@ -1,8 +1,25 @@
 <testsuites>
-	<testsuite name="AllTests" tests="4">
-		<testcase classname="AllTests" name="sdb_common_char_buff_test"/>
+	<testsuite name="AllTests" tests="9">
+		<testcase classname="AllTests" name="char_pointer_test"/>
+		<testcase classname="AllTests" name="newTestFunction"/>
+		<testcase classname="AllTests" name="sdb_common_char_buff_operator_test"/>
+		<testcase classname="AllTests" name="sdb_common_encoding_test"/>
+		<testcase classname="AllTests" name="sdb_common_char_buff_test">
+			<failure message="../src/Test.cpp:85 sdb_common_char_buff_test: b">
+sdb_common_char_buff_test: b
+			</failure>
+		</testcase>
 		<testcase classname="AllTests" name="sdb_common_buffer_str_test"/>
-		<testcase classname="AllTests" name="sdb_table_description_test"/>
 		<testcase classname="AllTests" name="sdb_test_sdb"/>
+		<testcase classname="AllTests" name="sdb_test_field_description_store">
+			<failure message="../src/Test.cpp:250 sdb_test_field_description_store: copy.is_deleted()">
+sdb_test_field_description_store: copy.is_deleted()
+			</failure>
+		</testcase>
+		<testcase classname="AllTests" name="sdb_table_description_test">
+			<failure message="../src/Test.cpp:215 sdb_table_description_test: other.exists_field(fn1) == false">
+sdb_table_description_test: other.exists_field(fn1) == false
+			</failure>
+		</testcase>
 	</testsuite>
 </testsuites>

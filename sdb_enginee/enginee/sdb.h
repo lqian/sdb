@@ -11,9 +11,7 @@
 #include <stdlib.h>
 #include <string>
 
-
 namespace enginee {
-
 
 const std::string sdb_meta_file(".sdb");
 const std::string sdb_lock_file(".lock");
@@ -42,8 +40,8 @@ enum sdb_table_status {
 };
 
 enum sdb_table_field_type {
-	unknow_type,
-	bool_type=0x10,
+	unknow_type =0x09,
+	bool_type = 0x10,
 	char_type,
 	short_type,
 	int_type,
@@ -51,7 +49,7 @@ enum sdb_table_field_type {
 	float_type,
 	double_type,
 
-	unsigned_char_type = 0x20,
+	unsigned_char_type = 0x40,
 	unsigned_short_type,
 	unsigned_int_type,
 	unsigned_long_type,
@@ -77,7 +75,9 @@ private:
 public:
 	explicit sdb(const char *dir, const char * name);
 	explicit sdb(const std::string & dir, const std::string &name);
-	explicit sdb(const sdb& other): dir(other.dir), name(other.name), charset(other.charset), status(other.status) {
+	explicit sdb(const sdb& other) :
+			dir(other.dir), name(other.name), charset(other.charset), status(
+					other.status) {
 		full_path = dir + "/" + name;
 	}
 	virtual ~ sdb();
@@ -100,14 +100,16 @@ public:
 		return dir;
 	}
 
-	const std::string get_full_path() { return full_path; }
+	const std::string get_full_path() {
+		return full_path;
+	}
 
 	bool equals(const sdb & other) {
 		return (other.dir == dir) && (name == other.name);
 	}
 
-	bool operator==(const sdb & other) {
-		return equals(other);
+	 bool operator==(const sdb & b) {
+		return equals(b);
 	}
 };
 

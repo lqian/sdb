@@ -5,13 +5,11 @@
  *      Author: linkqian
  */
 
-
 #include <fstream>
 #include "../common/encoding.h"
 #include "../common/sio.h"
 #include "table_description.h"
 #include "field_description_store.h"
-
 
 namespace enginee {
 
@@ -21,30 +19,85 @@ bool table_description::exists() {
 	return sdb_io::exist_file(file_name);
 }
 
-bool table_description::load() {
+bool table_description::load_from_file() {
 	bool loaded = false;
 	if (exists()) {
+		ifstream in(file_name, ios_base::in | ios_base::binary);
+		if (in.is_open()) {
 
+			//read all stream to char_buffer;
+			in.seekg(0, ifstream::end);
+			int len = in.tellg();
+			in.seekg(0, ifstream::beg);
+			char *p = new char[len];
+			in.read(p, len);
+			in.close();
+
+			common::char_buffer buffer(p, len);
+
+			int t_magic;
+			buffer >> t_magic;
+			if (t_magic == magic) {
+				field_desc_map.clear();
+				field_desc_list.clear();
+			} else {
+				throw "invalid table description file";
+			}
+
+			// ignore the table name
+			int field_size;
+			std::string t_table_name;
+			buffer >> t_table_name >> deleted >> field_size >> comment;
+
+			for (int i = 0; i < field_size; i++) {
+				common::char_buffer field_buffer(512);
+				if (buffer.pop_char_buffer(&field_buffer)) {
+					field_description_store fds;
+					fds.set_store(field_buffer);
+					fds.read_store();
+
+					// push back to the list in spit of its status
+					field_desc_list.push_back(fds);
+
+					//add valid field to map
+					if (!exists_field(fds) && !fds.is_deleted()) {
+						std::string k = fds.get_field_name();
+						field_desc_map.insert(std::pair<std::string, field_description>(k, fds));
+					}
+
+				} else {
+					throw "read field content error";
+				}
+			}
+
+			in.close();
+
+			loaded = true;
+		}
 	}
 	return loaded;
 }
 
-bool table_description::write() {
+bool table_description::write_to_file(bool refresh) {
 	bool writed = false;
-	if (!exists()) {
+	if (refresh || !exists()) {
 
 		std::ofstream out(file_name, ios_base::out | ios_base::binary);
-		if (out.is_open()) {
-			out << magic << table_name.size() << table_name << deleted;
-			out << field_description_map.size();
 
-			int pos = INT_CHARS * 3 + table_name.size() + BOOL_CHARS;
+		if (out.is_open()) {
+			common::char_buffer table_desc_buffer(512);
+
+			int fs = field_desc_list.size();
+			table_desc_buffer << magic << table_name << deleted << fs << comment;
+
+			int pos = table_desc_buffer.size();
 			int pre_pos;
 			int next_pos;
 			int i = 0;
-			for (std::pair<std::string, field_description_store>  element : field_description_map) {
-				field_description_store fds = field_description_store(
-						element.second);
+
+			for (std::list<field_description>::iterator it = field_desc_list.begin(); it != field_desc_list.end(); it++) {
+
+				field_description_store fds = field_description_store(*it);
 
 				int bs = fds.evaluate_block_size();
 				if (i == 0) {
@@ -54,12 +107,16 @@ bool table_description::write() {
 
 				fds.set_pre_store_block_pos(pre_pos);
 				fds.set_next_store_block_pos(next_pos);
-				out.write(fds.char_buffer().data(), (long)fds.block_size());
+				fds.fill_store();
+
+				// push back field block store table description buffer
+				table_desc_buffer << fds.char_buffer();
 
 				pre_pos = pos;
 				pos = next_pos;
 			}
 
+			out.write(table_desc_buffer.data(), table_desc_buffer.size());
 			out.close();
 			writed = true;
 		}
@@ -67,9 +124,29 @@ bool table_description::write() {
 	}
 	return writed;
 }
-bool table_description::update() {
+
+void table_description::delete_field(const string & field_name) {
+	// delete from map
+	field_desc_map.erase(field_name);
+
+	for (auto it = field_desc_list.begin(); it != field_desc_list.end(); it++) {
+		if (it->get_field_name() == field_name && !it->is_deleted()) {
+			it->set_deleted(true);
+		}
+	}
+}
+bool table_description::update_exist_file() {
 	bool updated = false;
 	return updated;
 }
+
+ bool table_description::operator ==( const table_description & b) {
+	return this->m_sdb == b.m_sdb
+			&& this->table_name == b.table_name
+			&& this->deleted == b.deleted
+			&& this->field_desc_list == b.field_desc_list;
+
+}
+
 }
 
