@@ -13,8 +13,8 @@
 
 namespace enginee {
 
-const std::string sdb_meta_file(".sdb");
-const std::string sdb_lock_file(".lock");
+const std::string sdb_meta_file_extension(".sdb");
+const std::string sdb_lock_file_extension(".lock");
 
 const int MAX_DB_NAME_SIZE(64);
 
@@ -81,7 +81,7 @@ public:
 			dir(other.dir), name(other.name), charset(other.charset), status(
 					other.status) {
 		full_path = dir + "/" + name;
-		db_meta_file = full_path.append("/").append(sdb_meta_file);
+		db_meta_file = full_path.append("/").append(sdb_meta_file_extension);
 	}
 	virtual ~ sdb();
 	bool exists();

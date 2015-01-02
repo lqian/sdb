@@ -26,7 +26,7 @@ sdb::sdb(const std::string &dir, const std::string &name) {
 	this->dir = dir;
 	this->full_path = dir + "/" + name;
 	this->status = sdb_ready;
-	this->db_meta_file = full_path.append("/").append(sdb_meta_file);
+	this->db_meta_file = full_path.append("/").append(sdb_meta_file_extension);
 }
 
 sdb::sdb(const char *dir, const char* name) {
@@ -34,7 +34,7 @@ sdb::sdb(const char *dir, const char* name) {
 	this->dir = std::string(dir);
 	this->full_path = this->dir + "/" + this->name;
 	this->status = sdb_ready;
-	this->db_meta_file = full_path.append("/").append(sdb_meta_file);
+	this->db_meta_file = full_path.append("/").append(sdb_meta_file_extension);
 }
 
 sdb::~sdb() {
