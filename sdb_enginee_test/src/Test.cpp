@@ -193,8 +193,8 @@ void sdb_table_description_test() {
 
 	ASSERT(tbl_desc.exists_field(fn1) == false);
 
-	std::list<field_description>::const_iterator it;
-	for (it = tbl_desc.get_field_desc_list().begin();
+
+	for (std::list<field_description>::const_iterator it = tbl_desc.get_field_desc_list().begin();
 			it != tbl_desc.get_field_desc_list().end(); it++) {
 		cout << " field name: " << it->get_field_name() << " is deleted: "
 				<< it->is_deleted() << endl;
@@ -214,6 +214,14 @@ void sdb_table_description_test() {
 //				<< it->second.get_inner_key() << " status: "
 //				<< it->second.is_deleted() << endl;
 //	}
+
+	for (std::map<std::string, field_description>::const_iterator it = other.get_field_description_map().begin();
+			it != other.get_field_description_map().end(); it++) {
+		cout << "map key:" << it->first << "map value:"
+				<< it->second.get_inner_key() << " status: "
+				<< it->second.is_deleted() << endl;
+	}
+
 
 	ASSERT(other.exists_field(fn1) == false);
 

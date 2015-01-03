@@ -19,14 +19,7 @@ const std::string sdb_lock_file_extension(".lock");
 const int MAX_DB_NAME_SIZE(64);
 
 enum sdb_status {
-	sdb_unknown,
-	sdb_opening = 1000,
-	sdb_opened,
-	sdb_ready,
-	sdb_in_using,
-	sdb_readonly,
-	sdb_exited,
-	sdb_failured = 2000
+	sdb_unknown, sdb_opening = 1000, sdb_opened, sdb_ready, sdb_in_using, sdb_readonly, sdb_exited, sdb_failured = 2000
 };
 
 enum sdb_table_status {
@@ -40,21 +33,9 @@ enum sdb_table_status {
 };
 
 enum sdb_table_field_type {
-	unknow_type =0x09,
-	bool_type = 0x10,
-	char_type,
-	short_type,
-	int_type,
-	long_type,
-	float_type,
-	double_type,
+	unknow_type = 0x09, bool_type = 0x10, char_type, short_type, int_type, long_type, float_type, double_type,
 
-	unsigned_char_type = 0x40,
-	unsigned_short_type,
-	unsigned_int_type,
-	unsigned_long_type,
-	unsigned_float_type,
-	unsigned_double_type
+	unsigned_char_type = 0x40, unsigned_short_type, unsigned_int_type, unsigned_long_type, unsigned_float_type, unsigned_double_type
 };
 
 class sdb {
@@ -78,10 +59,8 @@ public:
 	explicit sdb(const char *dir, const char * name);
 	explicit sdb(const std::string & dir, const std::string &name);
 	explicit sdb(const sdb& other) :
-			dir(other.dir), name(other.name), charset(other.charset), status(
-					other.status) {
+			dir(other.dir), name(other.name), charset(other.charset), status(other.status) {
 		full_path = dir + "/" + name;
-		db_meta_file = full_path.append("/").append(sdb_meta_file_extension);
 	}
 	virtual ~ sdb();
 	bool exists();
@@ -111,7 +90,7 @@ public:
 		return (other.dir == dir) && (name == other.name);
 	}
 
-	 bool operator==(const sdb & b) {
+	bool operator==(const sdb & b) {
 		return equals(b);
 	}
 };
