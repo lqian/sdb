@@ -25,8 +25,9 @@ sdb::sdb(const std::string &dir, const std::string &name) {
 	this->name = name;
 	this->dir = dir;
 	this->full_path = dir + "/" + name;
+	this->db_meta_file = full_path;
+	this->db_meta_file.append("/").append(sdb_meta_file_extension);
 	this->status = sdb_ready;
-	this->db_meta_file = full_path.append("/").append(sdb_meta_file_extension);
 }
 
 sdb::sdb(const char *dir, const char* name) {
@@ -34,7 +35,8 @@ sdb::sdb(const char *dir, const char* name) {
 	this->dir = std::string(dir);
 	this->full_path = this->dir + "/" + this->name;
 	this->status = sdb_ready;
-	this->db_meta_file = full_path.append("/").append(sdb_meta_file_extension);
+	this->db_meta_file = full_path;
+	this->db_meta_file.append("/").append(sdb_meta_file_extension);
 }
 
 sdb::~sdb() {
@@ -51,7 +53,6 @@ bool sdb::exists() {
 		in_stream.open(db_meta_file.c_str(), ios_base::in);
 		char * db_name = new char[MAX_DB_NAME_SIZE];
 		in_stream.getline(db_name, MAX_DB_NAME_SIZE);
-
 
 		return strcmp(db_name, this->name.c_str()) == 0;
 	}
