@@ -1,0 +1,15 @@
+<testsuites>
+	<testsuite name="AllTests" tests="11">
+		<testcase classname="AllTests" name="char_pointer_test"/>
+		<testcase classname="AllTests" name="sdb_common_char_buff_operator_test"/>
+		<testcase classname="AllTests" name="sdb_common_encoding_test"/>
+		<testcase classname="AllTests" name="sdb_common_char_buff_test"/>
+		<testcase classname="AllTests" name="sdb_common_buffer_str_test"/>
+		<testcase classname="AllTests" name="sdb_test_sdb"/>
+		<testcase classname="AllTests" name="sdb_test_field_description_store"/>
+		<testcase classname="AllTests" name="sdb_table_description_test"/>
+		<testcase classname="AllTests" name="time_test"/>
+		<testcase classname="AllTests" name="list_test"/>
+		<testcase classname="AllTests" name="sdb_table_store_test"/>
+	</testsuite>
+</testsuites>
