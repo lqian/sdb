@@ -2,37 +2,86 @@
 #include "ide_listener.h"
 #include "xml_listener.h"
 #include "cute_runner.h"
+
+#include <list>
+#include <ctime>
+
 #include "common/char_buffer.h"
 #include "common/encoding.h"
 #include "enginee/sdb.h"
 #include "enginee/table_description.h"
 #include "enginee/field_description_store.h"
-#include <list>
+#include "enginee/table_store.h"
 
 using namespace std;
 using namespace enginee;
 
-void char_pointer_test(){
+void time_test() {
+	time_t curr;
+	long seconds = time(&curr);
+
+	cout << "invoke once:" << seconds << endl;
+
+	seconds = time(&curr);
+
+	cout << "invoke twice: " << seconds << endl;
+
+	time_t myt = 1420440500;
+	cout << "another time:" << ctime(&myt) << endl;
+}
+
+void sdb_table_store_test() {
+	string tab1 = "tab1";
+	enginee::sdb db("/tmp", "db1");
+	enginee::table_description tbl_desc(db, tab1);
+
+	if (!db.exists()) {
+		db.init();
+	}
+
+	enginee::table_store tab1_store(tbl_desc);
+
+	if (!tab1_store.is_initialized()) {
+		tab1_store.init_store(false);
+	}
+
+	ASSERT(tab1_store.is_initialized() == true);
+
+	ASSERT(tab1_store.open() == true);
+
+	ASSERT(tab1_store.get_block_store_off() == enginee::table_head_length);
+
+	ASSERT(tab1_store.get_head_block_store_pos() ==  enginee::table_head_length);
+
+	block_store bs(tbl_desc);
+	ASSERT(tab1_store.assign_block_store(bs));
+
+	tab1_store.sync_header();
+
+	ASSERT(tab1_store.close());
+
+
+}
+
+void char_pointer_test() {
 	char *p = new char[10];
 
-	char f[] = {0};
+	char f[] = { 0 };
 
-	char t[] = {1};
+	char t[] = { 1 };
 
 	int pos = 0;
 
 	p[pos++] = f[0];
 	p[pos++] = t[0];
 
-	ASSERT(p[0]==0);
-	ASSERT(p[1]==1);
+	ASSERT(p[0] == 0);
+	ASSERT(p[1] == 1);
 
 	delete[] p;
 }
 
-
-
-void newTestFunction() {
+void list_test() {
 	ofstream out("test", ios_base::out | ofstream::binary);
 	out << 1 << 2 << "----------";
 	out.close();
@@ -47,8 +96,7 @@ void newTestFunction() {
 	my_list.push_back(20);
 	my_list.push_back(30);
 
-	for (std::list<int>::iterator it = my_list.begin(); it != my_list.end();
-			it++) {
+	for (std::list<int>::iterator it = my_list.begin(); it != my_list.end(); it++) {
 		cout << *it << endl;
 	}
 
@@ -57,8 +105,7 @@ void newTestFunction() {
 	my_list.insert(my_list.begin(), 40);
 
 	cout << "after my_list.insert()..." << endl;
-	for (std::list<int>::iterator it = my_list.begin(); it != my_list.end();
-			it++) {
+	for (std::list<int>::iterator it = my_list.begin(); it != my_list.end(); it++) {
 		cout << *it << endl;
 	}
 	ASSERT((*my_list.begin()) == 40);
@@ -77,9 +124,9 @@ void sdb_common_char_buff_test() {
 	common::char_buffer buffer1(512);
 
 	buffer1 << 128L << true;
-	ASSERT(buffer1.size()==9);
+	ASSERT(buffer1.size() == 9);
 
-	long l ;
+	long l;
 	bool b;
 	buffer1 >> l >> b;
 	ASSERT(b);
@@ -123,7 +170,10 @@ void sdb_common_char_buff_operator_test() {
 	long l = 2014L;
 	string str("this is a string");
 
-	buffer << i << l << str;
+	buffer << i;
+	buffer << l;
+	buffer << str;
+//	buffer << i << l << str;
 	ASSERT(buffer.size() == 4 + 8 + 4 + 16);
 
 }
@@ -137,8 +187,7 @@ void sdb_table_description_test() {
 	}
 	ASSERT(db.exists() == true);
 
-	ASSERTM(tbl_desc.get_file_name(),
-			tbl_desc.get_file_name() == std::string("/tmp/db1/tab1.td"));
+	ASSERTM(tbl_desc.get_file_name(), tbl_desc.get_file_name() == std::string("/tmp/db1/tab1.td"));
 
 	tbl_desc.set_comment("this is the table comment");
 
@@ -194,8 +243,7 @@ void sdb_table_description_test() {
 
 	for (std::list<field_description>::const_iterator it = tbl_desc.get_field_desc_list().begin();
 			it != tbl_desc.get_field_desc_list().end(); it++) {
-		cout << " field name: " << it->get_field_name() << " is deleted: "
-				<< it->is_deleted() << endl;
+		cout << " field name: " << it->get_field_name() << " is deleted: " << it->is_deleted() << endl;
 	}
 
 	tbl_desc.write_to_file(true);
@@ -207,9 +255,7 @@ void sdb_table_description_test() {
 
 	for (std::map<std::string, field_description>::const_iterator it = other.get_field_description_map().begin();
 			it != other.get_field_description_map().end(); it++) {
-		cout << "map key:" << it->first << "map value:"
-				<< it->second.get_inner_key() << " status: "
-				<< it->second.is_deleted() << endl;
+		cout << "map key:" << it->first << "map value:" << it->second.get_inner_key() << " status: " << it->second.is_deleted() << endl;
 	}
 
 	ASSERT(other.exists_field(fn1) == false);
@@ -274,7 +320,7 @@ void runAllTests(int argc, char const *argv[]) {
 	cute::suite s;
 	// add your test here
 	s.push_back(CUTE(char_pointer_test));
-	s.push_back(CUTE(newTestFunction));
+
 	s.push_back(CUTE(sdb_common_char_buff_operator_test));
 	s.push_back(CUTE(sdb_common_encoding_test));
 	s.push_back(CUTE(sdb_common_char_buff_test));
@@ -283,7 +329,9 @@ void runAllTests(int argc, char const *argv[]) {
 	s.push_back(CUTE(sdb_test_field_description_store));
 
 	s.push_back(CUTE(sdb_table_description_test));
-
+	s.push_back(CUTE(time_test));
+	s.push_back(CUTE(list_test));
+	s.push_back(CUTE(sdb_table_store_test));
 
 	// CUTE engineer start
 	cute::xml_file_opener xmlfile(argc, argv);

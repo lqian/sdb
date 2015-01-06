@@ -140,10 +140,8 @@ bool table_description::update_exist_file() {
 	return updated;
 }
 
- bool table_description::operator ==( const table_description & b) {
-	return this->m_sdb == b.m_sdb
-			&& this->table_name == b.table_name
-			&& this->deleted == b.deleted
+bool table_description::operator ==(const table_description & b) {
+	return this->m_sdb == b.m_sdb && this->table_name == b.table_name && this->deleted == b.deleted
 			&& this->field_desc_list == b.field_desc_list;
 
 }

@@ -10,7 +10,6 @@
 
 #include <stdlib.h>
 #include <string>
-#include "table_description.h"
 
 namespace enginee {
 
@@ -19,28 +18,33 @@ class field_description {
 protected:
 	short inner_key;
 	std::string field_name;
-	enginee::sdb_table_field_type field_type = unknow_type;
+	sdb_table_field_type field_type = unknow_type;
+	int size;
 	std::string comment;
 	bool deleted;
 public:
 
 	const int unsign_inner_key = -1;
 
-	field_description() :inner_key(unsign_inner_key),
-			deleted(false) {
+	field_description() :
+			inner_key(unsign_inner_key), deleted(false) {
 	}
 	;
-	explicit field_description(const std::string & _field_name,
-			const sdb_table_field_type _field_type,
-			const std::string & _comment, const bool _deleted) :inner_key(unsign_inner_key),
-			field_name(_field_name), field_type(_field_type), comment(_comment), deleted(
-					_deleted) {
+	explicit field_description(const std::string & _field_name, const sdb_table_field_type _field_type, const std::string & _comment,
+			const bool _deleted) :
+			inner_key(unsign_inner_key), field_name(_field_name), field_type(_field_type), comment(_comment), deleted(_deleted) {
+	}
+
+	explicit field_description(const std::string & _field_name, const sdb_table_field_type _field_type, const int & _size,
+			const std::string & _comment, const bool _deleted) :
+			inner_key(unsign_inner_key), field_name(_field_name), field_type(_field_type), size(_size), comment(_comment), deleted(_deleted) {
 	}
 
 	explicit field_description(const field_description & other) {
 		this->inner_key = other.inner_key;
 		this->field_name = other.field_name;
 		this->field_type = other.field_type;
+		this->size = other.size;
 		this->comment = other.comment;
 		this->deleted = other.deleted;
 	}
@@ -61,8 +65,10 @@ public:
 	}
 
 	friend bool operator==(const field_description & a, const field_description & b) {
-		return a.field_name == b.field_name && a.field_type == b.field_type
-				&& a.deleted == b.deleted && a.comment == b.comment;
+		return a.field_name == b.field_name
+				&& a.field_type == b.field_type
+				&& a.deleted == b.deleted
+				&& a.comment == b.comment;
 	}
 
 	const std::string& get_comment() const {
@@ -103,6 +109,10 @@ public:
 
 	void set_inner_key(short innerkey) {
 		inner_key = innerkey;
+	}
+
+	bool is_variant() const {
+		return (field_type == char_type || field_type == varchar_type) || field_type > varchar_type;
 	}
 };
 

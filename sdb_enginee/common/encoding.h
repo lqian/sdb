@@ -12,7 +12,7 @@
  const int DOUBLE_CHARS(8) ;
  const int FLOAT_CHARS (4);
  const int INT_CHARS (4);
- const int SHORT_CHARS (4);
+ const int SHORT_CHARS (2);
  const int BOOL_CHARS(1);
  const int CHAR_LEN(1);
 

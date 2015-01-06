@@ -9,6 +9,7 @@
 #define CHAR_BUFFER_H
 
 #include <string.h>
+#include <time.h>
 #include <iostream>
 #include "encoding.h"
 
@@ -16,7 +17,9 @@
  * a dynamic char buffer that push/pop bool, int, long, float, double, string, char array
  */
 namespace common {
+
 using namespace std;
+
 class char_buffer {
 
 private:
@@ -81,14 +84,14 @@ public:
 	/**
 	 * size of push chars has'nt been pop
 	 */
-	int remain() {
+	const int remain() const {
 		return push_pos - pop_pos;
 	}
 
 	/**
 	 * actual char size of current buffer
 	 */
-	int size() {
+	int size() const {
 		return b_size;
 	}
 
@@ -111,6 +114,12 @@ public:
 	 */
 	char_buffer * skip(int off) {
 		pop_pos += off;
+		return this;
+	}
+
+	char_buffer * push_back(const short & val) {
+		ensure_capacity(SHORT_CHARS);
+		push_chars(to_chars(val), SHORT_CHARS);
 		return this;
 	}
 	char_buffer * push_back(const int & val) {
@@ -243,6 +252,11 @@ public:
 		return buff;
 	}
 
+	friend char_buffer& operator<<(char_buffer & buff, const short & val) {
+		buff.push_back(val);
+		return buff;
+	}
+
 	friend char_buffer& operator<<(char_buffer & buff, const int & val) {
 		buff.push_back(val);
 		return buff;
@@ -263,14 +277,12 @@ public:
 		return buff;
 	}
 
-	friend char_buffer& operator<<(char_buffer & buff,
-			const std::string & val) {
+	friend char_buffer& operator<<(char_buffer & buff, const std::string & val) {
 		buff.push_back(val);
 		return buff;
 	}
 
-	friend char_buffer& operator<<(char_buffer & buff,
-			const char_buffer & val) {
+	friend char_buffer& operator<<(char_buffer & buff, const char_buffer & val) {
 		buff.push_back(val);
 		return buff;
 	}
@@ -287,6 +299,11 @@ public:
 
 	friend char_buffer& operator>>(char_buffer & buff, double & val) {
 		val = buff.pop_double();
+		return buff;
+	}
+
+	friend char_buffer& operator>>(char_buffer & buff, short & val) {
+		val = buff.pop_short();
 		return buff;
 	}
 
@@ -310,11 +327,6 @@ public:
 		return buff;
 	}
 
-	friend char_buffer& operator>>(char_buffer & buff, short & val) {
-		val = buff.pop_short();
-		return buff;
-	}
-
 	char_buffer & operator=(const char_buffer & other) {
 		cap = other.cap;
 		b_size = other.b_size;
@@ -323,6 +335,21 @@ public:
 		buffer = new char[b_size];
 		memcpy(buffer, other.buffer, b_size);
 		return *this;
+	}
+
+	void push_chars(const char* chars, int len) {
+		if (len == BOOL_CHARS) {
+			buffer[push_pos++] = chars[0];
+			if (chars[0] == 1) {
+				cout << "this is a c++ bug" << endl;
+			}
+		} else {
+			for (int i = 0; i < len;) {
+				buffer[push_pos++] = chars[i++];
+			}
+		}
+
+		b_size += len;
 	}
 
 protected:
@@ -336,22 +363,6 @@ protected:
 		buffer = new_buffer;
 	}
 
-	void push_chars(const char* chars, int len) {
-		if (len == BOOL_CHARS) {
-			buffer[push_pos++] = chars[0];
-			if (chars[0] == 1) {
-				cout << "this is a c++ bug" << endl;
-			}
-//			buffer[push_pos++] = *chars;
-
-		} else {
-			for (int i = 0; i < len;) {
-				buffer[push_pos++] = chars[i++];
-			}
-		}
-
-		b_size += len;
-	}
 }
 ;
 }

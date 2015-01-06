@@ -8,10 +8,10 @@
 #ifndef SDB_TABLE_DESCRIPTION_H_
 #define SDB_TABLE_DESCRIPTION_H_
 
-#include "sdb.h"
-#include "field_description.h"
 #include <map>
 #include <list>
+#include "sdb.h"
+#include "field_description.h"
 
 namespace enginee {
 
@@ -20,6 +20,7 @@ static const int magic = 0x890a10e6;
 static const int block_head_pos = -1;
 
 using namespace std;
+
 class table_description {
 
 private:
@@ -28,37 +29,33 @@ private:
 	std::string comment;
 
 	//not deleted field description map
-	std::map<std::string, field_description> field_desc_map;
+	map<std::string, field_description> field_desc_map;
 
 	// all field description, include deleted field description
-	std::list<field_description> field_desc_list;
+	list<field_description> field_desc_list;
 
 	// file stored the table description with binary format
 	std::string file_name;
 
 	bool deleted;
 
-	sdb_table_status status;
-
 public:
 
+	table_description() {
+
+	}
 	explicit table_description(const sdb & _sdb, const char * _table_name) :
-			m_sdb(_sdb), table_name(_table_name), deleted(false), status(
-					sdb_table_ready) {
+			m_sdb(_sdb), table_name(_table_name), deleted(false) {
 		file_name = m_sdb.get_full_path() + "/" + table_name.c_str() + ".td";
 	}
 
-	explicit table_description(const sdb & _sdb,
-			const std::string & _table_name) :
-			m_sdb(_sdb), table_name(_table_name), deleted(false), status(
-					sdb_table_ready) {
+	explicit table_description(const sdb & _sdb, const std::string & _table_name) :
+			m_sdb(_sdb), table_name(_table_name), deleted(false) {
 		file_name = m_sdb.get_full_path() + "/" + table_name.c_str() + ".td";
 	}
 
-	explicit table_description(const sdb & _sdb,
-			const std::string & _table_name, const std::string & _comment) :
-			m_sdb(_sdb), table_name(_table_name), comment(_comment), deleted(
-					false), status(sdb_table_ready) {
+	explicit table_description(const sdb & _sdb, const std::string & _table_name, const std::string & _comment) :
+			m_sdb(_sdb), table_name(_table_name), comment(_comment), deleted(false) {
 		file_name = m_sdb.get_full_path() + "/" + table_name.c_str() + ".td";
 	}
 
@@ -66,7 +63,6 @@ public:
 			m_sdb(other.m_sdb) {
 		table_name = other.table_name;
 		comment = other.comment;
-		status = other.status;
 		deleted = other.deleted;
 		field_desc_map = other.field_desc_map;
 		field_desc_list = other.field_desc_list;
@@ -83,16 +79,13 @@ public:
 	bool exists();
 	void delete_field(const std::string & field_name);
 
-	 bool operator==(const table_description & other);
+	bool operator==(const table_description & other);
 
 	bool exists_field(const std::string& field_name) {
-		return field_desc_map.size() > 0
-				&& (field_desc_map.find(field_name) != field_desc_map.end());
+		return field_desc_map.size() > 0 && (field_desc_map.find(field_name) != field_desc_map.end());
 	}
 	bool exists_field(const field_description & _field_description) {
-		return field_desc_map.size() > 0
-				&& (field_desc_map.find(_field_description.get_field_name())
-						!= field_desc_map.end());
+		return field_desc_map.size() > 0 && (field_desc_map.find(_field_description.get_field_name()) != field_desc_map.end());
 	}
 
 	const field_description & get_field_description(const std::string& s) {
@@ -105,14 +98,11 @@ public:
 	}
 
 	void add_field_description(field_description & _field_description) {
-		if (!exists_field(_field_description)
-				&& !_field_description.is_deleted()) {
+		if (!exists_field(_field_description) && !_field_description.is_deleted()) {
 
 			_field_description.set_inner_key((short) (field_desc_list.size() + 1));
 			std::string k = _field_description.get_field_name();
-			field_desc_map.insert(
-					std::pair<std::string, field_description>(k,
-							_field_description));
+			field_desc_map.insert(std::pair<std::string, field_description>(k, _field_description));
 
 			field_desc_list.push_back(_field_description);
 		}
@@ -148,14 +138,6 @@ public:
 		m_sdb = sdb;
 	}
 
-	sdb_table_status get_status() const {
-		return status;
-	}
-
-	void set_status(sdb_table_status status) {
-		this->status = status;
-	}
-
 	void set_deleted(bool deleted = false) {
 		this->deleted = deleted;
 	}
@@ -178,6 +160,16 @@ public:
 
 	const std::list<field_description>& get_field_desc_list() const {
 		return field_desc_list;
+	}
+
+	void operator=(const table_description & other) {
+		this->m_sdb = other.m_sdb;
+		this->table_name = other.table_name;
+		this->comment = other.comment;
+		this->deleted = other.deleted;
+		this->file_name = other.file_name;
+		this->field_desc_list = other.field_desc_list;
+		this->field_desc_map = other.field_desc_map;
 	}
 };
 }

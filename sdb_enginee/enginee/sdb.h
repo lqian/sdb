@@ -25,17 +25,32 @@ enum sdb_status {
 enum sdb_table_status {
 	sdb_table_ready,
 	sdb_table_opening,
-	sdb_table_opend,
+	sdb_table_opened,
 	sdb_table_in_using,
+	sdb_table_closed,
 	sdb_table_open_failure = 2000,
 	sdb_table_checksum_failure,
 	sdb_table_other_failure
 };
 
 enum sdb_table_field_type {
-	unknow_type = 0x09, bool_type = 0x10, char_type, short_type, int_type, long_type, float_type, double_type,
+	unknow_type = 0x09,
+	bool_type = 0x10,
+	short_type,
+	int_type,
+	long_type,
+	float_type,
+	double_type,
+	time_type,
+	unsigned_char_type = 0x40,
+	unsigned_short_type,
+	unsigned_int_type,
+	unsigned_long_type,
+	unsigned_float_type,
+	unsigned_double_type,
 
-	unsigned_char_type = 0x40, unsigned_short_type, unsigned_int_type, unsigned_long_type, unsigned_float_type, unsigned_double_type
+	char_type = 0x100,
+	varchar_type
 };
 
 class sdb {
@@ -56,6 +71,8 @@ private:
 	std::string db_meta_file;
 
 public:
+	sdb() {
+	}
 	explicit sdb(const char *dir, const char * name);
 	explicit sdb(const std::string & dir, const std::string &name);
 	explicit sdb(const sdb& other) :
@@ -63,6 +80,8 @@ public:
 		full_path = dir + "/" + name;
 	}
 	virtual ~ sdb();
+
+
 	bool exists();
 	bool init();
 	bool open(const bool & read_only);
@@ -82,7 +101,7 @@ public:
 		return dir;
 	}
 
-	const std::string get_full_path() {
+	const std::string & get_full_path() const {
 		return full_path;
 	}
 
@@ -92,6 +111,14 @@ public:
 
 	bool operator==(const sdb & b) {
 		return equals(b);
+	}
+
+	void operator=(const sdb & other) {
+		this->dir = other.dir;
+		this->name = other.name;
+		this->charset = other.charset;
+		this->full_path = other.full_path;
+		this->status = other.status;
 	}
 };
 
