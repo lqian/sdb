@@ -31,7 +31,7 @@ bool TableStore::init_store(bool refresh) {
 		head_buffer << tbl_desc.get_table_name() << full_path << create_time << update_time;
 		head_buffer << block_store_off << head_block_store_pos << tail_block_store_pos;
 
-		table_stream.open(full_path, fstream::binary | fstream::out);
+		table_stream.open(full_path.c_str(), fstream::binary | fstream::out);
 		if (table_stream.is_open()) {
 			table_stream.seekg(0, fstream::beg);
 			table_stream.write(head_buffer.data(), TABLE_HEAD_LENGTH);
@@ -75,7 +75,7 @@ bool TableStore::open() {
 	if (sdb_io::exist_file(lock_path)) {
 		return false;
 	} else {
-		ofstream lock_stream(lock_path);
+		ofstream lock_stream(lock_path.c_str());
 		bool locked = lock_stream.good();
 		lock_stream.close();
 		if (locked) {
@@ -85,7 +85,7 @@ bool TableStore::open() {
 		}
 
 		if (locked) {
-			table_stream.open(full_path, ios_base::in | ios_base::out | ios_base::binary);
+			table_stream.open(full_path.c_str(), ios_base::in | ios_base::out | ios_base::binary);
 			if (table_stream.is_open()) {
 				return read_head();
 			} else {
