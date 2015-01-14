@@ -10,8 +10,8 @@
 
 #include <string.h>
 #include <time.h>
-#include "row_store.h"
 #include "block_store.h"
+#include "row_store.h"
 #include "table_description.h"
 #include "../common/char_buffer.h"
 #include <fstream>
@@ -21,15 +21,18 @@ namespace enginee {
 using namespace std;
 using namespace common;
 
-const std::string table_store_file_extension(".data");
-const std::string table_lock_file_extension(".lock");
-const int table_head_length(1024);
+const static std::string TABLE_STORE_FILE_EXTENSION(".data");
+const static std::string TABLE_LOCK_FILE_EXTENSION(".lock");
 
+const static int TABLE_HEAD_LENGTH(1024);
 
-class table_store {
+const static int SYNC_BLOCK_HEAD = 1;
+const static int SYNC_BLOCK_DATA = 2;
+
+class TableStore {
 
 private:
-	table_description tbl_desc;
+	TableDescription tbl_desc;
 	std::string full_path; // the full path of file stores table data
 	std::string lock_path;
 	sdb_table_status status;
@@ -41,29 +44,41 @@ private:
 
 	long head_block_store_pos;
 	long tail_block_store_pos;
-	long block_count;
-
 
 	fstream table_stream;
 
 	char_buffer head_buffer;
 
-	block_store head_block_store;
-
-	block_store tail_block_store;
+	bool update_row_buffer(long start, char_buffer & buff, int size);
 
 public:
-	table_store(const table_description & _desc) :
-			tbl_desc(_desc), status(sdb_table_ready), head_buffer(char_buffer(table_head_length)){
+	explicit TableStore(const TableDescription & _desc) :
+			tbl_desc(_desc), status(sdb_table_ready), head_buffer(char_buffer(TABLE_HEAD_LENGTH)) {
 
-		full_path.append(_desc.get_sdb().get_full_path()).append("/").append(_desc.get_table_name()).append(table_store_file_extension);
+		full_path.append(_desc.get_sdb().get_full_path()).append("/").append(_desc.get_table_name()).append(
+				TABLE_STORE_FILE_EXTENSION);
 
-		lock_path.append(_desc.get_sdb().get_full_path()).append("/").append(_desc.get_table_name()).append(table_lock_file_extension);
+		lock_path.append(_desc.get_sdb().get_full_path()).append("/").append(_desc.get_table_name()).append(
+				TABLE_LOCK_FILE_EXTENSION);
 
 		time(&create_time);
 		time(&update_time);
 	}
-	virtual ~table_store();
+
+	explicit TableStore(const TableStore & other) :
+			head_buffer(char_buffer(TABLE_HEAD_LENGTH)) {
+		this->tbl_desc = other.tbl_desc;
+		this->head_buffer = other.head_buffer;
+		this->full_path = other.full_path;
+		this->create_time = other.create_time;
+		this->update_time = other.update_time;
+		this->lock_path = other.lock_path;
+		this->status = other.status;
+		this->head_block_store_pos = other.head_block_store_pos;
+		this->tail_block_store_pos = other.tail_block_store_pos;
+		this->block_store_off = other.block_store_off;
+	}
+	virtual ~TableStore();
 
 	/**
 	 * open the table data file and indicate it's status
@@ -78,23 +93,48 @@ public:
 
 	bool close();
 
+	bool has_block_store();
+
 	bool is_closed();
 
-	bool read_header();
-	bool sync_header();
-
-	bool assign_block_store(block_store & _bs);
-
-	const block_store & head();
-
-	const block_store & tail();
+	bool read_head();
+	bool sync_head();
 
 	/**
-	 * add a row_store to the table store end-block-store
+	 * assign disk space for the empty block_store, set the it's position and end position
 	 */
-	bool append_row_store(const row_store & _rs);
+	bool assign_block_store(BlockStore & bs);
 
-	bool append_block_store(const block_store & _bs);
+	/**
+	 * sync head content of block_store specified to correct position on table store
+	 */
+	bool sync_buffer(BlockStore & bs, const int & block_ops);
+
+	bool read_block_store(BlockStore & bs, const bool & with_content);
+
+	bool update_row_store(const BlockStore & _bs, RowStore & rs);
+
+	/*
+	 * update row list within a BlockStore
+	 */
+	bool update_row_store(const BlockStore & _bs, std::list<RowStore> & rs_list);
+
+	bool update_row_store(RowStore & rs);
+	bool update_row_store(std::list<RowStore> & rs_list);
+
+	bool mark_deleted_status(RowStore & _rs);
+	bool mark_deleted_status(std::list<RowStore> & rs_list);
+
+	bool mark_deleted_status(const BlockStore & bs, RowStore & rs);
+	bool mark_deleted_status(const BlockStore & bs, std::list<RowStore> & rs_list);
+
+	bool head_block(BlockStore * p_bs);
+
+	bool read_row_store(const BlockStore & bs, RowStore * prs);
+
+	bool read_row_store(RowStore * prs);
+
+	bool tail_block(BlockStore * p_bs);
 
 	long get_block_store_off() const {
 		return block_store_off;
@@ -160,11 +200,11 @@ public:
 		tail_block_store_pos = tailblockstorepos;
 	}
 
-	const table_description& get_tbl_desc() const {
+	const TableDescription& get_tbl_desc() const {
 		return tbl_desc;
 	}
 
-	void set_tbl_desc(const table_description& tbldesc) {
+	void set_tbl_desc(const TableDescription& tbldesc) {
 		tbl_desc = tbldesc;
 	}
 };

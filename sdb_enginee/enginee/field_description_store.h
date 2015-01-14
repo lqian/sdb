@@ -14,21 +14,21 @@
 #include "./../common/char_buffer.h"
 
 namespace enginee {
-class field_description_store: public enginee::field_description {
+class FieldDescriptionStore: public enginee::FieldDescription {
 	static const int field_store_block_size = 128;
 
 public:
 
-	field_description_store() {
+	FieldDescriptionStore() {
 	}
-	explicit field_description_store(const std::string & _field_name,
+	explicit FieldDescriptionStore(const std::string & _field_name,
 			const sdb_table_field_type _field_type,
 			const std::string & _comment, const bool _deleted) :
-			field_description(_field_name, _field_type, _comment, _deleted) {
+			FieldDescription(_field_name, _field_type, _comment, _deleted) {
 	}
 
-	explicit field_description_store(const field_description & fd) :
-			field_description(fd) {
+	explicit FieldDescriptionStore(const FieldDescription & fd) :
+			FieldDescription(fd) {
 	}
 
 	const int block_size() {

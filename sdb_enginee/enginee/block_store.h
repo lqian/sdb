@@ -1,19 +1,24 @@
 /*
  * block_store.h
  *
- *  Created on: Jan 4, 2015
+ *  Created on: Jan 8, 2015
  *      Author: linkqian
  */
 
 #ifndef BLOCK_STORE_H_
 #define BLOCK_STORE_H_
 
-#include <time.h>
-#include "row_store.h"
-#include "table_description.h"
+#include <string>
 #include "../common/char_buffer.h"
+#include "table_description.h"
+#include "row_store.h"
 
 namespace enginee {
+
+using namespace std;
+using namespace common;
+
+const static int BLOCK_STORE_HEAD_SIZE = 1024;
 
 const static std::string DEFAULT_NAMESPACE("_default");
 const static int ROW_STORE_SIZE_4K = 4096;
@@ -28,49 +33,57 @@ const static int BLOCK_SIZE_128M = 128 * 1024 * 1024;
 const static int BLOCK_SIZE_256M = 256 * 1024 * 1024;
 const static int BLOCK_SIZE_512M = 512 * 1024 * 1024;
 
-using namespace std;
+const static short DISK_SPACE_ASSIGNED = 1;
+const static short DISK_SPACE_NOT_ASSIGNED = -1;
 
-class block_store {
+const static short SUCCESS_APPEND_BUFFER = 2;
+const static short FAILURE_APPEND_BUFFER = 4;
+
+class BlockStore {
 
 private:
-	table_description tbl_desc;
 	long block_store_id;
 	int row_store_size;
 	short status;
 	string name_space;
-	long start_pos;  // start position in table store data
-	long end_pos;
-	long pre_block_store_pos;
-	long next_block_store_pos;
+	long start_pos = 0;  // start position in its table store data
+	long end_pos = 0;    // end position in its table store data
+	long pre_block_store_pos = -1;
+	long next_block_store_pos = -1;
 	int block_size;
-	int tail; // end position of the last row store
 
-	int usage_percent;
+	int tail = 0; // end position of the last row store
+
+	int usage_percent = 0;
 	time_t create_time;
 	time_t update_time;
 	time_t assign_time;
 
+	int block_buff_cap = 0 ;
+
+	char_buffer* block_store_head;
+	char * block_data;
+	char_buffer * block_buff;
+	TableDescription * table_desc;
+
+	int bufferred_rows;
+
 public:
 
-	block_store() :
+	explicit BlockStore() :
 			row_store_size(ROW_STORE_SIZE_4K), block_size(BLOCK_SIZE_64M), name_space(DEFAULT_NAMESPACE) {
 		time(&create_time);
 		time(&update_time);
-	}
-	explicit block_store(const table_description &_tbl_desc) :
-			tbl_desc(_tbl_desc), row_store_size(ROW_STORE_SIZE_4K), block_size(BLOCK_SIZE_64M), name_space(
-					DEFAULT_NAMESPACE) {
-		time(&create_time);
-		time(&update_time);
+		block_store_head = new char_buffer(BLOCK_STORE_HEAD_SIZE);
 	}
 
-	explicit block_store(const table_description &_tbl_desc, long & start, long& end) :
-			tbl_desc(_tbl_desc), start_pos(start), end_pos(end), name_space(DEFAULT_NAMESPACE) {
+	explicit BlockStore(long & start, long& end) :
+			start_pos(start), end_pos(end), name_space(DEFAULT_NAMESPACE) {
 		this->block_size = end - start;
+		block_store_head = new char_buffer(BLOCK_STORE_HEAD_SIZE);
 	}
 
-	explicit block_store(const block_store & other) :
-			tbl_desc(other.tbl_desc) {
+	explicit BlockStore(const enginee::BlockStore & other) {
 		this->block_store_id = other.block_store_id;
 		this->row_store_size = other.row_store_size;
 		this->status = other.status;
@@ -84,26 +97,58 @@ public:
 		this->create_time = other.create_time;
 		this->update_time = other.update_time;
 		this->assign_time = other.assign_time;
+		this->block_store_head = other.block_store_head;
+		this->block_buff_cap = other.block_buff_cap;
+		this->block_buff = other.block_buff;
 	}
 
-	virtual ~block_store();
+	virtual ~BlockStore() {
+		delete block_store_head;
+	}
 
-	bool is_empty();
-	bool sync_to_file();
-	bool sync_header();
-	bool load_from_file();
+	const bool is_empty() {
+		return usage_percent == 0 || tail == 0;
+	}
 
-	void fill_block_head(common::char_buffer & buff);
+	const bool has_sync_buffer() {
+		return block_buff->size() > 0;
+	}
 
-	bool append_row_store(const row_store & _rs);
-	bool delete_row_store(const row_store & _rs); // without index
-	bool update_row_store(const row_store & _rs);
-	bool delete_row_store(const row_store & _rs, const int & off);  // with index
-	bool update_row_store(const row_store & _rs, const int & off);
+	const bool is_full_buffer() {
+		return block_buff->remain() > 0;
+	}
 
-	const block_store & next_block_store();
-	const block_store & pre_block_store();
-	const block_store defragment();
+	const bool is_full() {
+		return usage_percent >= 99 || tail + start_pos == end_pos;
+	}
+
+	void new_tail() {
+		tail += (row_store_size * bufferred_rows);
+	}
+	void clean_buffer() {
+		bufferred_rows = 0;
+		block_buff->rewind();
+	}
+
+	const char * head_buffer() {
+		return block_store_head->data();
+	}
+
+	void push_head_chars(const char *p, int len) {
+		block_store_head->push_chars(p, len);
+	}
+
+	void fill_head();
+
+	void read_head();
+
+	/*
+	 * only append the RowStore to block_buff, return true if append RowStore data to block_buff,
+	 * return false when block_store is full or block_buff is full;
+	 */
+	bool append_to_buff(RowStore * _rs);
+
+	void defragment();
 
 	bool has_next() {
 		return next_block_store_pos != 0;
@@ -112,8 +157,8 @@ public:
 		return pre_block_store_pos != 0;
 	}
 
-	void operator=(const block_store & other) {
-		this->tbl_desc = other.tbl_desc;
+	void operator=(const BlockStore & other) {
+		this->table_desc = other.table_desc;
 		this->block_store_id = other.block_store_id;
 		this->row_store_size = other.row_store_size;
 		this->status = other.status;
@@ -129,15 +174,11 @@ public:
 		this->assign_time = other.assign_time;
 	}
 
-	bool operator==(const block_store & other) {
-		return this->tbl_desc == other.tbl_desc && this->block_store_id == other.block_store_id
+	bool operator==(const BlockStore & other) {
+		return this->table_desc == other.table_desc && this->block_store_id == other.block_store_id
 				&& this->row_store_size == other.row_store_size && this->status == other.status
-				&& this->start_pos == other.start_pos && this->end_pos == other.end_pos
-				&& this->pre_block_store_pos == other.pre_block_store_pos
-				&& this->next_block_store_pos == other.next_block_store_pos && this->block_size == other.block_size
-				&& this->tail == other.tail && this->usage_percent == other.usage_percent
-				&& this->create_time == other.create_time && this->update_time == other.update_time
-				&& this->assign_time == other.assign_time;
+				&& this->start_pos == other.start_pos && this->end_pos == other.end_pos;
+
 	}
 
 	int get_block_size() const {
@@ -192,7 +233,7 @@ public:
 		return start_pos;
 	}
 
-	void set_start_pos(long startpos) {
+	void set_start_pos(const long startpos) {
 		start_pos = startpos;
 	}
 
@@ -210,14 +251,6 @@ public:
 
 	void set_tail(int tail) {
 		this->tail = tail;
-	}
-
-	const table_description& get_tbl_desc() const {
-		return tbl_desc;
-	}
-
-	void set_tbl_desc(const table_description& tbldesc) {
-		tbl_desc = tbldesc;
 	}
 
 	time_t get_update_time() const {
@@ -258,6 +291,47 @@ public:
 
 	void set_assign_time(const time_t & assigntime) {
 		assign_time = assigntime;
+	}
+
+	char_buffer* get_block_store_head() {
+		return block_store_head;
+	}
+
+	void set_block_store_head(char_buffer* blockstorehead) {
+		block_store_head = blockstorehead;
+	}
+
+	const TableDescription* get_table_desc() const {
+		return table_desc;
+	}
+
+	void set_table_desc(TableDescription* tabledesc) {
+		table_desc = tabledesc;
+	}
+
+	char* get_block_data() const {
+		return block_data;
+	}
+
+	void set_block_data(char* blockdata) {
+		block_data = blockdata;
+	}
+
+	char_buffer* get_block_buff() const {
+		return block_buff;
+	}
+
+	void set_block_buff(char_buffer* blockbuff) {
+		block_buff = blockbuff;
+		block_buff_cap = block_buff->capacity();
+	}
+
+	int get_block_buff_cap() const {
+		return block_buff_cap;
+	}
+
+	int get_bufferred_rows() const {
+		return bufferred_rows;
 	}
 };
 

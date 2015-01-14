@@ -13,7 +13,7 @@
 
 namespace enginee {
 
-class field_description {
+class FieldDescription {
 
 protected:
 	short inner_key;
@@ -26,21 +26,21 @@ public:
 
 	const int unsign_inner_key = -1;
 
-	field_description() :
+	FieldDescription() :
 			inner_key(unsign_inner_key), deleted(false) {
 	}
 	;
-	explicit field_description(const std::string & _field_name, const sdb_table_field_type _field_type, const std::string & _comment,
+	explicit FieldDescription(const std::string & _field_name, const sdb_table_field_type _field_type, const std::string & _comment,
 			const bool _deleted) :
 			inner_key(unsign_inner_key), field_name(_field_name), field_type(_field_type), comment(_comment), deleted(_deleted) {
 	}
 
-	explicit field_description(const std::string & _field_name, const sdb_table_field_type _field_type, const int & _size,
+	explicit FieldDescription(const std::string & _field_name, const sdb_table_field_type _field_type, const int & _size,
 			const std::string & _comment, const bool _deleted) :
 			inner_key(unsign_inner_key), field_name(_field_name), field_type(_field_type), size(_size), comment(_comment), deleted(_deleted) {
 	}
 
-	explicit field_description(const field_description & other) {
+	explicit FieldDescription(const FieldDescription & other) {
 		this->inner_key = other.inner_key;
 		this->field_name = other.field_name;
 		this->field_type = other.field_type;
@@ -56,7 +56,7 @@ public:
 		return field_type == unknow_type && field_name.size() == 0;
 	}
 
-	void operator=(const field_description & other) {
+	void operator=(const FieldDescription & other) {
 		this->inner_key = other.inner_key;
 		this->field_name = other.field_name;
 		this->field_type = other.field_type;
@@ -64,7 +64,7 @@ public:
 		this->deleted = other.deleted;
 	}
 
-	friend bool operator==(const field_description & a, const field_description & b) {
+	friend bool operator==(const FieldDescription & a, const FieldDescription & b) {
 		return a.field_name == b.field_name
 				&& a.field_type == b.field_type
 				&& a.deleted == b.deleted
@@ -95,7 +95,7 @@ public:
 		field_name = fieldname;
 	}
 
-	enginee::sdb_table_field_type get_field_type() const {
+	const enginee::sdb_table_field_type get_field_type() const {
 		return field_type;
 	}
 

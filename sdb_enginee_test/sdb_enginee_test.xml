@@ -1,5 +1,5 @@
 <testsuites>
-	<testsuite name="AllTests" tests="11">
+	<testsuite name="AllTests" tests="15">
 		<testcase classname="AllTests" name="char_pointer_test"/>
 		<testcase classname="AllTests" name="sdb_common_char_buff_operator_test"/>
 		<testcase classname="AllTests" name="sdb_common_encoding_test"/>
@@ -10,6 +10,10 @@
 		<testcase classname="AllTests" name="sdb_table_description_test"/>
 		<testcase classname="AllTests" name="time_test"/>
 		<testcase classname="AllTests" name="list_test"/>
+		<testcase classname="AllTests" name="test_row_store"/>
 		<testcase classname="AllTests" name="sdb_table_store_test"/>
+		<testcase classname="AllTests" name="test_block_store_append"/>
+		<testcase classname="AllTests" name="test_delete_row_store"/>
+		<testcase classname="AllTests" name="test_read_row_store"/>
 	</testsuite>
 </testsuites>

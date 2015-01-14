@@ -32,13 +32,13 @@ private:
 
 public:
 
-	char_buffer(char * buff, int size) {
+	char_buffer(const char * buff, int size) {
 		cap = size;
 		buffer = new char[cap];
 		memcpy(buffer, buff, cap);
 	}
 
-	char_buffer(int capacity) {
+	explicit char_buffer(int capacity) {
 		this->cap = capacity;
 		buffer = new char[capacity];
 	}
@@ -86,6 +86,13 @@ public:
 	 */
 	const int remain() const {
 		return push_pos - pop_pos;
+	}
+
+	/*
+	 * size of chars has'nt push or assign value
+	 */
+	const int free() const {
+		return cap - push_pos;
 	}
 
 	/**
@@ -200,6 +207,20 @@ public:
 		}
 		pop_pos += len;
 		return p;
+	}
+
+	/**
+	 * pop int to len, and next length of chars
+	 */
+	char * pop_chars(int & len) {
+		len = pop_int();
+		if (len > 0) {
+			char *p = new char[len];
+			memcpy(p, buffer + pop_pos, len);
+			pop_pos += len;
+			return p;
+		} else
+			return NULL;
 	}
 
 	float pop_float() {
@@ -324,6 +345,11 @@ public:
 
 	friend char_buffer& operator>>(char_buffer & buff, char * val) {
 		val = buff.pop_cstr();
+		return buff;
+	}
+
+	friend char_buffer& operator>>(char_buffer & buff, char_buffer & val) {
+		buff.pop_char_buffer(&val);
 		return buff;
 	}
 

@@ -76,8 +76,8 @@ int to_int(const char* p_chars) {
 }
 
 short to_short(const char* p_chars) {
-	int * pi = (int *) p_chars;
-	int i(*pi);
+	short * pi = (short *) p_chars;
+	short i(*pi);
 	return i;
 }
 

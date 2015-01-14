@@ -10,78 +10,80 @@
 
 #include <map>
 #include <string.h>
-#include "field_value_store.h"
+#include "field_value.h"
 #include "field_description.h"
 #include "./../common/char_buffer.h"
 
 namespace enginee {
 using namespace std;
 
-class row_store {
+const static int ROW_STORE_IN_USAGE = 1;
+const static int ROW_STORE_DELETED = -1;
+const static int ROW_STORE_HEAD = 12;
+
+class RowStore {
 
 private:
 
-	long block_start_pos;
-	long block_end_pos;
+	int status;
+
+	int content_size;  // the row_store content size, excludes ROW_STORE_HEAD, maybe exceeds a row-store-size
 
 	/*
-	 * position offset the block_store start position
+	 * position offset the block_store start position, include BLOCK_HEAD_LENGTH
 	 */
 	int start_pos;
 	int end_pos;
 
-	int size;  // the row_store size
-
-	int status;
-
 	/*
-	 * position offset the row-store-data-end-position,
-	 * if current row store has extend or the it is full,
-	 * its value SHOULD be end_pos - 4;
+	 * for index
 	 */
-	int tail = 0;
-
+	long block_start_pos;
+	long block_end_pos;
 	/*
 	 * if a row value's bytes exceed a row store, the row value data spans two or more row_store,
 	 * besides the last row_store, they have extend that points start_pos of the next row store.
 	 */
-	int extended = 0;
+	int extended = -1;
 
-	map<short, field_value_store> field_value_map;
+	map<short, FieldValue> field_value_map;
 
 public:
 
-	const static int un_usage = 0;
-	const static int usage = 1;
-	const static int deleted = 2;
+	RowStore() {
 
-	explicit row_store(const long & bsp, const long & bep, const int & start) :
+	}
+	explicit RowStore(const long & bsp, const long & bep, const int & start) :
 			block_start_pos(bsp), block_end_pos(bep), start_pos(start) {
-		size = block_end_pos - block_start_pos;
+		content_size = block_end_pos - block_start_pos;
 	}
 
-	explicit row_store(const row_store & other) {
+	explicit RowStore(const RowStore & other) {
 		this->block_start_pos = other.block_start_pos;
 		this->block_end_pos = other.block_end_pos;
 		this->start_pos = other.start_pos;
 		this->status = other.status;
 		this->end_pos = other.end_pos;
-		this->size = other.size;
-		this->tail = other.tail;
+		this->content_size = other.content_size;
 		this->extended = other.extended;
 		this->field_value_map = other.field_value_map;
 	}
-	virtual ~row_store();
+	virtual ~RowStore();
 
-	bool exist_filed(const field_description & desc);
+	bool exist_filed(const FieldDescription & desc);
 	bool exist_filed(const short & key);
-	void add_field_value_store(const field_description & desc, const field_value_store & val);
-	void add_field_value_store(const short & key, const field_value_store & val);
-	void delete_field_value_store(const field_description & desc);
+	void add_field_value_store(const FieldDescription & desc, const FieldValue & val);
+	void add_field_value_store(const short & key, const FieldValue & val);
+	void delete_field_value_store(const FieldDescription & desc);
 	void delete_field_value_store(const short & inner_key);
-	void set_field_value_store(const field_description & desc, const field_value_store & val);
+	void set_field_value_store(const FieldDescription & desc, const FieldValue & val);
 
-	void fill_char_buffer(common::char_buffer * p_buffer) const;
+	void fill_char_buffer(common::char_buffer * p_buffer);
+
+	void read_char_buffer(common::char_buffer * p_buffer);
+	void read_char_buffer(const char * p, int len);
+
+
 
 	int get_end_pos() const {
 		return end_pos;
@@ -99,16 +101,20 @@ public:
 		this->extended = extended;
 	}
 
+	FieldValue & get_field_value(short key)  {
+		return field_value_map.at(key);
+	}
+
 	int get_row_head_count() const {
 		return field_value_map.size();
 	}
 
-	int get_size() const {
-		return size;
+	int get_content_size() const {
+		return content_size;
 	}
 
 	void set_size(int size) {
-		this->size = size;
+		this->content_size = size;
 	}
 
 	int get_start_pos() const {
@@ -123,26 +129,29 @@ public:
 		return status;
 	}
 
+	long get_stream_pos() {
+		return block_start_pos + start_pos;
+	}
+
 	void set_status(int status) {
 		this->status = status;
 	}
 
-	int get_tail() const {
-		return tail;
+	bool has_extended() {
+		return extended != -1;
 	}
 
-	void set_tail(int tail) {
-		this->tail = tail;
+	const bool can_search() {
+		return block_start_pos > 0 && start_pos > 0;
 	}
 
-	void operator=(const row_store & other) {
+	void operator=(const RowStore & other) {
 		this->block_start_pos = other.block_start_pos;
 		this->block_end_pos = other.block_end_pos;
 		this->start_pos = other.start_pos;
 		this->status = other.status;
 		this->end_pos = other.end_pos;
-		this->size = other.size;
-		this->tail = other.tail;
+		this->content_size = other.content_size;
 		this->extended = other.extended;
 		this->field_value_map = other.field_value_map;
 	}
@@ -163,11 +172,11 @@ public:
 		block_start_pos = blockstartpos;
 	}
 
-	const map<short, field_value_store>& get_field_value_map() const {
+	 map<short, FieldValue>& get_field_value_map() {
 		return field_value_map;
 	}
 
-	void set_field_value_map(const map<short, field_value_store>& fieldvaluemap) {
+	void set_field_value_map(const map<short, FieldValue>& fieldvaluemap) {
 		field_value_map = fieldvaluemap;
 	}
 };
