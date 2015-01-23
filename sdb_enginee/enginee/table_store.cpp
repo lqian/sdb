@@ -28,8 +28,10 @@ bool TableStore::init_store(bool refresh) {
 		block_store_off = TABLE_HEAD_LENGTH;
 //		head_block_store_pos = table_head_length;
 
-		head_buffer << tbl_desc.get_table_name() << full_path << create_time << update_time;
-		head_buffer << block_store_off << head_block_store_pos << tail_block_store_pos;
+		head_buffer << tbl_desc.get_table_name() << full_path << create_time
+				<< update_time;
+		head_buffer << block_store_off << head_block_store_pos
+				<< tail_block_store_pos;
 
 		table_stream.open(full_path, fstream::binary | fstream::out);
 		if (table_stream.is_open()) {
@@ -85,7 +87,8 @@ bool TableStore::open() {
 		}
 
 		if (locked) {
-			table_stream.open(full_path, ios_base::in | ios_base::out | ios_base::binary);
+			table_stream.open(full_path,
+					ios_base::in | ios_base::out | ios_base::binary);
 			if (table_stream.is_open()) {
 				return read_head();
 			} else {
@@ -112,14 +115,16 @@ bool TableStore::read_head() {
 		perror("invalid table store data file");
 		return false;
 	}
-	head_buffer >> block_store_off >> head_block_store_pos >> tail_block_store_pos;
+	head_buffer >> block_store_off >> head_block_store_pos
+			>> tail_block_store_pos;
 
 	return true;
 }
 
 bool TableStore::sync_head() {
 	head_buffer.rewind();
-	head_buffer << tbl_desc.get_table_name() << full_path << create_time << update_time;
+	head_buffer << tbl_desc.get_table_name() << full_path << create_time
+			<< update_time;
 
 //	head_buffer << block_store_off << head_block_store_pos << tail_block_store_pos;
 
@@ -148,7 +153,8 @@ bool TableStore::assign_block_store(BlockStore & bs) {
 
 		//append a empty block to table store data file
 		table_stream.seekg(0, ios_base::end);
-		table_stream.write(bs.get_block_store_head()->data(), enginee::BLOCK_STORE_HEAD_SIZE);
+		table_stream.write(bs.get_block_store_head()->data(),
+				enginee::BLOCK_STORE_HEAD_SIZE);
 		table_stream.write(block_buffer.data(), block_buffer.capacity());
 		table_stream.flush();
 
@@ -182,7 +188,8 @@ bool TableStore::read_block_store(BlockStore & bs, const bool & with_content) {
 		char * h_buff = new char[enginee::BLOCK_STORE_HEAD_SIZE];
 		table_stream.read(h_buff, enginee::BLOCK_STORE_HEAD_SIZE);
 		bs.get_block_store_head()->rewind();
-		bs.get_block_store_head()->push_chars(h_buff, enginee::BLOCK_STORE_HEAD_SIZE);
+		bs.get_block_store_head()->push_chars(h_buff,
+				enginee::BLOCK_STORE_HEAD_SIZE);
 		bs.read_head();
 
 		if (with_content) {
@@ -205,19 +212,24 @@ bool TableStore::sync_buffer(BlockStore & bs, const int & ops) {
 			bs.fill_head();
 			long cur_pos = table_stream.tellg();
 			table_stream.seekg(bs.get_start_pos() - cur_pos, ios_base::cur);
-			table_stream.write(bs.head_buffer(), enginee::BLOCK_STORE_HEAD_SIZE);
+			table_stream.write(bs.head_buffer(),
+					enginee::BLOCK_STORE_HEAD_SIZE);
 
 			if (table_stream.good()) {
-				if ((ops & enginee::SYNC_BLOCK_DATA) == enginee::SYNC_BLOCK_DATA) {
+				if ((ops & enginee::SYNC_BLOCK_DATA)
+						== enginee::SYNC_BLOCK_DATA) {
 
 					char_buffer row_buff(bs.get_row_store_size());
 					table_stream.seekg(old_tail, ios_base::cur);
 
 					for (int i = 0; i < bs.get_bufferred_rows(); i++) {
 						if (bs.get_block_buff()->pop_char_buffer(&row_buff)) {
-							table_stream.write(row_buff.data(), row_buff.size());
+							table_stream.write(row_buff.data(),
+									row_buff.size());
 							row_buff.rewind();
-							table_stream.seekg(bs.get_row_store_size() - row_buff.size(), ios_base::cur);
+							table_stream.seekg(
+									bs.get_row_store_size() - row_buff.size(),
+									ios_base::cur);
 						}
 					}
 				}
@@ -237,7 +249,8 @@ bool TableStore::update_row_store(const BlockStore & _bs, RowStore & _rs) {
 	return update_row_buffer(start, row_buff, row_buff.size());
 }
 
-bool TableStore::update_row_store(const BlockStore & _bs, std::list<RowStore> & rs_list) {
+bool TableStore::update_row_store(const BlockStore & _bs,
+		std::list<RowStore> & rs_list) {
 	bool success = true;
 	std::list<RowStore>::iterator it = rs_list.begin();
 	char_buffer row_buff(_bs.get_row_store_size());
@@ -250,7 +263,8 @@ bool TableStore::update_row_store(const BlockStore & _bs, std::list<RowStore> & 
 	return success;
 }
 
-bool TableStore::update_row_buffer(long target_pos, char_buffer & buff, int size) {
+bool TableStore::update_row_buffer(long target_pos, char_buffer & buff,
+		int size) {
 	bool updated = false;
 	long cur_pos = table_stream.tellg();
 	long off = target_pos - cur_pos;
@@ -272,7 +286,8 @@ bool TableStore::update_row_store(std::list<RowStore> & rs_list) {
 	char_buffer row_buff(enginee::ROW_STORE_SIZE_4K);
 	for (; success && it != rs_list.end(); it++) {
 		it->fill_char_buffer(&row_buff);
-		success = update_row_buffer(it->get_stream_pos(), row_buff, row_buff.size());
+		success = update_row_buffer(it->get_stream_pos(), row_buff,
+				row_buff.size());
 		row_buff.rewind();
 	}
 	return success;
@@ -299,16 +314,19 @@ bool TableStore::mark_deleted_status(std::list<RowStore> & rs_list) {
 bool TableStore::mark_deleted_status(const BlockStore & bs, RowStore & rs) {
 	char_buffer buff(4);
 	buff << enginee::ROW_STORE_DELETED;
-	return update_row_buffer(bs.get_start_pos() + rs.get_start_pos(), buff, buff.size());
+	return update_row_buffer(bs.get_start_pos() + rs.get_start_pos(), buff,
+			buff.size());
 }
 
-bool TableStore::mark_deleted_status(const BlockStore & bs, std::list<RowStore> & rs_list) {
+bool TableStore::mark_deleted_status(const BlockStore & bs,
+		std::list<RowStore> & rs_list) {
 	char_buffer buff(4);
 	buff << enginee::ROW_STORE_DELETED;
 	bool success = true;
 	std::list<RowStore>::iterator it = rs_list.begin();
 	for (; success && it != rs_list.end(); it++) {
-		success = update_row_buffer(it->get_start_pos() + bs.get_start_pos(), buff, buff.size());
+		success = update_row_buffer(it->get_start_pos() + bs.get_start_pos(),
+				buff, buff.size());
 	}
 
 	return success;

@@ -62,7 +62,9 @@ bool TableDescription::load_from_file() {
 					//add valid field to map
 					if (!exists_field(fds) && !fds.is_deleted()) {
 						std::string k = fds.get_field_name();
-						field_desc_map.insert(std::pair<std::string, FieldDescription>(k, fds));
+						field_desc_map.insert(
+								std::pair<std::string, FieldDescription>(k,
+										fds));
 					}
 
 				} else {
@@ -88,16 +90,19 @@ bool TableDescription::write_to_file(bool refresh) {
 			common::char_buffer table_desc_buffer(512);
 
 			int fs = field_desc_list.size();
-			table_desc_buffer << magic << table_name << deleted << fs << comment;
+			table_desc_buffer << magic << table_name << deleted << fs
+					<< comment;
 
 			int pos = table_desc_buffer.size();
 			int pre_pos;
 			int next_pos;
 			int i = 0;
 
-			for (std::list<FieldDescription>::iterator it = field_desc_list.begin(); it != field_desc_list.end(); it++) {
+			for (std::list<FieldDescription>::iterator it =
+					field_desc_list.begin(); it != field_desc_list.end();
+					it++) {
 
-				FieldDescriptionStore fds = FieldDescriptionStore(*it);
+				FieldDescriptionStore fds(*it);
 
 				int bs = fds.evaluate_block_size();
 				if (i == 0) {
@@ -129,19 +134,22 @@ void TableDescription::delete_field(const string & field_name) {
 	// delete from map
 	field_desc_map.erase(field_name);
 
-	for (std::list<FieldDescription>::iterator it = field_desc_list.begin(); it != field_desc_list.end(); it++) {
+	for (std::list<FieldDescription>::iterator it = field_desc_list.begin();
+			it != field_desc_list.end(); it++) {
 		if (it->get_field_name() == field_name && !it->is_deleted()) {
 			it->set_deleted(true);
 		}
 	}
 }
+
 bool TableDescription::update_exist_file() {
 	bool updated = false;
 	return updated;
 }
 
 bool TableDescription::operator ==(const TableDescription & b) {
-	return this->m_sdb == b.m_sdb && this->table_name == b.table_name && this->deleted == b.deleted
+	return this->m_sdb == b.m_sdb && this->table_name == b.table_name
+			&& this->deleted == b.deleted
 			&& this->field_desc_list == b.field_desc_list;
 
 }

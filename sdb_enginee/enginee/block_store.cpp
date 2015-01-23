@@ -26,7 +26,7 @@ bool BlockStore::append_to_buff(RowStore * rs) {
 			block_buff->push_back(row_buff);
 			bufferred_rows++;
 			append = true;
-			usage_percent = (tail  +  block_buff->size()) * 100 / block_size;
+			usage_percent = (tail + block_buff->size()) * 100 / block_size;
 		}
 	}
 

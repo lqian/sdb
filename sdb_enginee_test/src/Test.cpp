@@ -116,7 +116,8 @@ void test_block_store_append() {
 	r1.add_field_value_store(fd3, v3);
 
 	head_block.append_to_buff(&r1);
-	tab1_store.sync_buffer(head_block, enginee::SYNC_BLOCK_HEAD | enginee::SYNC_BLOCK_DATA);
+	tab1_store.sync_buffer(head_block,
+			enginee::SYNC_BLOCK_HEAD | enginee::SYNC_BLOCK_DATA);
 
 	ASSERT(tab1_store.close());
 
@@ -143,7 +144,7 @@ void test_delete_row_store() {
 	ASSERT(tab1_store.head_block(&head_block));
 
 	RowStore rs;
-	rs.set_start_pos(enginee::BLOCK_STORE_HEAD_SIZE);  // the first row store in the block
+	rs.set_start_pos(enginee::BLOCK_STORE_HEAD_SIZE); // the first row store in the block
 	tab1_store.mark_deleted_status(head_block, rs);
 
 	tab1_store.close();
@@ -171,12 +172,13 @@ void test_read_row_store() {
 
 	RowStore first;
 	RowStore sec;
-	first.set_start_pos(enginee::BLOCK_STORE_HEAD_SIZE);  // the first row store in the block
+	first.set_start_pos(enginee::BLOCK_STORE_HEAD_SIZE); // the first row store in the block
 	tab1_store.read_row_store(head_block, &first);
 
 	ASSERT(first.get_status() == enginee::ROW_STORE_DELETED);
 
-	sec.set_start_pos(enginee::BLOCK_STORE_HEAD_SIZE + head_block.get_row_store_size());
+	sec.set_start_pos(
+			enginee::BLOCK_STORE_HEAD_SIZE + head_block.get_row_store_size());
 	bool r = tab1_store.read_row_store(head_block, &sec);
 	tab1_store.close();
 	ASSERT(r);
@@ -241,13 +243,22 @@ void test_row_store() {
 
 	char_buffer row_buff(ROW_STORE_SIZE_4K);
 	r1.fill_char_buffer(&row_buff);
-	ASSERT(r1.get_content_size() == (4 + (3 * 2 + INT_CHARS) + (4 * 3 + 1 + 4 + 8 + INT_CHARS)));
+	ASSERT(
+			r1.get_content_size()
+					== (4 + (3 * 2 + INT_CHARS)
+							+ (4 * 3 + 1 + 4 + 8 + INT_CHARS)));
 
-	ASSERT(row_buff.size() == (12 + (4 + 3 * 2 + INT_CHARS) + (4 + 1 + 4 + 4 + 4 + 8 + INT_CHARS)));
+	ASSERT(
+			row_buff.size()
+					== (12 + (4 + 3 * 2 + INT_CHARS)
+							+ (4 + 1 + 4 + 4 + 4 + 8 + INT_CHARS)));
 
 	RowStore r2;
 	r2.read_char_buffer(&row_buff);
-	ASSERT(r2.get_content_size() == (4 + (3 * 2 + INT_CHARS) + (4 * 3 + 1 + 4 + 8 + INT_CHARS)));
+	ASSERT(
+			r2.get_content_size()
+					== (4 + (3 * 2 + INT_CHARS)
+							+ (4 * 3 + 1 + 4 + 8 + INT_CHARS)));
 
 	ASSERT(r2.get_field_value(fd1.get_inner_key()).bool_val());
 	ASSERT(r2.get_field_value(fd2.get_inner_key()).int_val() == 1024);
@@ -287,7 +298,8 @@ void list_test() {
 	my_list.push_back(20);
 	my_list.push_back(30);
 
-	for (std::list<int>::iterator it = my_list.begin(); it != my_list.end(); it++) {
+	for (std::list<int>::iterator it = my_list.begin(); it != my_list.end();
+			it++) {
 		cout << *it << endl;
 	}
 
@@ -296,7 +308,8 @@ void list_test() {
 	my_list.insert(my_list.begin(), 40);
 
 	cout << "after my_list.insert()..." << endl;
-	for (std::list<int>::iterator it = my_list.begin(); it != my_list.end(); it++) {
+	std::list<int>::iterator it = my_list.begin();
+	for (; it != my_list.end(); it++) {
 		cout << *it << endl;
 	}
 	ASSERT((*my_list.begin()) == 40);
@@ -378,7 +391,8 @@ void sdb_table_description_test() {
 	}
 	ASSERT(db.exists() == true);
 
-	ASSERTM(tbl_desc.get_file_name(), tbl_desc.get_file_name() == std::string("/tmp/db1/tab1.td"));
+	ASSERTM(tbl_desc.get_file_name(),
+			tbl_desc.get_file_name() == std::string("/tmp/db1/tab1.td"));
 
 	tbl_desc.set_comment("this is the table comment");
 
@@ -408,7 +422,7 @@ void sdb_table_description_test() {
 	tbl_desc.add_field_description(field2);
 	tbl_desc.add_field_description(field3);
 
-	ASSERT(field1.get_inner_key()==1);
+	ASSERT(field1.get_inner_key() == 1);
 
 	tbl_desc.write_to_file(true);
 
@@ -428,7 +442,6 @@ void sdb_table_description_test() {
 	ASSERT(ofd1.get_comment() == comment1);
 	ASSERT(ofd1.get_field_type() == field1.get_field_type());
 
-
 	other.set_table_name("copy_tab1");
 	other.delete_field(fn1);
 	other.write_to_file(true);
@@ -445,9 +458,11 @@ void sdb_table_description_test() {
 //				<< it->second.is_deleted() << endl;
 //	}
 
-	for (std::map<std::string, FieldDescription>::const_iterator it = other.get_field_description_map().begin();
+	for (std::map<std::string, FieldDescription>::const_iterator it =
+			other.get_field_description_map().begin();
 			it != other.get_field_description_map().end(); it++) {
-		cout << "map key:" << it->first << "map value:" << it->second.get_inner_key() << " status: "
+		cout << "map key:" << it->first << "map value:"
+				<< it->second.get_inner_key() << " status: "
 				<< it->second.is_deleted() << endl;
 	}
 

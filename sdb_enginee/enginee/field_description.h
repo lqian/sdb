@@ -29,15 +29,20 @@ public:
 	FieldDescription() :
 			inner_key(unsign_inner_key), deleted(false) {
 	}
-	;
-	explicit FieldDescription(const std::string & _field_name, const sdb_table_field_type _field_type, const std::string & _comment,
-			const bool _deleted) :
-			inner_key(unsign_inner_key), field_name(_field_name), field_type(_field_type), comment(_comment), deleted(_deleted) {
+
+	explicit FieldDescription(const std::string & _field_name,
+			const sdb_table_field_type _field_type,
+			const std::string & _comment, const bool _deleted) :
+			inner_key(unsign_inner_key), field_name(_field_name), field_type(
+					_field_type), comment(_comment), deleted(_deleted) {
 	}
 
-	explicit FieldDescription(const std::string & _field_name, const sdb_table_field_type _field_type, const int & _size,
+	explicit FieldDescription(const std::string & _field_name,
+			const sdb_table_field_type _field_type, const int & _size,
 			const std::string & _comment, const bool _deleted) :
-			inner_key(unsign_inner_key), field_name(_field_name), field_type(_field_type), size(_size), comment(_comment), deleted(_deleted) {
+			inner_key(unsign_inner_key), field_name(_field_name), field_type(
+					_field_type), size(_size), comment(_comment), deleted(
+					_deleted) {
 	}
 
 	explicit FieldDescription(const FieldDescription & other) {
@@ -64,11 +69,10 @@ public:
 		this->deleted = other.deleted;
 	}
 
-	friend bool operator==(const FieldDescription & a, const FieldDescription & b) {
-		return a.field_name == b.field_name
-				&& a.field_type == b.field_type
-				&& a.deleted == b.deleted
-				&& a.comment == b.comment;
+	friend bool operator==(const FieldDescription & a,
+			const FieldDescription & b) {
+		return a.field_name == b.field_name && a.field_type == b.field_type
+				&& a.deleted == b.deleted && a.comment == b.comment;
 	}
 
 	const std::string& get_comment() const {
@@ -112,7 +116,8 @@ public:
 	}
 
 	bool is_variant() const {
-		return (field_type == char_type || field_type == varchar_type) || field_type > varchar_type;
+		return (field_type == char_type || field_type == varchar_type)
+				|| field_type > varchar_type;
 	}
 };
 

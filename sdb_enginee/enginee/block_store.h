@@ -59,7 +59,7 @@ private:
 	time_t update_time;
 	time_t assign_time;
 
-	int block_buff_cap = 0 ;
+	int block_buff_cap = 0;
 
 	char_buffer* block_store_head;
 	char * block_data;
@@ -71,7 +71,8 @@ private:
 public:
 
 	explicit BlockStore() :
-			row_store_size(ROW_STORE_SIZE_4K), block_size(BLOCK_SIZE_64M), name_space(DEFAULT_NAMESPACE) {
+			row_store_size(ROW_STORE_SIZE_4K), block_size(BLOCK_SIZE_64M), name_space(
+					DEFAULT_NAMESPACE) {
 		time(&create_time);
 		time(&update_time);
 		block_store_head = new char_buffer(BLOCK_STORE_HEAD_SIZE);
@@ -175,9 +176,12 @@ public:
 	}
 
 	bool operator==(const BlockStore & other) {
-		return this->table_desc == other.table_desc && this->block_store_id == other.block_store_id
-				&& this->row_store_size == other.row_store_size && this->status == other.status
-				&& this->start_pos == other.start_pos && this->end_pos == other.end_pos;
+		return this->table_desc == other.table_desc
+				&& this->block_store_id == other.block_store_id
+				&& this->row_store_size == other.row_store_size
+				&& this->status == other.status
+				&& this->start_pos == other.start_pos
+				&& this->end_pos == other.end_pos;
 
 	}
 

@@ -13,7 +13,8 @@ namespace enginee {
 using namespace common;
 
 bool RowStore::exist_filed(const FieldDescription & desc) {
-	std::map<short, FieldValue>::const_iterator it = field_value_map.find(desc.get_inner_key());
+	std::map<short, FieldValue>::const_iterator it = field_value_map.find(
+			desc.get_inner_key());
 	return it != field_value_map.end();
 }
 
@@ -22,11 +23,14 @@ bool RowStore::exist_filed(const short & key) {
 	return it != field_value_map.end();
 }
 
-void RowStore::add_field_value_store(const FieldDescription & desc, const FieldValue & val) {
-	field_value_map.insert(std::pair<short, FieldValue>(desc.get_inner_key(), val));
+void RowStore::add_field_value_store(const FieldDescription & desc,
+		const FieldValue & val) {
+	field_value_map.insert(
+			std::pair<short, FieldValue>(desc.get_inner_key(), val));
 }
 
-void RowStore::add_field_value_store(const short & key, const FieldValue & val) {
+void RowStore::add_field_value_store(const short & key,
+		const FieldValue & val) {
 	field_value_map.insert(std::pair<short, FieldValue>(key, val));
 }
 
@@ -38,8 +42,10 @@ void RowStore::delete_field_value_store(const FieldDescription & desc) {
 	field_value_map.erase(desc.get_inner_key());
 }
 
-void RowStore::set_field_value_store(const FieldDescription & desc, const FieldValue & val) {
-	field_value_map.insert(std::pair<short, FieldValue>(desc.get_inner_key(), val));
+void RowStore::set_field_value_store(const FieldDescription & desc,
+		const FieldValue & val) {
+	field_value_map.insert(
+			std::pair<short, FieldValue>(desc.get_inner_key(), val));
 }
 
 void RowStore::fill_char_buffer(char_buffer * p_buffer) {

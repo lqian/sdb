@@ -102,8 +102,6 @@ bool sdb::init() {
 	return success;
 }
 
-
-
 bool sdb::exist_table(const char * table_name) {
 	TableDescription tbl_desc(*this, table_name);
 	return tbl_desc.exists();

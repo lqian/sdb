@@ -36,7 +36,8 @@ public:
 			type(_type) {
 	}
 
-	explicit FieldValue(const sdb_table_field_type & _type, const char * _value, const int & _len) :
+	explicit FieldValue(const sdb_table_field_type & _type, const char * _value,
+			const int & _len) :
 			type(_type), len(_len) {
 		value = new char[len];
 		memcpy(value, _value, _len);
@@ -76,7 +77,8 @@ public:
 	time_t time_val();
 
 	bool is_variant() const {
-		return (type == char_type || type == varchar_type) || type > varchar_type;
+		return (type == char_type || type == varchar_type)
+				|| type > varchar_type;
 	}
 
 	bool read_buffer(common::char_buffer * buff);

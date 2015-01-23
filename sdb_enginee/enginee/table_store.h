@@ -40,7 +40,7 @@ private:
 	time_t create_time;
 	time_t update_time;
 
-	long block_store_off;  // offset includes last block length, meanwhile it's the next new block start off
+	long block_store_off; // offset includes last block length, meanwhile it's the next new block start off
 
 	long head_block_store_pos;
 	long tail_block_store_pos;
@@ -53,13 +53,14 @@ private:
 
 public:
 	explicit TableStore(const TableDescription & _desc) :
-			tbl_desc(_desc), status(sdb_table_ready), head_buffer(char_buffer(TABLE_HEAD_LENGTH)) {
+			tbl_desc(_desc), status(sdb_table_ready), head_buffer(
+					char_buffer(TABLE_HEAD_LENGTH)) {
 
-		full_path.append(_desc.get_sdb().get_full_path()).append("/").append(_desc.get_table_name()).append(
-				TABLE_STORE_FILE_EXTENSION);
+		full_path.append(_desc.get_sdb().get_full_path()).append("/").append(
+				_desc.get_table_name()).append(TABLE_STORE_FILE_EXTENSION);
 
-		lock_path.append(_desc.get_sdb().get_full_path()).append("/").append(_desc.get_table_name()).append(
-				TABLE_LOCK_FILE_EXTENSION);
+		lock_path.append(_desc.get_sdb().get_full_path()).append("/").append(
+				_desc.get_table_name()).append(TABLE_LOCK_FILE_EXTENSION);
 
 		time(&create_time);
 		time(&update_time);
@@ -117,7 +118,8 @@ public:
 	/*
 	 * update row list within a BlockStore
 	 */
-	bool update_row_store(const BlockStore & _bs, std::list<RowStore> & rs_list);
+	bool update_row_store(const BlockStore & _bs,
+			std::list<RowStore> & rs_list);
 
 	bool update_row_store(RowStore & rs);
 	bool update_row_store(std::list<RowStore> & rs_list);
@@ -126,7 +128,9 @@ public:
 	bool mark_deleted_status(std::list<RowStore> & rs_list);
 
 	bool mark_deleted_status(const BlockStore & bs, RowStore & rs);
-	bool mark_deleted_status(const BlockStore & bs, std::list<RowStore> & rs_list);
+
+	bool mark_deleted_status(const BlockStore & bs,
+			std::list<RowStore> & rs_list);
 
 	bool head_block(BlockStore * p_bs);
 

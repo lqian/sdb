@@ -19,7 +19,14 @@ const std::string sdb_lock_file_extension(".lock");
 const int MAX_DB_NAME_SIZE(64);
 
 enum sdb_status {
-	sdb_unknown, sdb_opening = 1000, sdb_opened, sdb_ready, sdb_in_using, sdb_readonly, sdb_exited, sdb_failured = 2000
+	sdb_unknown,
+	sdb_opening = 1000,
+	sdb_opened,
+	sdb_ready,
+	sdb_in_using,
+	sdb_readonly,
+	sdb_exited,
+	sdb_failured = 2000
 };
 
 enum sdb_table_status {
@@ -76,11 +83,11 @@ public:
 	explicit sdb(const char *dir, const char * name);
 	explicit sdb(const std::string & dir, const std::string &name);
 	explicit sdb(const sdb& other) :
-			dir(other.dir), name(other.name), charset(other.charset), status(other.status) {
+			dir(other.dir), name(other.name), charset(other.charset), status(
+					other.status) {
 		full_path = dir + "/" + name;
 	}
 	virtual ~ sdb();
-
 
 	bool exists();
 	bool init();

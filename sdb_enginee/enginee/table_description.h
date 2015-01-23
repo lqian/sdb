@@ -54,8 +54,10 @@ public:
 		file_name = m_sdb.get_full_path() + "/" + table_name.c_str() + ".td";
 	}
 
-	explicit TableDescription(const sdb & _sdb, const std::string & _table_name, const std::string & _comment) :
-			m_sdb(_sdb), table_name(_table_name), comment(_comment), deleted(false) {
+	explicit TableDescription(const sdb & _sdb, const std::string & _table_name,
+			const std::string & _comment) :
+			m_sdb(_sdb), table_name(_table_name), comment(_comment), deleted(
+					false) {
 		file_name = m_sdb.get_full_path() + "/" + table_name.c_str() + ".td";
 	}
 
@@ -82,14 +84,18 @@ public:
 	bool operator==(const TableDescription & other);
 
 	bool exists_field(const std::string& field_name) {
-		return field_desc_map.size() > 0 && (field_desc_map.find(field_name) != field_desc_map.end());
+		return field_desc_map.size() > 0
+				&& (field_desc_map.find(field_name) != field_desc_map.end());
 	}
 	bool exists_field(const FieldDescription & _field_description) {
-		return field_desc_map.size() > 0 && (field_desc_map.find(_field_description.get_field_name()) != field_desc_map.end());
+		return field_desc_map.size() > 0
+				&& (field_desc_map.find(_field_description.get_field_name())
+						!= field_desc_map.end());
 	}
 
 	const FieldDescription & get_field_description(const std::string& s) {
-		std::map<std::string, FieldDescription>::iterator its = field_desc_map.find(s);
+		std::map<std::string, FieldDescription>::iterator its =
+				field_desc_map.find(s);
 		if (its != field_desc_map.end()) {
 			return its->second;
 		} else {
@@ -102,7 +108,8 @@ public:
 
 			fd.set_inner_key((short) (field_desc_list.size() + 1));
 			std::string k = fd.get_field_name();
-			field_desc_map.insert(std::pair<std::string, FieldDescription>(k, fd));
+			field_desc_map.insert(
+					std::pair<std::string, FieldDescription>(k, fd));
 
 			field_desc_list.push_back(fd);
 		}

@@ -27,7 +27,7 @@ private:
 
 	int status;
 
-	int content_size;  // the row_store content size, excludes ROW_STORE_HEAD, maybe exceeds a row-store-size
+	int content_size; // the row_store content size, excludes ROW_STORE_HEAD, maybe exceeds a row-store-size
 
 	/*
 	 * position offset the block_store start position, include BLOCK_HEAD_LENGTH
@@ -72,18 +72,18 @@ public:
 
 	bool exist_filed(const FieldDescription & desc);
 	bool exist_filed(const short & key);
-	void add_field_value_store(const FieldDescription & desc, const FieldValue & val);
+	void add_field_value_store(const FieldDescription & desc,
+			const FieldValue & val);
 	void add_field_value_store(const short & key, const FieldValue & val);
 	void delete_field_value_store(const FieldDescription & desc);
 	void delete_field_value_store(const short & inner_key);
-	void set_field_value_store(const FieldDescription & desc, const FieldValue & val);
+	void set_field_value_store(const FieldDescription & desc,
+			const FieldValue & val);
 
 	void fill_char_buffer(common::char_buffer * p_buffer);
 
 	void read_char_buffer(common::char_buffer * p_buffer);
 	void read_char_buffer(const char * p, int len);
-
-
 
 	int get_end_pos() const {
 		return end_pos;
@@ -101,7 +101,7 @@ public:
 		this->extended = extended;
 	}
 
-	FieldValue & get_field_value(short key)  {
+	FieldValue & get_field_value(short key) {
 		return field_value_map.at(key);
 	}
 
@@ -172,7 +172,7 @@ public:
 		block_start_pos = blockstartpos;
 	}
 
-	 map<short, FieldValue>& get_field_value_map() {
+	map<short, FieldValue>& get_field_value_map() {
 		return field_value_map;
 	}
 

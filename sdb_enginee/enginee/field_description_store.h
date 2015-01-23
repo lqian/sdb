@@ -36,8 +36,8 @@ public:
 	}
 
 	void fill_store() {
-		store << pre_store_block_start_pos << next_store_block_start_pos << inner_key
-				<< field_name << deleted;
+		store << pre_field_desc_start_pos << next_field_desc_start_pos
+				<< inner_key << field_name << deleted;
 		int t = field_type;
 		store << t << comment;
 	}
@@ -46,8 +46,8 @@ public:
 	 * read members from store
 	 */
 	void read_store() {
-		store >> pre_store_block_start_pos >> next_store_block_start_pos >> inner_key
-				>> field_name >> deleted;
+		store >> pre_field_desc_start_pos >> next_field_desc_start_pos
+				>> inner_key >> field_name >> deleted;
 		int t(0);
 //		comment = store.pop_string();
 		store >> t >> comment;
@@ -55,15 +55,16 @@ public:
 	}
 
 	void set_pre_store_block_pos(int pos) {
-		pre_store_block_start_pos = pos;
+		pre_field_desc_start_pos = pos;
 	}
 
 	void set_next_store_block_pos(int pos) {
-		next_store_block_start_pos = pos;
+		next_field_desc_start_pos = pos;
 	}
 
 	const int evaluate_block_size() {
-		return INT_CHARS * 5 + field_name.size() + comment.size() + BOOL_CHARS + SHORT_CHARS;
+		return INT_CHARS * 5 + field_name.size() + comment.size() + BOOL_CHARS
+				+ SHORT_CHARS;
 	}
 
 	common::char_buffer& char_buffer() {
@@ -75,9 +76,9 @@ public:
 	}
 
 private:
-	common::char_buffer store =  common::char_buffer(field_store_block_size);
-	int pre_store_block_start_pos = 0;
-	int next_store_block_start_pos = 0;
+	common::char_buffer store = common::char_buffer(field_store_block_size);
+	int pre_field_desc_start_pos = 0;
+	int next_field_desc_start_pos = 0;
 };
 }
 

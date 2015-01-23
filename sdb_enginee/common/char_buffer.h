@@ -298,12 +298,14 @@ public:
 		return buff;
 	}
 
-	friend char_buffer& operator<<(char_buffer & buff, const std::string & val) {
+	friend char_buffer& operator<<(char_buffer & buff,
+			const std::string & val) {
 		buff.push_back(val);
 		return buff;
 	}
 
-	friend char_buffer& operator<<(char_buffer & buff, const char_buffer & val) {
+	friend char_buffer& operator<<(char_buffer & buff,
+			const char_buffer & val) {
 		buff.push_back(val);
 		return buff;
 	}
