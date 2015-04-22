@@ -10,7 +10,7 @@
 
 #include <string>
 
-namespace sdb_io {
+namespace sio {
 
 bool exist_file(char * path, int mode);
 
@@ -19,6 +19,8 @@ bool exist_file(std::string & path, int mode);
 bool exist_file(char * path);
 
 bool exist_file(std::string & path);
+
+bool remove_file(std::string &path);
 }
 ;
 

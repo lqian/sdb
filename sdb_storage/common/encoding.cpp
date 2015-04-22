@@ -34,6 +34,15 @@ char* to_chars(const int &i) {
 	return pc;
 }
 
+char* to_chars(const unsigned int &i) {
+	char * pv = (char *) &i;
+	char * pc = new char[INT_CHARS];
+	for (int j = 0; j < INT_CHARS; j++) {
+		pc[j] = pv[j];
+	}
+	return pc;
+}
+
 char* to_chars(const short &i) {
 	char * pv = (char *) &i;
 	char * pc = new char[SHORT_CHARS];
@@ -52,6 +61,14 @@ char* to_chars(const long &l) {
 	return pc;
 }
 
+char * to_chars(const unsigned long &ul) {
+	char * pv = (char *) &ul;
+	char * pc = new char[UNSIGNED_LONG_CHARS];
+	for (int j = 0; j < UNSIGNED_LONG_CHARS; j++) {
+		pc[j] = pv[j];
+	}
+	return pc;
+}
 char* to_chars(const bool &b) {
 	char c = b ? 1 : 0;
 	char * pc = &c;
@@ -75,6 +92,12 @@ int to_int(const char* p_chars) {
 	return i;
 }
 
+unsigned int to_unsigned_int(const char* p_chars) {
+	unsigned int * pui = (unsigned int *) p_chars;
+	unsigned int ui(*pui);
+	return ui;
+}
+
 short to_short(const char* p_chars) {
 	short * pi = (short *) p_chars;
 	short i(*pi);
@@ -89,5 +112,11 @@ long to_long(const char* p_char) {
 	long *pl = (long *) p_char;
 	long l(*pl);
 	return l;
+}
+
+unsigned long to_unsigned_long(const char* p_char) {
+	unsigned long *pul = (unsigned long *) p_char;
+	unsigned long ul(*pul);
+	return ul;
 }
 

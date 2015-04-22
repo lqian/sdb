@@ -31,11 +31,21 @@ private:
 	float grow_factor = 2;
 
 public:
-
 	char_buffer(const char * buff, int size) {
 		cap = size;
 		buffer = new char[cap];
 		memcpy(buffer, buff, cap);
+	}
+
+	char_buffer(char * buff, int size, bool wrapped=false) {
+		if (wrapped) {
+			cap = size;
+			buffer = buff;
+		} else {
+			cap = size;
+			buffer = new char[cap];
+			memcpy(buffer, buff, cap);
+		}
 	}
 
 	explicit char_buffer(int capacity) {
@@ -53,6 +63,12 @@ public:
 			cap(other.cap), b_size(other.b_size), grow_factor(other.grow_factor) {
 		buffer = new char[cap];
 		memcpy(buffer, other.buffer, b_size);
+	}
+
+	char_buffer(char_buffer && other) :
+			cap(other.cap), b_size(other.b_size), grow_factor(other.grow_factor) {
+		this->buffer = other.buffer;
+		other.buffer = nullptr;
 	}
 
 	char_buffer(const char_buffer & other, const bool shrinking) :
@@ -135,9 +151,21 @@ public:
 		return this;
 	}
 
+	char_buffer * push_back(const unsigned int & val) {
+		ensure_capacity(INT_CHARS);
+		push_chars(to_chars(val), INT_CHARS);
+		return this;
+	}
+
 	char_buffer * push_back(const long & val) {
 		ensure_capacity(LONG_CHARS);
 		push_chars(to_chars(val), LONG_CHARS);
+		return this;
+	}
+
+	char_buffer * push_back(const unsigned long & val) {
+		ensure_capacity(UNSIGNED_LONG_CHARS);
+		push_chars(to_chars(val), UNSIGNED_LONG_CHARS);
 		return this;
 	}
 
@@ -194,6 +222,12 @@ public:
 		return (*p);
 	}
 
+	const unsigned & pop_unsigned_int() {
+		unsigned * p = (unsigned *) (buffer + pop_pos);
+		pop_pos += INT_CHARS;
+		return (*p);
+	}
+
 	std::string pop_string() {
 		return std::string(pop_cstr());
 	}
@@ -241,6 +275,12 @@ public:
 		return (*p);
 	}
 
+	unsigned long pop_unsigned_long() {
+		unsigned long * p = (unsigned long *) (buffer + pop_pos);
+		pop_pos += UNSIGNED_LONG_CHARS;
+		return (*p);
+	}
+
 	bool pop_char_buffer(char_buffer* p_buffer) {
 		int len = pop_int();
 		if (len <= 0)
@@ -279,6 +319,18 @@ public:
 	}
 
 	friend char_buffer& operator<<(char_buffer & buff, const int & val) {
+		buff.push_back(val);
+		return buff;
+	}
+
+	friend char_buffer& operator<<(char_buffer & buff,
+			const unsigned int & val) {
+		buff.push_back(val);
+		return buff;
+	}
+
+	friend char_buffer& operator<<(char_buffer & buff,
+			const unsigned long & val) {
 		buff.push_back(val);
 		return buff;
 	}
@@ -335,8 +387,18 @@ public:
 		return buff;
 	}
 
+	friend char_buffer & operator>>(char_buffer & buff, unsigned & val) {
+		val = buff.pop_unsigned_int();
+		return buff;
+	}
+
 	friend char_buffer& operator>>(char_buffer & buff, long & val) {
 		val = buff.pop_long();
+		return buff;
+	}
+
+	friend char_buffer& operator>>(char_buffer & buff, unsigned long & val) {
+		val = buff.pop_unsigned_long();
 		return buff;
 	}
 
@@ -347,6 +409,11 @@ public:
 
 	friend char_buffer& operator>>(char_buffer & buff, char * val) {
 		val = buff.pop_cstr();
+		return buff;
+	}
+
+	friend char_buffer& operator>>(char_buffer & buff, char & val) {
+		val = *(buff.pop_cstr());
 		return buff;
 	}
 
@@ -390,7 +457,6 @@ protected:
 		delete[] buffer;
 		buffer = new_buffer;
 	}
-
 }
 ;
 }
