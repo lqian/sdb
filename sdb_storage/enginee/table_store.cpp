@@ -15,11 +15,12 @@
 namespace enginee {
 
 bool TableStore::is_open() {
-	return sdb_io::exist_file(lock_path) && status == sdb_table_opened;
+
+	return sio::exist_file(lock_path) && status == sdb_table_opened;
 }
 
 bool TableStore::is_closed() {
-	return status == sdb_table_closed || !sdb_io::exist_file(lock_path);
+	return status == sdb_table_closed || !sio::exist_file(lock_path);
 }
 
 bool TableStore::init_store(bool refresh) {
@@ -44,7 +45,7 @@ bool TableStore::init_store(bool refresh) {
 }
 
 bool TableStore::is_initialized() {
-	if (sdb_io::exist_file(full_path)) {
+	if (sio::exist_file(full_path)) {
 		struct stat t_stat;
 		stat(full_path.c_str(), &t_stat);
 		return t_stat.st_size >= TABLE_HEAD_LENGTH;
@@ -53,7 +54,7 @@ bool TableStore::is_initialized() {
 }
 
 bool TableStore::has_block_store() {
-	if (sdb_io::exist_file(full_path)) {
+	if (sio::exist_file(full_path)) {
 		struct stat t_stat;
 		stat(full_path.c_str(), &t_stat);
 		return t_stat.st_size > TABLE_HEAD_LENGTH;
@@ -74,7 +75,7 @@ bool TableStore::head_block(BlockStore * p_bs) {
 	return r;
 }
 bool TableStore::open() {
-	if (sdb_io::exist_file(lock_path)) {
+	if (sio::exist_file(lock_path)) {
 		return false;
 	} else {
 		ofstream lock_stream(lock_path.c_str());
@@ -234,7 +235,8 @@ bool TableStore::sync_buffer(BlockStore & bs, const int & ops) {
 						}
 					}
 				}
-				if (table_stream.good() && table_stream.flush() == 0) {
+				table_stream.flush();
+				if (table_stream.good()) {
 					synced = true;
 				}
 			}
@@ -375,7 +377,7 @@ bool TableStore::read_row_store(const BlockStore & bs, RowStore * prs) {
 }
 
 bool TableStore::close() {
-	if (sdb_io::exist_file(lock_path)) {
+	if (sio::exist_file(lock_path)) {
 		table_stream.close();
 		bool b = (remove(lock_path.c_str()) == 0);
 		if (b) {

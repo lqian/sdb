@@ -16,7 +16,17 @@ namespace enginee {
 using namespace std;
 
 bool TableDescription::exists() {
-	return sdb_io::exist_file(file_name);
+	return sio::exist_file(file_name);
+}
+
+void TableDescription::add_field_description(FieldDescription &fd) {
+	if (!exists_field(fd) && !fd.is_deleted()) {
+		fd.set_inner_key((short) (field_desc_list.size() + 1));
+		std::string k = fd.get_field_name();
+		std::pair<std::string, FieldDescription> p(k, fd);
+//TODO		field_desc_map.insert(p);
+		field_desc_list.push_back(fd);
+	}
 }
 
 bool TableDescription::load_from_file() {
@@ -62,9 +72,8 @@ bool TableDescription::load_from_file() {
 					//add valid field to map
 					if (!exists_field(fds) && !fds.is_deleted()) {
 						std::string k = fds.get_field_name();
-						field_desc_map.insert(
-								std::pair<std::string, FieldDescription>(k,
-										fds));
+						std::pair<std::string, FieldDescription> p(k, fds);
+//TODO						field_desc_map.insert(p);
 					}
 
 				} else {

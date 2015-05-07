@@ -52,6 +52,14 @@ char* to_chars(const short &i) {
 	return pc;
 }
 
+char* to_chars(const unsigned short &i) {
+	char * pv = (char *) &i;
+	char * pc = new char[SHORT_CHARS];
+	for (int j = 0; j < SHORT_CHARS; j++) {
+		pc[j] = pv[j];
+	}
+	return pc;
+}
 char* to_chars(const long &l) {
 	char * pv = (char *) &l;
 	char * pc = new char[LONG_CHARS];

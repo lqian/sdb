@@ -1,10 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <projectDescription>
-	<name>sdb_storage_test</name>
+	<name>sdb_storage_test2</name>
 	<comment></comment>
 	<projects>
 		<project>sdb_storage</project>
-		<project>sdb_enginee</project>
 	</projects>
 	<buildSpec>
 		<buildCommand>

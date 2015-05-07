@@ -37,7 +37,7 @@ public:
 		memcpy(buffer, buff, cap);
 	}
 
-	char_buffer(char * buff, int size, bool wrapped=false) {
+	char_buffer(char * buff, int size, bool wrapped = false) {
 		if (wrapped) {
 			cap = size;
 			buffer = buff;
@@ -145,6 +145,12 @@ public:
 		push_chars(to_chars(val), SHORT_CHARS);
 		return this;
 	}
+
+	char_buffer * push_back(const unsigned short & val) {
+		ensure_capacity(SHORT_CHARS);
+		push_chars(to_chars(val), SHORT_CHARS);
+		return this;
+	}
 	char_buffer * push_back(const int & val) {
 		ensure_capacity(INT_CHARS);
 		push_chars(to_chars(val), INT_CHARS);
@@ -209,6 +215,12 @@ public:
 
 	const short pop_short() {
 		short *p = (short *) (buffer + pop_pos);
+		pop_pos += SHORT_CHARS;
+		return (*p);
+	}
+
+	const unsigned short pop_unsigned_short() {
+		unsigned short *p = (unsigned short *) (buffer + pop_pos);
 		pop_pos += SHORT_CHARS;
 		return (*p);
 	}
@@ -294,7 +306,7 @@ public:
 		return true;
 	}
 
-	const char * data() {
+	char * data() {
 		return buffer;
 	}
 
@@ -314,6 +326,12 @@ public:
 	}
 
 	friend char_buffer& operator<<(char_buffer & buff, const short & val) {
+		buff.push_back(val);
+		return buff;
+	}
+
+	friend char_buffer& operator<<(char_buffer & buff,
+			const unsigned short & val) {
 		buff.push_back(val);
 		return buff;
 	}
@@ -374,6 +392,11 @@ public:
 
 	friend char_buffer& operator>>(char_buffer & buff, double & val) {
 		val = buff.pop_double();
+		return buff;
+	}
+
+	friend char_buffer& operator>>(char_buffer & buff, unsigned short & val) {
+		val = buff.pop_unsigned_short();
 		return buff;
 	}
 

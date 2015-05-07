@@ -103,17 +103,7 @@ public:
 		}
 	}
 
-	void add_field_description(FieldDescription & fd) {
-		if (!exists_field(fd) && !fd.is_deleted()) {
-
-			fd.set_inner_key((short) (field_desc_list.size() + 1));
-			std::string k = fd.get_field_name();
-			field_desc_map.insert(
-					std::pair<std::string, FieldDescription>(k, fd));
-
-			field_desc_list.push_back(fd);
-		}
-	}
+	void add_field_description(FieldDescription & fd) ;
 
 	void load_indexes();
 

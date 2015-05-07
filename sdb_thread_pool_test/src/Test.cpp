@@ -5,6 +5,7 @@
 #include "ThreadPool.h"
 #include <functional>
 #include <atomic>
+#include <map>
 
 using namespace std;
 using namespace sdb::common;
@@ -22,7 +23,6 @@ public:
 		std::this_thread::sleep_for(std::chrono::milliseconds(duration));
 	}
 };
-
 
 class CounterRunner: public sdb::common::Runnable {
 public:
@@ -78,12 +78,21 @@ void test_thread_pool() {
 
 	ASSERT(counter.load(std::memory_order_relaxed) == 1200);
 }
+void newTestFunction(){
+	std::map<char, int> map1;
+	map1.insert(std::pair<char,int>('a', 1));
+	ASSERT(map1.find('a') != map1.end());
+
+	ASSERT(map1.find('a')->second == 1);
+}
+
 
 void runSuite() {
 	cute::suite s;
 
 	s.push_back(CUTE(test_task_queue));
 	s.push_back(CUTE(test_thread_pool));
+	s.push_back(CUTE(newTestFunction));
 
 	cute::ide_listener lis;
 	cute::makeRunner(lis)(s, "The Suite");
