@@ -55,13 +55,17 @@ struct node {
 		return parent != nullptr && (has_left() || has_right());
 	}
 
-	void remove_as_leaf(node *n) {
-		if (n == left) {
+	void remove_left_leaf() {
+		if (left->is_leaf()) {
+			left->parent = nullptr;
 			left = nullptr;
-			n->parent = nullptr;
-		} else if (n == right) {
+		}
+	}
+
+	void remove_right_leaf() {
+		if (right->is_leaf()) {
+			right->parent = nullptr;
 			right = nullptr;
-			n->parent = nullptr;
 		}
 	}
 
@@ -124,43 +128,52 @@ struct node {
 	}
 
 	/*
-	 * rotate this node to be the left child node of its right node.
-	 * this node is to be rotate left node,
-	 * the right child node is promotion node, its left child node is pivotal node
+	 * this node is promoted as parent, its parent is moved to left child of the node.
+	 * this node is promotion node (PN),  meanwhile its parent node
+	 * is moving to the left child (ML), the left child node of PN is pivotal
+	 * node which should be moved to the ML node's right child
+	 *
+	 *
+	 * THE METHOD MUST NOT APPLY ON ROOT NODE
 	 *
 	 */
 	void rotate_left() {
-		if (has_right()) {
-			right->parent = parent;
-			if (!is_root()) {
-				parent->right = this->right;
-			}
+		node * gp = parent->parent;
+		if (has_left()) {
+			parent->add_right(left);
+		} else {
+			parent->right = nullptr;
+		}
+		add_left(parent);
 
-			if (right->has_left()) {
-				add_right(right->left);
-			}
-			right->add_left(this);
-			right = nullptr;
+		if (gp != nullptr) {
+			gp->add_left(this);
+		} else {
+			parent = gp;
 		}
 	}
 
 	/*
-	 * rotate this node to be the right node of its left node.
-	 * this node is to be rotate right.
-	 * the left child node is promotion node, its right child node is pivotal node
+	 * this node is promoted as parent, its parent is moved to right child of the node.
+	 * this node is promotion node (PN),  meanwhile its parent node
+	 * is moving to the right child (MR), the right child node of PN is pivotal
+	 * node which should be moved to the MR node's left child
+	 *
+	 * THE METHOD MUST NOT APPLY ON ROOT NODE
+	 *
 	 */
 	void rotate_right() {
-		if (has_left()) {
-			left->parent = parent;
-			if (!is_root()) {
-				parent->left = this->left;
-			}
-
-			if (left->has_right()) {
-				add_left(left->right);
-			}
-			left->add_right(this);
-			left = nullptr;
+		node * gp = parent->parent;
+		if (has_right()) {
+			parent->add_left(right);
+		} else {
+			parent->left = nullptr;
+		}
+		add_right(parent);
+		if (gp != nullptr) {
+			gp->add_right(this);
+		} else {
+			parent = gp;
 		}
 	}
 

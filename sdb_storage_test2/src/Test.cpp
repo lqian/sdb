@@ -40,8 +40,8 @@ public:
 
 	virtual void handle(const sdb::tree::node<K, V> *p, const K k,
 			node_handler_event e) {
-		std::cout << "node k: " << p->k << "; const k:" << k <<"; node event: " << event_names[e]
-						<< std::endl;
+		std::cout << "node k: " << p->k << "; const k:" << k << "; node event: "
+				<< event_names[e] << std::endl;
 	}
 };
 
@@ -200,7 +200,7 @@ void mem_block_test() {
 void tree_node_test() {
 	sdb::tree::node<int, int> n1, n2, n3, n4, n5;
 	n1.k = 1, n1.parent = &n2;
-	n2.left = &n1;
+	n2.left = &n1;  // n2 is the root
 	n2.k = 2;
 	n3.k = 3, n3.parent = &n2, n2.right = &n3;
 	n4.k = 4, n4.parent = &n3, n3.right = &n4;
@@ -223,17 +223,23 @@ void tree_node_test() {
 	ASSERT(n2.exists(1));
 	ASSERT(n2.exists(4));
 
-	n2.rotate_left();
+	n3.rotate_left();
+	ASSERT(n3.exists(4)); // the n3 is the new root
 	ASSERT(n2.balance_factor() == 1);
 	ASSERT(n3.balance_factor() == 0);
+
+	n2.rotate_right();
+	ASSERT(n1.parent == &n2);
+	ASSERT(n2.is_root());
+	ASSERT(n2.right == &n3);
 
 }
 
 void test_avl() {
 
 	using namespace sdb::tree;
-	sdb::tree::node<int, int> n1, n2, n3, n4, n5;
-	n1.k = 1, n2.k = 2, n3.k = 3, n4.k = 4, n5.k = 5;
+	sdb::tree::node<int, int> n1, n2, n3, n4, n5, n6;
+	n1.k = 1, n2.k = 2, n3.k = 3, n4.k = 4, n5.k = 5, n6.k = 6;
 
 	sdb::tree::avl<int, int> tree(&n1);
 	ASSERT(tree.exists(n1.k));
@@ -247,11 +253,27 @@ void test_avl() {
 	ASSERT(bf < 2 && bf > -2);
 
 	ASSERT(tree.exists(4));
+	tree.insert_node(&n6);
 
 	echo_handler<int, int> handler;
 
+	cout << "traverse in order" << endl;
 	tree.traverse(&handler, sdb::tree::in_order);
 
+	cout << "traverse pre order" << endl;
+	tree.traverse(&handler, sdb::tree::pre_order);
+
+	cout << "traverse post order" << endl;
+	tree.traverse(&handler, sdb::tree::post_order);
+
+	cout << "traverse level order" << endl;
+	tree.traverse(&handler, sdb::tree::level_order);
+
+	node<int, int> *d = tree.remove(2);
+	ASSERT(d != nullptr && d->k == 2);
+
+	cout << "== traverse in order after delete 2 ====" << endl;
+	tree.traverse(&handler, sdb::tree::in_order);
 }
 
 void runSuite() {

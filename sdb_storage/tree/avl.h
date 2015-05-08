@@ -65,7 +65,8 @@ public:
 			node_handler_event event) {
 	}
 
-	virtual void handle(const node<K, V> *p, const K k, node_handler_event event) {
+	virtual void handle(const node<K, V> *p, const K k,
+			node_handler_event event) {
 	}
 };
 
@@ -77,23 +78,37 @@ class avl {
 private:
 	node<K, V> *root = nullptr;
 
+	/*
+	 * the n is rotate node, its parent balance factor is -2 or 2
+	 */
 	void balance(node<K, V> *n) {
-		int bf = n->balance_factor();
-		if (bf >= 2) {
-			n->rotate_right();
-		} else if (bf <= -2) {
-			n->rotate_left();
-		}
-
-		if (n->is_root()) {
-			root = n;
-		} else if (n->has_parent() && n->parent->is_root()) {
-			root = n->parent;
-		}
-
 		if (n->has_parent()) {
-			balance(n->parent);
+			node<K, V> *p = n->parent;
+			int bf = p->balance_factor();
+			if (bf >= 2) {
+				n->rotate_right();
+				if (n->is_root()) {
+					root = n;
+				}
+			} else if (bf <= -2) {
+				n->rotate_left();
+				if (n->is_root()) {
+					root = n;
+				}
+			}
+
+			// recursively balance if  the newest node has parent
+			if (n->has_parent()) {
+				balance(n->parent);
+			}
 		}
+
+//		if (n->is_root()) {
+//			root = n;
+//		} else if (n->has_parent() && n->parent->is_root()) {
+//			root = n->parent;
+//		}
+
 	}
 
 	node<K, V> * find_equal(node<K, V> *n, const K k) {
@@ -161,6 +176,7 @@ private:
 			return nullptr;
 		}
 	}
+
 	node<K, V> * find_greater_equal(node<K, V> *n, const K k) {
 		if (n->k >= k) {
 			if (n->has_left()) {
@@ -324,7 +340,7 @@ public:
 				return insert_node(parent->left, n, overwrite);
 			} else {
 				parent->add_left(n);
-				// only the parent of node which be add children should rotate
+				// if parent's parent balance factor is -2, or 2, balance it
 				if (!parent->is_root()) {
 					balance(parent->parent);
 				}
@@ -357,76 +373,69 @@ public:
 
 	/*
 	 * find a node's k equal k given, remove the node from avl, and return it;
-	 */
-	/*
-	 * when remove a middle node from avl, a child of the node should be promoted.
+	 *
+	 * when remove a node from avl, a child of the node should be promoted.
 	 * there are two types of child node promotion:
 	 *
 	 * 1) left promotion, in case of the removing node key is less than its parent key
 	 *  or the removing node is root. if the removing node has left and right child
 	 *  node, add the right node to last right leaf of promotion node as new right leaf
 	 *
-	 * 2) right promotion, in case of the removing node key is greater than is parent key,
-	 * if the removing node has left and right child node, add the left child node to the
+	 * 2) right promotion, in case of the removing node key is greater than is parent key
+	 *  if the removing node has left and right child node, add the left child node to the
 	 *  left leaf of the promotion node as new left leaf.
 	 *
 	 */
-	node<K, V> * remove(node<K, V> *n, K k) {
-		if (n->k == k) {
-			// the node to be removing
-			if (n->is_leaf()) {
-				if (n->has_parent()) {
-					n->parent->remove_as_leaf(n);
-					balance(root);
-				}
-				return n;
-			} else if (n->is_root() || n->parent->k > k) {
-				node<K, V> * d = n;  // the removing node
-				node<K, V> * prom;
-				if (n->has_left()) { // promote left child as root
-					prom = n->left;
-					prom->parent = d->parent;
+	node<K, V> * remove(K k) {
+		node<K, V> *d = find_equal(root, k);
+		if (d != nullptr) {
+			if (d->is_root()) {
+				if (d->is_leaf()) { // avl has only one node
+					root = nullptr;
+					return d;
+				} else {
+					// promotion root's left child, the deleting node's right
+					// child as the new right leaf of root's, needn't balance
+					root = d->left;
+					root->parent = nullptr;
+					root->right_leaf()->add_right(d->right);
 
-					if (d->has_right()) {
-						prom->right_leaf()->add_right(d->right);
-					}
-
-				} else if (d->has_right()) { // no left child, only promote right child
-					prom = d->right;
-					prom->parent = d->parent;
+					// ? may need to remove children on the old root
 				}
-				if (d->is_root()) {
-					root = prom;
+			} else if (d->is_leaf()) {
+				if (d->is_left()) {
+					d->parent->remove_left_leaf();
+				} else {
+					d->parent->remove_right_leaf();
 				}
-				balance(root);
-				return d;
-			} else if (n->parent->k < k) {
-				node<K, V> * d = n;  // the removing node
-				node<K, V> * prom;
-				if (d->has_right()) {
-					prom = n->right;
-					prom->parent = d->parent;
-
-					if (d->has_left()) {
-						prom->left_leaf()->add_left(d->left);
-					}
-				} else if (d->has_left()) { // no left child, only promote left child
+				balance(d->parent);
+			} else { // middle node
+				node<K, V> *prom;
+				if (d->has_left()) {  // the deleting node has left child node
 					prom = d->left;
-					prom->parent = d->parent;
-				}
-				if (d->is_root()) {
-					root = prom;
+					d->k < d->parent->k ?
+							d->parent->add_left(prom) :
+							d->parent->add_right(prom);
+					if (d->has_right()) {
+						if (prom->has_right()) {
+							prom->right_leaf()->add_right(d->right);
+						} else {
+							prom->add_right(d->right);
+						}
+					}
+				} else { //only has right child node
+					prom = d->right;
+					d->k < d->parent->k ?
+							d->parent->add_left(prom) :
+							d->parent->add_right(prom);
 				}
 
-				balance(root);
-				return d;
+				balance(prom->parent);
 			}
-		} else if (n->k > k && n->has_left()) {
-			return remove(n->left, k);
-		} else if (n->k < k && n->has_right()) {
-			return remove(n->right, k);
+			return d;
+		} else {
+			return nullptr;
 		}
-		return nullptr;
 	}
 
 	/*
