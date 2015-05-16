@@ -323,7 +323,7 @@ public:
 	 * insert a node denoted by n to parent node
 	 * 1) if the node K does not exist in the tree, insert the node ,return true
 	 *
-	 * 2) if the node K already exists, and the overwrite flat is true,
+	 * 2) if the node K already exists, and the overwrite flag is true,
 	 *  overwrite the existed node, return true, else return false
 	 */
 	bool insert_node(node<K, V> *parent, node<K, V> * n,
@@ -456,6 +456,17 @@ public:
 	avl(node<K, V> *_r) {
 		root = _r;
 	}
+
+	avl(const avl & _other) {
+		root = _other.root;
+	}
+
+	avl & operator=(const avl & _other) {
+		avl t;
+		t.root = _other.root;
+		return t;
+	}
+
 	virtual ~avl() {
 	}
 };

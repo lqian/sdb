@@ -16,8 +16,10 @@
 #include <iostream>
 #include "../common/char_buffer.h"
 
-int SUCCESS = 0;
-int FAILURE = -1;
+namespace sdb {
+
+const int SUCCESS = 0;
+const int FAILURE = -1;
 
 namespace storage {
 
@@ -25,7 +27,9 @@ using namespace std;
 using namespace common;
 
 const int unused_id = 0;
-const unsigned int data_file_magic = 0x7A9E401C;
+const unsigned int DATA_FILE_MAGIC = 0x7A9E401C;
+const unsigned int ROW_BLOCK_MAGIC = 0x98c2e0f9; /* default block magic */
+
 const short data_file_head_size = 1024;
 const short data_file_version = 0x10;
 const long data_file_max_size = 0x10000000;  // 4G
@@ -35,30 +39,126 @@ const short segment_head_size = 1024;
 const short segment_tail_size = 1024;
 const char segment_deleted = 0xff;
 const char segment_alive = 0x01;
-const short segment_space_reversed_for_insert = 20; //20
-const short block_space_reversed_for_insert = 20;
+const short block_space_reversed_for_update = 20;
 
-int M_64 = 67108864;
-int M_128 = 134217728;
-int M_256 = 268435456;
-int M_512 = 536870912;
+const int M_64 = 67108864;
+const int M_128 = 134217728;
+const int M_256 = 268435456;
+const int M_512 = 536870912;
 
-int kilo_byte = 1024;
+const int kilo_byte = 1024;
 
-int UNKNOWN_OFFSET = -1;
-int DELETE_OFFSET = -2;
+const int UNKNOWN_OFFSET = -1;
+const int DELETE_OFFSET = -2;
 
-int offset_bytes = 2;
+const int offset_bytes = 2;
+
+const int PRE_SEG_SPAN_DFILE_BIT = 0;
+const int NEXT_SEG_SPAN_DFILE_BIT = 1;
+
+const short block_header_size = 42;
+
+/*
+ * block head flag bit define
+ */
+const int REMOVED_BLK_BIT = 0;
+const int NEXT_BLK_BIT = 1;
+const int PRE_BLK_BIT = 2;
+const int NEXT_BLK_SPAN_SEG_BIT = 3;
+const int PRE_BLK_SPAN_SEG_BIT = 4;
+const int NEXT_BLK_SPAN_DFILE_BIT = 5;
+const int PRE_BLK_SPAN_DFILE_BIT = 6;
+
+const int BLK_OFF_OVERFLOW = -2;
+
+/*
+ * a common struct for data block stored in segmentF
+ */
+struct data_block {
+	struct head {
+		unsigned int blk_magic;
+		time_t create_time;
+		time_t assign_time;
+		time_t update_time;
+		short flag = 0;
+		int pre_blk_off;
+		int next_blk_off;
+		int checksum;
+	}*header = nullptr;
+
+	bool ref_flag = false;
+	int offset; /* block offset from start of segment which the block belong to,
+	 the first data block offset is 0 within a segment */
+
+	char *buffer; /* all data store in the buffer, include ROW DIRECTORY & DATA,
+	 but excludes data block header */
+	short length; /* total length of buffer, excludes header length */
+
+	short u_off_start = 0;
+	short u_off_end = 0; /* update offset start and end  if the block buffer has been modified */
+
+	void init(int off, short len) {
+		offset = off;
+		length = len;
+		buffer = new char[length + block_header_size];
+		header = (head *) buffer;
+		init_header();
+		buffer += block_header_size;
+		u_off_start = 0;
+		u_off_end = 0;
+	}
+
+	/*
+	 * reference the data header and content from a given buff parameter that denoted
+	 * the header start position. the off parameter denotes the data block offset beh-
+	 * hind segment header.
+	 */
+	void ref(int off, char *buff, short len) {
+		offset = off;
+		length = len;
+		header = (head *) buff;
+		buffer = buff + block_header_size;
+		ref_flag = true;
+		u_off_start = 0;
+		u_off_end = 0;
+	}
+
+	void init_header() {
+		header->flag = 0;
+		time(&header->create_time);
+		header->blk_magic = ROW_BLOCK_MAGIC;
+	}
+
+	inline void set_flag(int bit) {
+		header->flag |= (1 << bit);
+	}
+
+	inline void remove_flag(int bit) {
+		header->flag &= ~(1 << bit);
+	}
+
+	inline bool test_flag(int b) {
+		return (header->flag >> b & 1) == 1;
+	}
+
+	~ data_block() {
+		if (!ref_flag) {
+			delete[] (buffer - block_header_size);
+			std::cout << "~ data_block() " << std::endl;
+		}
+	}
+
+};
 
 /**
- * data block buffer internal:
- * +---+---+---+----------------------------+------+------+------+
- * |   |   |   |                            |      |      |      |
- * | O | O | O |                            |      |      |      |
- * | F | F | F |    UN-UTILIZAION SPACE     | ROW3 | ROW2 | ROW1 |
- * | F | F | F |                            | DATA | DATA | DATA |
- * | 1 | 2 | 3 |                            |      |      |      |
- * +---+---+---+----------------------------+------+------+------+
+ * variant-size row of data block buffer internal:
+ * +------+---+---+---+----------------------------+------+------+------+
+ * |      |   |   |   |                            |      |      |      |
+ * |      | O | O | O |                            |      |      |      |
+ * | ROW  | F | F | F |    UN-UTILIZAION SPACE     | ROW3 | ROW2 | ROW1 |
+ * | HEAD | F | F | F |                            | DATA | DATA | DATA |
+ * |      | 1 | 2 | 3 |                            |      |      |      |
+ * +------+---+---+---+----------------------------+------+------+------+
  *
  * ROW DIRECTORY has a OFFSET table, each OFFSET has 2 bytes, point a start
  * position for a  ROW DATA has variant bytes.
@@ -84,30 +184,10 @@ int offset_bytes = 2;
  * update operation may incur some disk space become un-available. a thread
  * periodically re-organize data block to recycle them for re-use.
  */
-struct data_block {
-	int offset; /* block offset from start of segment which the block belong to,
-	 the first data block offset is 0 within a segment */
-
-	char *buffer; /* all data store in the buffer, include ROW DIRECTORY & DATA */
-	short length; /* total length of buffer, include un-utilization space */
-
-	short u_off_start = 0;
-	short u_off_end = 0; /* update offset start and end  if the block buffer has been modified */
-
-	short free_perct = 100;
-
-	void init(int off, short len) {
-		offset = off;
-		length = len;
-		buffer = new char[length];
-
-		u_off_start = 0;
-		u_off_end = 0;
-	}
-};
-
 struct mem_data_block: data_block {
 	vector<unsigned short> off_tbl;
+	short free_perct = 100;
+
 	void calc_free_perct() {
 		int s = off_tbl.size();
 		if (s > 0) {
@@ -164,7 +244,7 @@ struct mem_data_block: data_block {
 			if (rl <= length - offset_bytes) {
 				unsigned short l_off = length - rl;
 				off_tbl.push_back(l_off);
-				memcpy(buffer, rb, rl);
+				memcpy(buffer + l_off, rb, rl);
 				calc_free_perct();
 				r = l_off;
 			}
@@ -282,7 +362,7 @@ struct mem_data_block: data_block {
 	 * write off table to the buffer
 	 */
 	void write_off_tbl() {
-		common::char_buffer cb(length / 4);
+		common::char_buffer cb(length / 10);
 		for (auto it = off_tbl.begin(); it != off_tbl.end(); ++it) {
 			cb << (*it);
 		}
@@ -305,7 +385,7 @@ class segment;
 class data_file {
 	friend class segment;
 private:
-	int magic = data_file_magic;
+	int magic = DATA_FILE_MAGIC;
 	unsigned long id;
 	std::string full_path;
 	time_t create_time;  // data file object create time
@@ -379,6 +459,11 @@ public:
 	 */
 	int update_segment(segment & seg, int offset, int length);
 
+	int write_block(segment & seg, data_block &blk,
+			bool update_seg_head = true);
+
+	int read_block(segment &seg, data_block &blk);
+
 	/**
 	 *  check has a segment from current position of the data file,
 	 *  if read a valid segment from current position, store the segment into the parameter
@@ -410,23 +495,31 @@ public:
 
 class segment {
 	friend class data_file;
-private:
+protected:
 	int magic = segment_magic;
 	unsigned long id; /* unique id for a segment */
 	unsigned offset; /* offset position in a data file behind head */
 	short status = segment_alive;
-	int length;
+	int length; /* total length of the segment, include header size*/
 
-	char free_perct = 99; /* current segment free space percentage 99 - 0 */
 	time_t create_time;
 	time_t assign_time;
 	time_t update_time;
 
-	data_file * d_file;
-	int pre_seg_offset;
-	int next_seg_offset;
+	data_file * d_file = nullptr;
+
+	char span_dfile_flag = 0; /* the 0-bit, 1 denotes pre_seg_offset is in another data file,
+	 the 1-bit, 1 denotes next_seg_offset is in another data file */
+	unsigned int pre_seg_offset = 0;
+	unsigned int next_seg_offset = 0;
+	unsigned long pre_seg_dfile_id = 0;
+	unsigned long next_seg_dfile_id = 0;
+
+	std::string pre_seg_dfile_path;
+	std::string next_seg_dfile_path;
 
 	int block_size;
+	int block_count = 0;
 
 	bool has_buffer = false;
 	char * content_buffer;
@@ -465,9 +558,27 @@ public:
 	 */
 	void fetch_from_buff(common::char_buffer & buff);
 
+	/*
+	 * sequentially add a new block to the segment. if the segment has enough remained space
+	 * for assignation of a new data block, increment segment block count in memory. if the
+	 * segment has assigned content buffer, the assigning block buffer references some place
+	 * of segment buffer, else assign new buffer for the block.
+	 *
+	 * for eventually write blocks to disk, outside should invoke flush, flush_head or
+	 *  flush_blcok method. operation of block has the same manner.
+	 */
+	int assign_block(data_block & blk);
+	int remove_block(data_block & blk);
+	int flush_block(data_block & blk);
+	int read_block(data_block &blk);
+
+	int flush();
+
+	int flush(int off, int len);
+
 	bool operator ==(const segment & other);
 
-	time_t get_create_time() const {
+	inline time_t get_create_time() const {
 		return create_time;
 	}
 
@@ -475,88 +586,129 @@ public:
 	 * assign content buffer for the segment, if assign content buffer, the segment MUST delete pointer
 	 * of the content buffer on the segment object destroy
 	 */
-	void assign_content_buffer() {
+	inline void assign_content_buffer() {
 		if (!has_buffer) {
 			has_buffer = true;
 			content_buffer = new char[length - segment_head_size];
 		}
 	}
-	unsigned long get_id() const {
+	inline unsigned long get_id() const {
 		return id;
 	}
 
-	int get_length() const {
+	inline int get_length() const {
 		return length;
 	}
 
-	void set_length(const int length) {
+	inline void set_length(const int length) {
 		this->length = length;
 	}
 
-	unsigned get_offset() const {
+	inline unsigned get_offset() const {
 		return offset;
 	}
 
-	data_file * get_file() const {
+	inline data_file * get_file() const {
 		return d_file;
 	}
 
-	bool has_free_space() const {
-		return free_perct > 0;
+	inline bool has_pre_seg() {
+		return pre_seg_offset > 0
+				|| ((span_dfile_flag >> PRE_SEG_SPAN_DFILE_BIT) & 1) == 1;
 	}
 
-	/**
-	 *  determine free space exceeding reversed space for append operation
-	 */
-	bool exceeded() {
-		return free_perct <= segment_space_reversed_for_insert;
+	inline bool has_nex_seg() {
+		return next_seg_offset > 0
+				|| ((span_dfile_flag >> NEXT_SEG_SPAN_DFILE_BIT) & 1) == 1;
+	}
+
+	inline segment next_seg() {
+		segment seg;
+		if (this->d_file == nullptr) {
+			//ignore this case
+		} else if (d_file->id != pre_seg_dfile_id) {
+			//the code cause invalid pointer
+			data_file df(next_seg_dfile_id, next_seg_dfile_path);
+			seg.offset = pre_seg_offset;
+			seg.d_file = &df;
+			df.open();
+			df.fetch_segment(seg);
+		} else {
+			seg.d_file = this->d_file;
+			seg.offset = next_seg_offset;
+			d_file->fetch_segment(seg);
+		}
+		return seg;
+	}
+
+	inline segment pre_seg() {
+		segment seg;
+		if (this->d_file == nullptr) {
+			//ignore this case
+		} else if (d_file->id != pre_seg_dfile_id) {
+			//the code cause invalid pointer
+			data_file df(pre_seg_dfile_id, pre_seg_dfile_path);
+			seg.offset = pre_seg_offset;
+			seg.d_file = &df;
+			df.fetch_segment(seg);
+		} else {
+			seg.d_file = this->d_file;
+			seg.offset = pre_seg_offset;
+			d_file->fetch_segment(seg);
+		}
+		return seg;
 	}
 
 	inline bool is_valid() {
-		return magic == segment_magic && id > unused_id && offset >= 0;
+		return magic == segment_magic && id > unused_id;
 	}
 
-	time_t get_assign_time() const {
+	inline time_t get_assign_time() const {
 		return assign_time;
 	}
 
-	void set_assign_time(time_t assigntime) {
+	inline void set_assign_time(time_t assigntime) {
 		assign_time = assigntime;
 	}
 
-	int get_magic() const {
+	inline int get_magic() const {
 		return magic;
 	}
 
-	int get_next_seg_offset() const {
+	inline int get_next_seg_offset() const {
 		return next_seg_offset;
 	}
 
-	void set_next_seg_offset(int nextsegoffset) {
+	inline void set_next_seg_offset(int nextsegoffset) {
 		next_seg_offset = nextsegoffset;
 	}
 
-	void set_offset(unsigned offset) {
+	inline void set_offset(unsigned offset) {
 		this->offset = offset;
 	}
 
-	int get_pre_seg_offset() const {
+	inline int get_pre_seg_offset() const {
 		return pre_seg_offset;
 	}
 
-	void set_pre_seg_offset(int presegoffset) {
+	inline void set_pre_seg_offset(int presegoffset) {
 		pre_seg_offset = presegoffset;
 	}
 
-	short get_status() const {
+	inline short get_status() const {
 		return status;
 	}
 
-	void set_status(short status = segment_alive) {
+	inline int remain() {
+		return length - segment_head_size - block_count * block_size;
+	}
+
+	inline void set_status(short status = segment_alive) {
 		this->status = status;
 	}
 
-	void update(int dest_off, const char * source, int src_off, int len) {
+	inline void update(int dest_off, const char * source, int src_off,
+			int len) {
 		memcpy(content_buffer + dest_off, source + src_off, len);
 	}
 
@@ -564,35 +716,32 @@ public:
 	 * read segment content buffer from offset, length of chars to buff,
 	 * do not check the buffer length.
 	 */
-	void read(char * buff, int offset, int len) {
+	inline void read(char * buff, int offset, int len) {
 		memcpy(buff, content_buffer + offset, len);
 	}
 
-	int get_block_size() const {
+	inline int get_block_size() const {
 		return block_size;
 	}
 
-	void set_block_size(block_size_type t) {
+	inline void set_block_size(block_size_type t) {
 		block_size = t * kilo_byte;
 	}
 
-	char* get_content_buffer() const {
+	inline char* get_content_buffer() const {
 		return content_buffer;
 	}
 
-	char get_free_perct() const {
-		return free_perct;
-	}
-
-	bool is_has_buffer() const {
+	inline bool is_has_buffer() const {
 		return has_buffer;
 	}
 
-	time_t get_update_time() const {
+	inline time_t get_update_time() const {
 		return update_time;
 	}
 };
 
 } /* namespace storage */
+} /* namespace sdb */
 
 #endif /* STORAGE_DATAFILE_H_ */

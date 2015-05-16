@@ -5,11 +5,13 @@
 #include <vector>
 #include <iostream>
 #include "storage/datafile.h"
+#include <algorithm>
 #include "tree/avl.h"
 #include "tree/node.h"
 
 using namespace std;
 using namespace sdb::tree;
+using namespace sdb::storage;
 
 template<class K, class V>
 class echo_handler: public sdb::tree::node_handler<K, V> {
@@ -45,25 +47,28 @@ public:
 	}
 };
 
-using namespace storage;
-
 void data_file_basic_test() {
-	storage::data_file d_file(1L, "/tmp/sdb_data_file_1.db");
-	ASSERT(d_file.create() == SUCCESS);
-	ASSERT(d_file.open() == SUCCESS);
-	ASSERT(d_file.close() == SUCCESS);
+
+	sdb::storage::data_file d_file(1L, "/tmp/sdb_data_file_1.db");
+	ASSERT(d_file.create() == sdb::SUCCESS);
+	ASSERT(d_file.open() == sdb::SUCCESS);
+	ASSERT(d_file.close() == sdb::SUCCESS);
 	d_file.remove();
 
 	ASSERT(d_file.exist() == false);
 }
 
 void segment_basic_test() {
-	segment seg1(1L), seg2(2L), seg(1L);
+	using namespace sdb;
+	using namespace sdb::storage;
+
+	sdb::storage::segment seg1(1L), seg2(2L), seg(seg1);
+
 	ASSERT(seg1 == seg);
 	std::string path = "/tmp/sdb_data_file_tmp_2.db";
-	data_file df1(2L, path);
+	sdb::storage::data_file df1(2L, path);
 	ASSERT(df1.open() == SUCCESS);
-	seg1.set_length(storage::M_64);
+	seg1.set_length(sdb::storage::M_64);
 	ASSERT(df1.assgin_segment(seg1) == SUCCESS);
 	df1.close();
 
@@ -78,7 +83,9 @@ void segment_basic_test() {
 }
 
 void test_delete_segment() {
-	storage::data_file df(3L, "/tmp/sdb_data_file_tmp_3.db");
+	using namespace sdb;
+	using namespace sdb::storage;
+	sdb::storage::data_file df(3L, "/tmp/sdb_data_file_tmp_3.db");
 	if (df.exist())
 		df.remove();
 	df.open();
@@ -94,8 +101,10 @@ void test_delete_segment() {
 }
 
 void test_update_segment() {
+	using namespace sdb;
+	using namespace sdb::storage;
 	std::string path("/tmp/sdb_data_file_tmp_update.db");
-	storage::data_file df(3L, path);
+	sdb::storage::data_file df(3L, path);
 	if (df.exist())
 		df.remove();
 	df.open();
@@ -116,7 +125,7 @@ void test_update_segment() {
 	df.close();
 
 	//re-open the data file and read  the segment content
-	storage::data_file df1(3L, path);
+	sdb::storage::data_file df1(3L, path);
 	ASSERT(df1.open() == SUCCESS);
 	ASSERT(seg_r.get_offset() == 0);
 	ASSERT(df1.fetch_segment(seg_r) == SUCCESS);
@@ -129,10 +138,14 @@ void test_update_segment() {
 }
 
 void mem_block_test() {
-	storage::mem_data_block mdb;
+
+	using namespace sdb::storage;
+
+	sdb::storage::mem_data_block mdb;
 	mdb.length = 4096;
 	mdb.free_perct = 100;
 	mdb.buffer = new char[mdb.length];
+	mdb.ref_flag = true;
 
 	// a row to be add
 	int ral = 57;
@@ -145,6 +158,7 @@ void mem_block_test() {
 	unsigned short ra_off = mdb.add_row_data(ra, ral);
 	ASSERT(ra_off == t_off);
 	ASSERT(mdb.off_tbl.size() == 1 && mdb.off_tbl[0] == t_off);
+	ASSERT(memcmp(mdb.buffer + t_off, ra, ral) == 0);
 
 	int rbl = 102;
 	char * rb = new char[rbl + 10];
@@ -156,7 +170,6 @@ void mem_block_test() {
 	unsigned short rb_off = mdb.add_row_data(rb, rbl);
 	ASSERT(rb_off == t_off);
 	ASSERT(mdb.off_tbl.size() == 2 && mdb.off_tbl[1] == t_off);
-
 	// update the rb as shrink manner in the end
 	unsigned short sb_off = mdb.update_row_data(rb_off, rb, rbl - 20);
 	ASSERT(sb_off - 20 == rb_off);
@@ -188,7 +201,7 @@ void mem_block_test() {
 
 	// test write offset tbl
 	mdb.write_off_tbl();
-	common::char_buffer head_buff(mdb.buffer, 3 * storage::offset_bytes);
+	common::char_buffer head_buff(mdb.buffer, 3 * sdb::storage::offset_bytes);
 
 	unsigned short off0, off1, off2;
 	head_buff >> off0 >> off1 >> off2;
@@ -274,6 +287,73 @@ void test_avl() {
 
 	cout << "== traverse in order after delete 2 ====" << endl;
 	tree.traverse(&handler, sdb::tree::in_order);
+
+	for (int i = 0; i < 20; i++) {
+		sdb::tree::node<int, int> n;
+		n.k = std::abs(std::rand());
+		std::cout << "rand:" << n.k << std::endl;
+		tree.insert_node(&n);
+	}
+
+	cout << "traverse in order for big tree" << endl;
+	tree.traverse(&handler, sdb::tree::in_order);
+
+}
+
+void test_block_write() {
+	mem_data_block b1, b2;
+
+	std::string path("/tmp/test_block_write.db");
+	sdb::storage::data_file df(3L, path);
+	if (df.exist())
+		df.remove();
+	df.open();
+
+	segment seg(1L);
+	seg.set_length(M_64);
+	// assign a new data block
+	seg.set_block_size(sdb::storage::K_4);
+	segment seg_r(seg);
+
+	df.assgin_segment(seg);
+
+	seg.assign_content_buffer();
+	seg.assign_block(b1);
+
+	ASSERT(b1.ref_flag);
+	ASSERT(b1.length == K_4 * kilo_byte - sdb::storage::block_header_size);
+
+	int row_len = path.length();
+	int w_off = b1.add_row_data(path.c_str(), row_len);
+	ASSERT(w_off == b1.length - row_len);
+
+	ASSERT(b1.off_tbl.size() == 1);
+	ASSERT(b1.off_tbl[0] == b1.length - row_len);
+	char * row_data = b1.buffer + b1.off_tbl[0];
+	ASSERT(memcmp(row_data, path.c_str(), row_len) == 0);
+	b1.write_off_tbl();
+	ASSERT(df.write_block(seg, b1, true) == sdb::SUCCESS);
+
+	//re-open the data file for read block
+	df.close();
+	df.open();
+
+	b2.offset = 0;
+	seg_r.set_offset(0);
+	seg_r.set_block_size(sdb::storage::K_4);
+	ASSERT(df.fetch_segment(seg_r) == sdb::SUCCESS);
+	seg_r.read_block(b2);
+
+	ASSERT(b1.header->blk_magic == b2.header->blk_magic);
+	ASSERT(b1.header->create_time == b2.header->create_time);
+
+	ASSERT(b2.length == K_4 * kilo_byte - sdb::storage::block_header_size);
+	b2.parse_off_tbl();
+	ASSERT(
+			b2.off_tbl.size() == 1
+					&& b2.off_tbl[0] == b2.length - path.length());
+	ASSERT(memcmp(b2.buffer + b2.off_tbl[0], path.c_str(), path.length()) == 0);
+
 }
 
 void runSuite() {
@@ -285,6 +365,7 @@ void runSuite() {
 
 	//memory block test
 	s.push_back(CUTE(mem_block_test));
+	s.push_back(CUTE(test_block_write));
 
 	// data file and segment test
 	s.push_back(CUTE(data_file_basic_test));

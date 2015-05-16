@@ -12,7 +12,7 @@
 #include "../common/sio.h"
 #include "../common/char_buffer.h"
 #include <fstream>
-
+namespace sdb {
 namespace storage {
 
 data_file::data_file(std::string full_path) {
@@ -30,7 +30,7 @@ data_file::data_file(unsigned long id, std::string full_path) {
 }
 
 bool data_file::operator ==(const data_file & another) {
-	return magic == data_file_magic && magic == another.magic
+	return magic == DATA_FILE_MAGIC && magic == another.magic
 			&& id == another.id && full_path == another.full_path;
 }
 
@@ -83,27 +83,23 @@ int data_file::open() {
 }
 
 bool data_file::is_valid() {
-	return magic == data_file_magic && id > unused_id && exist();
+	return magic == DATA_FILE_MAGIC && id > unused_id && exist();
 }
 
 int data_file::seek_segment(const segment & seg) {
 	long pos = fs.tellg();
 	fs.seekg(seg.offset + data_file_head_size - pos, ios_base::cur);
-	return fs.good() && !fs.eof() ? SUCCESS : FAILURE;
+	return !fs.fail() ? SUCCESS : FAILURE;
 }
 
 bool data_file::has_next_segment(segment & seg) {
-	long pos = fs.tellg();
-	if (fs.fail() || fs.eof()) {
-		return false;
-	} else {
-		while (!fs.eof()) {
-			common::char_buffer buff(segment_head_size);
-			fs.read(buff.data(), segment_head_size);
-			seg.fetch_head_from_buff(buff);
-			return seg.is_valid();
-		}
+	while (!fs.eof()) {
+		common::char_buffer buff(segment_head_size);
+		fs.read(buff.data(), segment_head_size);
+		seg.fetch_head_from_buff(buff);
+		return seg.is_valid();
 	}
+	return false;
 }
 
 int data_file::assgin_segment(segment & seg) {
@@ -117,12 +113,14 @@ int data_file::assgin_segment(segment & seg) {
 	time(&seg.assign_time);
 	common::char_buffer head_buff(segment_head_size);
 	seg.fill_head_to_buff(head_buff);
-	fs.write(head_buff.data(), head_buff.capacity());
-	char * seg_body = new char[seg.length - segment_head_size];
-	fs.write(seg_body, seg.length);
-	fs.flush();
+	fs.write(head_buff.data(), segment_head_size);
+
+	int cl = seg.length - segment_head_size;
+	char * seg_body = new char[cl];
+	fs.write(seg_body, cl);
 	delete[] seg_body;
-	if (fs.good()) {
+	fs.flush();
+	if (!fs.fail()) {
 		free_perct = free_perct
 				- ceil((seg.length * 100.0) / data_file_max_size);
 		time(&update_time);
@@ -213,6 +211,48 @@ int data_file::update_segment(segment &seg, int off, int length) {
 	return r;
 }
 
+int data_file::write_block(segment &seg, data_block &blk,
+		bool update_seg_head) {
+	if (blk.offset + seg.block_size > seg.length - segment_head_size) {
+		return BLK_OFF_OVERFLOW;
+	} else {
+		long pos = fs.tellg();
+		fs.seekg(seg.offset + data_file_head_size - pos, ios_base::cur);
+		if (!fs.fail()) {
+			if (update_seg_head) {
+				common::char_buffer head_buff(segment_head_size);
+				seg.fill_head_to_buff(head_buff);
+				fs.write(head_buff.data(), segment_head_size);
+			}
+			//okay, the stream moves to the content position
+			if (!fs.fail()) {
+				fs.seekg(blk.offset + (update_seg_head ? 0 : segment_head_size),
+						ios_base::cur);
+				fs.write((char *) blk.header, block_header_size);
+				fs.write(blk.buffer, blk.length);
+				fs.flush();
+				if (!fs.fail())
+					return SUCCESS;
+			}
+		}
+	}
+	return FAILURE;
+}
+
+int data_file::read_block(segment &seg, data_block &blk) {
+	long pos = fs.tellg();
+	long off = seg.offset + data_file_head_size + blk.offset + segment_head_size
+			- pos;
+	fs.seekg(off - pos, ios_base::cur);
+	if (!fs.eof()) {
+		fs.read(blk.buffer - block_header_size, blk.length + block_header_size);
+		if (fs.good()) {
+			return SUCCESS;
+		}
+	}
+	return FAILURE;
+}
+
 void data_file::skip_segment(segment & seg) {
 	if (seg.is_valid()) {
 		fs.seekg(seg.length - segment_head_size, ios_base::cur);
@@ -225,7 +265,7 @@ void data_file::remove() {
 
 void data_file::fill_head_to_buff(common::char_buffer & buff) {
 	// THE ORDER MUST NOT CHANGE
-	buff << data_file_magic << id << create_time << attach_time << update_time
+	buff << DATA_FILE_MAGIC << id << create_time << attach_time << update_time
 			<< version << free_perct;
 }
 
@@ -247,7 +287,7 @@ int data_file::fetch_segment(segment & seg) {
 		if (s1.is_valid() && s1 == seg) {
 			seg.assign_content_buffer();
 			fs.read(seg.content_buffer, seg.length - segment_head_size);
-			if (fs.good() && !fs.eof()) {
+			if (!fs.fail()) {
 				r = SUCCESS;
 			}
 		}
@@ -265,10 +305,12 @@ int data_file::close() {
 			fs.write(head_buff.data(), head_buff.capacity());
 			fs.flush();
 			closed = true;
-			if (fs.good()) {
+			opened = false;
+			if (!fs.fail()) {
 				r = SUCCESS;
 				fs.close();
 			}
+
 		}
 
 		return r;
@@ -313,9 +355,13 @@ segment::segment(const segment & another) {
 	assign_time = another.assign_time;
 	update_time = another.update_time;
 	create_time = another.create_time;
-	free_perct = another.free_perct;
 	has_buffer = another.has_buffer;
 	block_size = another.block_size;
+	block_count = another.block_count;
+	pre_seg_dfile_id = another.pre_seg_dfile_id;
+	pre_seg_dfile_path = another.pre_seg_dfile_path;
+	next_seg_dfile_id = another.next_seg_dfile_id;
+	next_seg_dfile_path = another.next_seg_dfile_path;
 
 	if (has_buffer) {
 		assign_content_buffer();
@@ -335,11 +381,15 @@ segment::segment(segment && another) {
 	assign_time = another.assign_time;
 	create_time = another.create_time;
 	update_time = another.update_time;
-	free_perct = another.free_perct;
 	has_buffer = another.has_buffer;
 	content_buffer = another.content_buffer;
 	block_size = another.block_size;
+	block_count = another.block_count;
 
+	pre_seg_dfile_id = another.pre_seg_dfile_id;
+	pre_seg_dfile_path = another.pre_seg_dfile_path;
+	next_seg_dfile_id = another.next_seg_dfile_id;
+	next_seg_dfile_path = another.next_seg_dfile_path;
 	//move another content buffer to this
 	another.content_buffer = NULL;
 	another.has_buffer = false;
@@ -358,17 +408,77 @@ void segment::fill_to_buff(char_buffer & buff) {
 void segment::fill_head_to_buff(char_buffer &buff) {
 	buff << magic << id << offset << status << length << create_time
 			<< assign_time << update_time << pre_seg_offset << next_seg_offset
-			<< block_size;
+			<< block_size << span_dfile_flag;
+	if ((span_dfile_flag & 1) == 1) {
+		buff << pre_seg_dfile_id << pre_seg_dfile_path;
+	}
+	if ((span_dfile_flag & 2) == 2) {
+		buff << next_seg_dfile_id << next_seg_dfile_path;
+	}
 }
 
 bool segment::operator ==(const segment & other) {
-	return other.id == id && other.status == status;
+	return other.id == id && magic == other.magic && other.status == status
+			&& create_time == other.create_time && length == other.length;
 }
 
 void segment::fetch_head_from_buff(common::char_buffer & buff) {
 	buff >> magic >> id >> offset >> status >> length >> create_time
 			>> assign_time >> update_time >> pre_seg_offset >> next_seg_offset
-			>> block_size;
+			>> block_size >> span_dfile_flag;
+
+	if ((span_dfile_flag & 1) == 1) {
+		buff >> pre_seg_dfile_id;
+	}
+	if ((span_dfile_flag & 2) == 2) {
+		buff >> next_seg_dfile_id;
+	}
+}
+
+int segment::assign_block(data_block &blk) {
+	int r = length - segment_head_size - block_size * block_count;
+	if (r > block_size) {
+		int off = block_size * block_count;
+		if (has_buffer) {
+			blk.ref(off, content_buffer + off, block_size - block_header_size);
+			blk.init_header();
+			time(&blk.header->assign_time);
+		} else {
+			blk.init(off, block_size - block_header_size);
+		}
+		block_count++;
+		return sdb::SUCCESS;
+	} else {
+		return sdb::FAILURE;
+	}
+}
+
+int segment::remove_block(data_block & blk) {
+	blk.set_flag(REMOVED_BLK_BIT);
+	if (blk.ref_flag) {
+		char * p = (char *) &blk.header;
+		memcpy(content_buffer + blk.offset, p, block_header_size);
+		return sdb::SUCCESS;
+	} else {
+		return flush_block(blk);
+	}
+}
+
+int segment::flush_block(data_block &blk) {
+	return d_file->write_block(*this, blk);
+}
+
+int segment::read_block(data_block &blk) {
+	if (blk.offset + block_size > length) {
+		return BLK_OFF_OVERFLOW;
+	} else if (has_buffer) {
+		blk.ref(blk.offset, content_buffer + blk.offset,
+				block_size - block_header_size);
+		return SUCCESS;
+	} else {
+		return d_file->read_block(*this, blk);
+	}
 }
 
 } /* namespace storage */
+} /*  namespace sdb */

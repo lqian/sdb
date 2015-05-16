@@ -23,46 +23,46 @@ struct node {
 	node * left = nullptr; /* point to left child */
 	node * right = nullptr; /* point right child */
 
-	bool is_root() {
+	inline bool is_root() {
 		return parent == nullptr;
 	}
 
-	bool has_left() {
+	inline bool has_left() {
 		return left != nullptr;
 	}
 
-	bool has_right() {
+	inline bool has_right() {
 		return right != nullptr;
 	}
 
-	bool has_parent() {
+	inline bool has_parent() {
 		return parent != nullptr;
 	}
 
-	bool is_leaf() {
+	inline bool is_leaf() {
 		return left == nullptr && right == nullptr;
 	}
 
-	bool is_right() {
+	inline bool is_right() {
 		return parent->right == this;
 	}
 
-	bool is_left() {
+	inline bool is_left() {
 		return parent->left == this;
 	}
 
-	bool is_middle() {
+	inline bool is_internal () {
 		return parent != nullptr && (has_left() || has_right());
 	}
 
-	void remove_left_leaf() {
+	inline void remove_left_leaf() {
 		if (left->is_leaf()) {
 			left->parent = nullptr;
 			left = nullptr;
 		}
 	}
 
-	void remove_right_leaf() {
+	inline void remove_right_leaf() {
 		if (right->is_leaf()) {
 			right->parent = nullptr;
 			right = nullptr;
@@ -81,7 +81,7 @@ struct node {
 		}
 	}
 
-	bool is_null() {
+	inline bool is_null() {
 		return parent == nullptr && left == nullptr && right == nullptr
 				&& k.is_null() && v.is_null();
 	}
@@ -177,17 +177,17 @@ struct node {
 		}
 	}
 
-	void add_right(node *n) {
+	inline void add_right(node *n) {
 		n->parent = this;
 		right = n;
 	}
 
-	void add_left(node *n) {
+	inline void add_left(node *n) {
 		n->parent = this;
 		left = n;
 	}
 
-	node * left_leaf() {
+	inline node * left_leaf() {
 		node * ll = left;
 		while (ll->has_left()) {
 			ll = ll->left;
@@ -195,7 +195,7 @@ struct node {
 		return ll;
 	}
 
-	node * right_leaf() {
+	inline node * right_leaf() {
 		node *rl = right;
 		while (rl->has_right()) {
 			rl = rl->right;
