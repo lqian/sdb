@@ -7,45 +7,10 @@
 #include "storage/datafile.h"
 #include <algorithm>
 #include "tree/avl.h"
-#include "tree/node.h"
 
 using namespace std;
 using namespace sdb::tree;
 using namespace sdb::storage;
-
-template<class K, class V>
-class echo_handler: public sdb::tree::node_handler<K, V> {
-	std::vector<std::string> event_names;
-public:
-
-	echo_handler() {
-		event_names.push_back("not_found");
-		event_names.push_back("equal_event");
-		event_names.push_back("greater_event");
-		event_names.push_back("less_event");
-		event_names.push_back("add_left_event");
-		event_names.push_back("add_right_event");
-		event_names.push_back("overwrite_event");
-		event_names.push_back("rotate_left_event");
-		event_names.push_back("rotate_right_event");
-	}
-
-	virtual void handle(const sdb::tree::node<K, V> * n) {
-		cout << "node k: " << n->k << endl;
-	}
-
-	virtual void handle(sdb::tree::node<K, V> *n,
-			sdb::tree::node_handler_event e) {
-		std::cout << "node n: " << n->k << "; node event: " << event_names[e]
-				<< std::endl;
-	}
-
-	virtual void handle(const sdb::tree::node<K, V> *p, const K k,
-			node_handler_event e) {
-		std::cout << "node k: " << p->k << "; const k:" << k << "; node event: "
-				<< event_names[e] << std::endl;
-	}
-};
 
 void data_file_basic_test() {
 
@@ -210,95 +175,9 @@ void mem_block_test() {
 	ASSERT(off2 == mdb.off_tbl[2]);
 }
 
-void tree_node_test() {
-	sdb::tree::node<int, int> n1, n2, n3, n4, n5;
-	n1.k = 1, n1.parent = &n2;
-	n2.left = &n1;  // n2 is the root
-	n2.k = 2;
-	n3.k = 3, n3.parent = &n2, n2.right = &n3;
-	n4.k = 4, n4.parent = &n3, n3.right = &n4;
-	n5.k = 5, n5.parent = &n4, n4.right = &n5;
 
-	ASSERT(n2.is_root());
-	ASSERT(n1.is_left());
-	ASSERT(n3.is_right());
 
-	int h = n2.height();
-	ASSERT(h == 4);
-	ASSERT(n2.stage() == 5);
-	ASSERT(n2.left->height() == 1);
-	ASSERT(n2.right->height() == 3);
 
-	int bf = n2.balance_factor();
-
-	ASSERT(bf == -2);
-	ASSERT(n2.exists(2));
-	ASSERT(n2.exists(1));
-	ASSERT(n2.exists(4));
-
-	n3.rotate_left();
-	ASSERT(n3.exists(4)); // the n3 is the new root
-	ASSERT(n2.balance_factor() == 1);
-	ASSERT(n3.balance_factor() == 0);
-
-	n2.rotate_right();
-	ASSERT(n1.parent == &n2);
-	ASSERT(n2.is_root());
-	ASSERT(n2.right == &n3);
-
-}
-
-void test_avl() {
-
-	using namespace sdb::tree;
-	sdb::tree::node<int, int> n1, n2, n3, n4, n5, n6;
-	n1.k = 1, n2.k = 2, n3.k = 3, n4.k = 4, n5.k = 5, n6.k = 6;
-
-	sdb::tree::avl<int, int> tree(&n1);
-	ASSERT(tree.exists(n1.k));
-
-	ASSERT(tree.insert_node(&n2));
-	ASSERT(tree.insert_node(&n3));
-	ASSERT(tree.insert_node(&n4));
-	ASSERT(tree.insert_node(&n5));
-
-	int bf = tree.balance_factor();
-	ASSERT(bf < 2 && bf > -2);
-
-	ASSERT(tree.exists(4));
-	tree.insert_node(&n6);
-
-	echo_handler<int, int> handler;
-
-	cout << "traverse in order" << endl;
-	tree.traverse(&handler, sdb::tree::in_order);
-
-	cout << "traverse pre order" << endl;
-	tree.traverse(&handler, sdb::tree::pre_order);
-
-	cout << "traverse post order" << endl;
-	tree.traverse(&handler, sdb::tree::post_order);
-
-	cout << "traverse level order" << endl;
-	tree.traverse(&handler, sdb::tree::level_order);
-
-	node<int, int> *d = tree.remove(2);
-	ASSERT(d != nullptr && d->k == 2);
-
-	cout << "== traverse in order after delete 2 ====" << endl;
-	tree.traverse(&handler, sdb::tree::in_order);
-
-	for (int i = 0; i < 20; i++) {
-		sdb::tree::node<int, int> n;
-		n.k = std::abs(std::rand());
-		std::cout << "rand:" << n.k << std::endl;
-		tree.insert_node(&n);
-	}
-
-	cout << "traverse in order for big tree" << endl;
-	tree.traverse(&handler, sdb::tree::in_order);
-
-}
 
 void test_block_write() {
 	mem_data_block b1, b2;
@@ -358,10 +237,6 @@ void test_block_write() {
 
 void runSuite() {
 	cute::suite s;
-
-	// tree test suite
-	s.push_back(CUTE(tree_node_test));
-	s.push_back(CUTE(test_avl));
 
 	//memory block test
 	s.push_back(CUTE(mem_block_test));

@@ -30,7 +30,7 @@ data_file::data_file(unsigned long id, std::string full_path) {
 }
 
 bool data_file::operator ==(const data_file & another) {
-	return magic == DATA_FILE_MAGIC && magic == another.magic
+	return magic == data_file_magic && magic == another.magic
 			&& id == another.id && full_path == another.full_path;
 }
 
@@ -83,7 +83,7 @@ int data_file::open() {
 }
 
 bool data_file::is_valid() {
-	return magic == DATA_FILE_MAGIC && id > unused_id && exist();
+	return magic == data_file_magic && id > unused_id && exist();
 }
 
 int data_file::seek_segment(const segment & seg) {
@@ -114,11 +114,8 @@ int data_file::assgin_segment(segment & seg) {
 	common::char_buffer head_buff(segment_head_size);
 	seg.fill_head_to_buff(head_buff);
 	fs.write(head_buff.data(), segment_head_size);
-
-	int cl = seg.length - segment_head_size;
-	char * seg_body = new char[cl];
-	fs.write(seg_body, cl);
-	delete[] seg_body;
+	seg.assign_content_buffer();
+	fs.write(seg.content_buffer, seg.length - segment_head_size);
 	fs.flush();
 	if (!fs.fail()) {
 		free_perct = free_perct
@@ -173,7 +170,7 @@ int data_file::update_segment(segment &seg) {
 		common::char_buffer head_buff(segment_head_size);
 		seg.fill_head_to_buff(head_buff);
 		fs.write(head_buff.data(), segment_head_size);
-		if (seg.has_buffer) {
+		if (seg.has_buffer()) {
 			fs.write(seg.content_buffer, seg.length - segment_head_size);
 		}
 		fs.flush();
@@ -198,7 +195,7 @@ int data_file::update_segment(segment &seg, int off, int length) {
 		common::char_buffer head_buff(segment_head_size);
 		seg.fill_head_to_buff(head_buff);
 		fs.write(head_buff.data(), segment_head_size);
-		if (seg.has_buffer) {
+		if (seg.has_buffer()) {
 			fs.seekg(off, ios_base::cur);
 			fs.write(seg.content_buffer + off, length);
 		}
@@ -253,6 +250,8 @@ int data_file::read_block(segment &seg, data_block &blk) {
 	return FAILURE;
 }
 
+
+
 void data_file::skip_segment(segment & seg) {
 	if (seg.is_valid()) {
 		fs.seekg(seg.length - segment_head_size, ios_base::cur);
@@ -265,7 +264,7 @@ void data_file::remove() {
 
 void data_file::fill_head_to_buff(common::char_buffer & buff) {
 	// THE ORDER MUST NOT CHANGE
-	buff << DATA_FILE_MAGIC << id << create_time << attach_time << update_time
+	buff << data_file_magic << id << create_time << attach_time << update_time
 			<< version << free_perct;
 }
 
@@ -349,13 +348,13 @@ segment::segment(const segment & another) {
 	id = another.id;
 	status = another.status;
 	length = another.length;
+	seg_type = another.seg_type;
 	offset = another.offset;
 	next_seg_offset = another.next_seg_offset;
 	pre_seg_offset = another.pre_seg_offset;
 	assign_time = another.assign_time;
 	update_time = another.update_time;
 	create_time = another.create_time;
-	has_buffer = another.has_buffer;
 	block_size = another.block_size;
 	block_count = another.block_count;
 	pre_seg_dfile_id = another.pre_seg_dfile_id;
@@ -363,11 +362,7 @@ segment::segment(const segment & another) {
 	next_seg_dfile_id = another.next_seg_dfile_id;
 	next_seg_dfile_path = another.next_seg_dfile_path;
 
-	if (has_buffer) {
-		assign_content_buffer();
-		memcpy(content_buffer, another.content_buffer,
-				length - segment_head_size);
-	}
+	content_buffer = another.content_buffer;
 }
 
 segment::segment(segment && another) {
@@ -375,14 +370,15 @@ segment::segment(segment && another) {
 	id = another.id;
 	status = another.status;
 	length = another.length;
+	seg_type = another.seg_type;
 	offset = another.offset;
 	next_seg_offset = another.next_seg_offset;
 	pre_seg_offset = another.pre_seg_offset;
+
 	assign_time = another.assign_time;
 	create_time = another.create_time;
 	update_time = another.update_time;
-	has_buffer = another.has_buffer;
-	content_buffer = another.content_buffer;
+
 	block_size = another.block_size;
 	block_count = another.block_count;
 
@@ -390,13 +386,14 @@ segment::segment(segment && another) {
 	pre_seg_dfile_path = another.pre_seg_dfile_path;
 	next_seg_dfile_id = another.next_seg_dfile_id;
 	next_seg_dfile_path = another.next_seg_dfile_path;
+
 	//move another content buffer to this
-	another.content_buffer = NULL;
-	another.has_buffer = false;
+	content_buffer = another.content_buffer;
+	another.content_buffer = nullptr;
 }
 
 segment::~segment() {
-	if (has_buffer) {
+	if (content_buffer!=nullptr) {
 		delete[] content_buffer;
 	}
 }
@@ -406,9 +403,9 @@ void segment::fill_to_buff(char_buffer & buff) {
 }
 
 void segment::fill_head_to_buff(char_buffer &buff) {
-	buff << magic << id << offset << status << length << create_time
+	buff << magic << id << offset << status << length << seg_type << create_time
 			<< assign_time << update_time << pre_seg_offset << next_seg_offset
-			<< block_size << span_dfile_flag;
+			<< block_size << block_count << span_dfile_flag;
 	if ((span_dfile_flag & 1) == 1) {
 		buff << pre_seg_dfile_id << pre_seg_dfile_path;
 	}
@@ -419,13 +416,43 @@ void segment::fill_head_to_buff(char_buffer &buff) {
 
 bool segment::operator ==(const segment & other) {
 	return other.id == id && magic == other.magic && other.status == status
-			&& create_time == other.create_time && length == other.length;
+			&& seg_type == other.seg_type && create_time == other.create_time
+			&& length == other.length;
+}
+
+segment & segment::operator=(const segment & another) {
+	if (&another != this) {
+		magic = another.magic;
+		id = another.id;
+		status = another.status;
+		length = another.length;
+		seg_type = another.seg_type;
+		offset = another.offset;
+		next_seg_offset = another.next_seg_offset;
+		pre_seg_offset = another.pre_seg_offset;
+		assign_time = another.assign_time;
+		update_time = another.update_time;
+		create_time = another.create_time;
+		block_size = another.block_size;
+		block_count = another.block_count;
+		pre_seg_dfile_id = another.pre_seg_dfile_id;
+		pre_seg_dfile_path = another.pre_seg_dfile_path;
+		next_seg_dfile_id = another.next_seg_dfile_id;
+		next_seg_dfile_path = another.next_seg_dfile_path;
+
+		if (has_buffer()) {
+			assign_content_buffer();
+			memcpy(content_buffer, another.content_buffer, length - segment_head_size);
+		}
+	}
+
+	return *this;
 }
 
 void segment::fetch_head_from_buff(common::char_buffer & buff) {
-	buff >> magic >> id >> offset >> status >> length >> create_time
+	buff >> magic >> id >> offset >> status >> length >> seg_type >> create_time
 			>> assign_time >> update_time >> pre_seg_offset >> next_seg_offset
-			>> block_size >> span_dfile_flag;
+			>> block_size >> block_count >> span_dfile_flag;
 
 	if ((span_dfile_flag & 1) == 1) {
 		buff >> pre_seg_dfile_id;
@@ -435,11 +462,17 @@ void segment::fetch_head_from_buff(common::char_buffer & buff) {
 	}
 }
 
+int segment::flush() {
+	if (d_file) {
+		return d_file->update_segment(*this);
+	}
+	return SEGMENT_NOT_ASSIGNED;
+}
 int segment::assign_block(data_block &blk) {
 	int r = length - segment_head_size - block_size * block_count;
 	if (r > block_size) {
 		int off = block_size * block_count;
-		if (has_buffer) {
+		if (has_buffer()) {
 			blk.ref(off, content_buffer + off, block_size - block_header_size);
 			blk.init_header();
 			time(&blk.header->assign_time);
@@ -471,7 +504,7 @@ int segment::flush_block(data_block &blk) {
 int segment::read_block(data_block &blk) {
 	if (blk.offset + block_size > length) {
 		return BLK_OFF_OVERFLOW;
-	} else if (has_buffer) {
+	} else if (has_buffer()) {
 		blk.ref(blk.offset, content_buffer + blk.offset,
 				block_size - block_header_size);
 		return SUCCESS;
