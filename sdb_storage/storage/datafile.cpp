@@ -47,7 +47,7 @@ int data_file::create() {
 	time(&attach_time);
 	common::char_buffer buff(data_file_head_size);
 	fill_head_to_buff(buff);
-	ofstream out(full_path, ios_base::app | ios_base::binary);
+	ofstream out(full_path.c_str(), ios_base::app | ios_base::binary);
 	out.write(buff.data(), buff.capacity());
 	out.flush();
 	out.close();
@@ -60,7 +60,7 @@ int data_file::open() {
 		if (!exist() && create() != SUCCESS) {
 			return FAILURE;
 		}
-		fs.open(full_path, ios_base::binary | ios_base::in | ios_base::out);
+		fs.open(full_path.c_str(), ios_base::binary | ios_base::in | ios_base::out);
 		if (fs.is_open()) {
 			char * data = new char[data_file_head_size];
 			fs.read(data, data_file_head_size);

@@ -358,6 +358,8 @@ public:
 		return tree;
 	}
 
+	~index_segment() {}
+
 private:
 	bptree * tree = nullptr;
 };
