@@ -175,10 +175,6 @@ void mem_block_test() {
 	ASSERT(off2 == mdb.off_tbl[2]);
 }
 
-
-
-
-
 void test_block_write() {
 	mem_data_block b1, b2;
 

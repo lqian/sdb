@@ -82,6 +82,15 @@ const int NODE2_REF_INVALID_BLOCK = -4;
 
 using namespace sdb::storage;
 
+enum key_test_numu {
+	invalid_test,
+	key_found,
+	key_not_found,
+	key_within_page,
+	key_greater,
+	key_less,
+};
+
 struct node2;
 
 class index_segment;
@@ -133,6 +142,7 @@ struct key: val {
 	}
 }
 ;
+
 /*
  * a block contains fixed-size of node2. its internal as
  * +------+---+---+---+----------------------------+------+------+------+
@@ -161,9 +171,13 @@ struct fixed_size_index_block: data_block {
 
 	//define programmatic stage
 	node2 * parent;
-	fixed_size_index_block *pre_page = nullptr;
-	fixed_size_index_block *next_page = nullptr;
-	fixed_size_index_block *parent_page = nullptr;
+	fixed_size_index_block * pre_page;
+	fixed_size_index_block * next_page;
+	fixed_size_index_block * parent_page;
+
+	//	fixed_size_index_block * pre_page_header;
+	//	fixed_size_index_block * next_page_header;
+	//	fixed_size_index_block * parent_page_header;
 
 	index_segment* idx_seg;
 
@@ -185,10 +199,14 @@ struct fixed_size_index_block: data_block {
 	}
 
 	int assign_node(node2 *n);
+	void assign_node(node2 &n);
 	int read_node(node2 *n);
 	void set_pre_page(fixed_size_index_block *pre);
 	void set_next_page(fixed_size_index_block *next);
 	void set_parent_node2(node2 *n);
+	void purge_node();
+	void sort_in_mem();
+	key_test_numu test_key(const key & k, node2 & n);
 
 	bool is_full() {
 		return length - header->node_count * header->node_size
@@ -255,17 +273,36 @@ struct node2 {
 	node2 * nxt_nd2 = nullptr; /*  the next node */
 
 	page * ref_page = nullptr; /* this node's reference page which contains it */
-	page * left_page = nullptr; /* the left page, which nodes key is less then this key */
-	page * right_page = nullptr; /* the right page, which nodes key is equal or greater than this key */
+	page left_page; /* the left page, which nodes key is less then this key */
+	page right_page; /* the right page, which nodes key is equal or greater than this key */
 
-	void set_key_val(key * _k, val *_v) {
-		k.set_val(_k->v, _k->len);
-		v.set_val(_v->v, _v->len);
+	void set_key(key & _k) {
+		k.set_val(_k.v, _k.len);
 	}
 
-	void set_key_val(char *kb, short kl, char *vb, short  vl) {
+	void set_key_val(key & _k, val &_v) {
+		k.set_val(_k.v, _k.len);
+		v.set_val(_v.v, _v.len);
+	}
+
+	void set_key_val(char *kb, short kl, char *vb, short vl) {
 		k.set_val(kb, kl);
 		v.set_val(vb, vl);
+	}
+
+	void init(int off, int len) {
+		buffer = new char[index_block_header_size + len];
+		header = (head *) buffer;
+		buffer += index_block_header_size;
+	}
+
+	void ref(char *buff, int off, int len) {
+		refer = true;
+		offset = off;
+		this->length = len;
+
+		header = (head *) buff;
+		buffer = buff + node2_header_size;
 	}
 
 	/*
@@ -298,6 +335,28 @@ struct node2 {
 
 	void set_left(page *p);
 	void set_right(page *p);
+
+	node2 & operator=(const node2& other) {
+		if (&other != this) {
+			header = other.header;
+			length = other.length;
+			buffer = new char[length];
+			memcpy(buffer, other.buffer, other.length);
+			refer = false;
+		}
+		return *this;
+	}
+
+	bool operator<(const node2 & other) {
+		return k.compare(other.k) < 0;
+	}
+
+	~ node2() {
+		if (!refer) {
+			delete header;
+			delete[] buffer;
+		}
+	}
 }
 ;
 
@@ -305,6 +364,7 @@ class bptree {
 	friend class index_segment;
 public:
 	int load();
+	page & find_page(page &p, const key &k);
 	int add_key(key &k, val& v);
 	int remove_key(key &k);
 	int update_val(key &k, val& v);
@@ -339,13 +399,20 @@ private:
 	int block_size; /* a block size in bytes */
 
 	index_segment * root_seg;
+	page * root_page;
+
+	int fetch_left_page(node2 &n);
+	int fetch_right_page(node2 &n);
+	int fetch_parent_page(node2 &n);
+
+	int add_key(page * p, key &k, val& v);
 };
 
 class index_segment: public segment {
 	friend class bptree;
 public:
 	int assign_page(page *p);
-	int read_page(page &p);
+	int read_page(page *p);
 	int remove_page(page *p);
 	int first_page(page *p);
 
@@ -353,15 +420,18 @@ public:
 	index_segment(unsigned long _id, data_file *_f, unsigned int _off = 0);
 	index_segment(const index_segment & other);
 	index_segment(index_segment && other);
-
+	index_segment(segment & other);
+	index_segment & operator=(index_segment & other);
 	const bptree* get_tree() const {
 		return tree;
 	}
 
-	~index_segment() {}
+	~index_segment() {
+	}
 
 private:
 	bptree * tree = nullptr;
+
 };
 
 } /* namespace tree */

@@ -139,7 +139,7 @@ void tree_node_test() {
 }
 
 void basic_test_bptree() {
-	data_file df(1L, "/tmp/btpree.db");
+	data_file df(1L, "/tmp/bptree.db");
 	if (df.exist()) {
 		df.remove();
 	}
@@ -167,7 +167,7 @@ void basic_test_bptree() {
 }
 
 void basic_page_test() {
-	data_file df(1L, "/tmp/btpree.db");
+	data_file df(1L, "/tmp/bptree.db");
 	if (df.exist()) {
 		df.remove();
 	}
@@ -185,6 +185,7 @@ void basic_page_test() {
 	page p, s;
 	ASSERT(seg.assign_page(&p) == sdb::SUCCESS);
 	ASSERT(seg.get_block_count() == 1);
+	ASSERT(p.idx_seg == &seg);
 	ASSERT(p.length == K_4 * kilo_byte - sdb::tree::index_block_header_size);
 	std::cout << "node_size: " << p.header->node_size << std::endl;
 
@@ -194,16 +195,23 @@ void basic_page_test() {
 
 	ASSERT(p.is_root());
 
-	node2 n;
+	node2 n, n1;
 	p.assign_node(&n);
+	p.assign_node(&n1);
 	ASSERT(n.length == 4 + 4);
+	ASSERT(n1.length == 4 + 4);
 
 	int i = 0xA0B1C2D3;
+	int i1 = 0xA0B1C2D0;
 	int t = 0xE0F09180;
+	int t1 = 0xE0F0918a;
 	short l = sizeof(int);
 	n.set_key_val(to_chars(i), l, to_chars(t), l);
 	ASSERT(to_int(n.k.v) == i);
 	ASSERT(to_int(n.v.v) == t);
+	n1.set_key_val(to_chars(i1), l, to_chars(t1), l);
+
+	ASSERT(n < n1 == false);
 
 	seg.flush();
 	df.close();
@@ -218,15 +226,19 @@ void basic_page_test() {
 
 	page rp;
 	rp.offset = 0;
-	ASSERT(seg.read_page(rp) == sdb::SUCCESS);
+	ASSERT(seg.read_page(&rp) == sdb::SUCCESS);
 	ASSERT(rp.header->blk_magic == sdb::storage::block_magic);
-	ASSERT(rp.header->node_count==1);
+	std::cout << "basic_page_test" << std::endl;
+	ASSERT(rp.header->node_count == 1);
+
 	node2 nr;
 	nr.offset = 0;
 	ASSERT(rp.read_node(&nr) == sdb::SUCCESS);
 	ASSERT(nr.offset == 0);
 	ASSERT(to_int(nr.k.v) == i);
 	ASSERT(to_int(nr.v.v) == t);
+
+
 }
 
 void runSuite() {

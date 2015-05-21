@@ -74,7 +74,6 @@ const int BLK_OFF_INVALID = -3;
 const int SEGMENT_NOT_ASSIGNED = -0x100;
 const int SEGMENT_IS_FULL = -0x101;
 
-
 class segment;
 
 struct data_block;
@@ -305,9 +304,12 @@ public:
 	}
 
 	inline void free_buffer() {
-		delete[] content_buffer;
-		content_buffer = nullptr;
+		if (content_buffer) {
+			delete[] content_buffer;
+			content_buffer = nullptr;
+		}
 	}
+
 	inline unsigned long get_id() const {
 		return id;
 	}
@@ -338,7 +340,7 @@ public:
 				|| ((span_dfile_flag >> NEXT_SEG_SPAN_DFILE_BIT) & 1) == 1;
 	}
 
-	inline segment next_seg() {
+	inline segment & next_seg() {
 		segment seg;
 		if (this->d_file == nullptr) {
 			//ignore this case
