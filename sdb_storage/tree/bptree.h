@@ -44,6 +44,7 @@
 
 #include <list>
 #include <cstring>
+#include <map>
 #include "node.h"
 #include "../common/char_buffer.h"
 #include "../storage/datafile.h"
@@ -79,6 +80,7 @@ const int ND2_PP_DF_BIT = 9;
 const int NODE2_OVERFLOW_OFFSET = -2;
 const int NODE2_INVALID_OFFSET = -3;
 const int NODE2_REF_INVALID_BLOCK = -4;
+const int NODE2_OVERFLOW_MAX_ORDER = -5;
 
 using namespace sdb::storage;
 
@@ -116,9 +118,9 @@ struct val {
 	}
 
 	~val() {
-		if (!ref && len > 0) {
-			delete[] v;
-		}
+//		if (!ref && len > 0) {
+//			delete[] v;
+//		}
 	}
 };
 
@@ -171,13 +173,13 @@ struct fixed_size_index_block: data_block {
 
 	//define programmatic stage
 	node2 * parent;
-	fixed_size_index_block * pre_page;
-	fixed_size_index_block * next_page;
-	fixed_size_index_block * parent_page;
+//	fixed_size_index_block * pre_page;
+//	fixed_size_index_block * next_page;
+//	fixed_size_index_block * parent_page;
 
-	//	fixed_size_index_block * pre_page_header;
-	//	fixed_size_index_block * next_page_header;
-	//	fixed_size_index_block * parent_page_header;
+	head * pre_page_header;
+	head * next_page_header;
+	head * parent_page_header;
 
 	index_segment* idx_seg;
 
@@ -199,19 +201,20 @@ struct fixed_size_index_block: data_block {
 	}
 
 	int assign_node(node2 *n);
-	void assign_node(node2 &n);
 	int read_node(node2 *n);
 	void set_pre_page(fixed_size_index_block *pre);
 	void set_next_page(fixed_size_index_block *next);
 	void set_parent_node2(node2 *n);
-	void purge_node();
+//	void purge_node();
+
+	/*
+	 * purge node from a give index of node2 in the page
+	 */
+	void purge_node(int idx = 0);
 	void sort_in_mem();
 	key_test_numu test_key(const key & k, node2 & n);
 
-	bool is_full() {
-		return length - header->node_count * header->node_size
-				< header->node_size;
-	}
+	 bool is_full()  ;
 
 	bool is_root() {
 		return test_flag(PAGE_PP_BIT) == false;
@@ -220,6 +223,10 @@ struct fixed_size_index_block: data_block {
 	bool is_leaf_page() {
 		return test_flag(PAGE_NODE_TYPE_BIT) == false;
 	}
+
+	bool is_left();
+
+	bool is_right();
 
 	virtual void set_flag(int bit) {
 		header->flag |= (1 << bit);
@@ -232,6 +239,8 @@ struct fixed_size_index_block: data_block {
 	virtual bool test_flag(int b) {
 		return (header->flag >> b & 1) == 1;
 	}
+
+	virtual ~ fixed_size_index_block();
 };
 
 typedef fixed_size_index_block page;
@@ -265,12 +274,9 @@ struct node2 {
 	char * buffer;
 	int length; /* total length of the node2 bytes, excludes header */
 
-	bool refer = false;
+	bool ref_flag = false;
 	key k;
 	val v;
-
-	node2 * pre_nd2 = nullptr; /* the previous node */
-	node2 * nxt_nd2 = nullptr; /*  the next node */
 
 	page * ref_page = nullptr; /* this node's reference page which contains it */
 	page left_page; /* the left page, which nodes key is less then this key */
@@ -297,7 +303,7 @@ struct node2 {
 	}
 
 	void ref(char *buff, int off, int len) {
-		refer = true;
+		ref_flag = true;
 		offset = off;
 		this->length = len;
 
@@ -310,7 +316,7 @@ struct node2 {
 	 * is content includes key and value
 	 */
 	void ref(char *buff, int off, int len, short kl, short vl) {
-		refer = true;
+		ref_flag = true;
 		offset = off;
 		this->length = len;
 
@@ -336,13 +342,27 @@ struct node2 {
 	void set_left(page *p);
 	void set_right(page *p);
 
+	inline bool has_pre_nd2() {
+		return offset > 0;
+	}
+
+	inline bool has_nxt_nd2() {
+		int ns = ref_page->header->node_size;
+		int nc = ref_page->header->node_count;
+		return offset / ns < nc - 1;
+	}
+
+	node2 nxt_nd2();
+
+	node2 pre_nd2();
+
 	node2 & operator=(const node2& other) {
 		if (&other != this) {
 			header = other.header;
 			length = other.length;
 			buffer = new char[length];
 			memcpy(buffer, other.buffer, other.length);
-			refer = false;
+			ref_flag = false;
 		}
 		return *this;
 	}
@@ -352,7 +372,7 @@ struct node2 {
 	}
 
 	~ node2() {
-		if (!refer) {
+		if (!ref_flag) {
 			delete header;
 			delete[] buffer;
 		}
@@ -369,7 +389,8 @@ public:
 	int remove_key(key &k);
 	int update_val(key &k, val& v);
 
-	bptree(index_segment * _root_seg, int kl, int vl, int bs = K_4);
+	bptree(index_segment * _root_seg, int kl, int vl, int bs);
+	bptree(index_segment * _root_seg, int m, int kl, int vl, int bs);
 	virtual ~bptree();
 
 	int get_block_size() const {
@@ -384,7 +405,7 @@ public:
 		return m;
 	}
 
-	const index_segment* get_root_seg() const {
+	index_segment* get_root_seg() {
 		return root_seg;
 	}
 
@@ -398,14 +419,31 @@ private:
 	int val_len; /* the value length  in byte */
 	int block_size; /* a block size in bytes */
 
-	index_segment * root_seg;
-	page * root_page;
+	index_segment * root_seg, *curr_seg;
 
-	int fetch_left_page(node2 &n);
-	int fetch_right_page(node2 &n);
-	int fetch_parent_page(node2 &n);
+	std::map<unsigned long, index_segment> seg_map;
+	page root_page;
 
-	int add_key(page * p, key &k, val& v);
+	int fetch_left_page(node2 &n, page & lp);
+	int fetch_right_page(node2 &n, page & rp);
+	int fetch_parent_page(node2 &n, page &pp);
+
+	int fetch_next_page(page &p, page &nxt);
+	int fetch_pre_page(page &p, page &pre);
+	/*
+	 * transfer node2 from a given position to the tail of another page without
+	 * range check
+	 */
+	void transfer(page &p1, int from, page & p2);
+	void re_organize(page &p1, page &p2);
+
+	int add_key(page & p, key &k, val& v);
+
+	int assign_page(page &p);
+	void split_2(page &p, page &left, page &right);
+	void split_2_3(page &p1, page &p2, page & empty);
+	void to_right(page &p);
+	void to_left(page &p);
 };
 
 class index_segment: public segment {
@@ -414,7 +452,6 @@ public:
 	int assign_page(page *p);
 	int read_page(page *p);
 	int remove_page(page *p);
-	int first_page(page *p);
 
 	index_segment(unsigned long _id);
 	index_segment(unsigned long _id, data_file *_f, unsigned int _off = 0);
@@ -424,9 +461,6 @@ public:
 	index_segment & operator=(index_segment & other);
 	const bptree* get_tree() const {
 		return tree;
-	}
-
-	~index_segment() {
 	}
 
 private:

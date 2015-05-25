@@ -71,6 +71,7 @@ const int PRE_BLK_SPAN_DFILE_BIT = 6;
 
 const int BLK_OFF_OVERFLOW = -2;
 const int BLK_OFF_INVALID = -3;
+const int NO_PRE_BLK = -4;
 const int SEGMENT_NOT_ASSIGNED = -0x100;
 const int SEGMENT_IS_FULL = -0x101;
 
@@ -225,6 +226,8 @@ protected:
 	 the 1-bit, 1 denotes next_seg_offset is in another data file */
 	unsigned int pre_seg_offset = 0;
 	unsigned int next_seg_offset = 0;
+	unsigned long pre_seg_id = 0;
+	unsigned long next_seg_id = 0;
 	unsigned long pre_seg_dfile_id = 0;
 	unsigned long next_seg_dfile_id = 0;
 
@@ -340,8 +343,7 @@ public:
 				|| ((span_dfile_flag >> NEXT_SEG_SPAN_DFILE_BIT) & 1) == 1;
 	}
 
-	inline segment & next_seg() {
-		segment seg;
+	 int  next_seg(segment & seg) {
 		if (this->d_file == nullptr) {
 			//ignore this case
 		} else if (d_file->id != pre_seg_dfile_id) {
@@ -350,17 +352,17 @@ public:
 			seg.offset = pre_seg_offset;
 			seg.d_file = &df;
 			df.open();
-			df.fetch_segment(seg);
+			return df.fetch_segment(seg);
 		} else {
 			seg.d_file = this->d_file;
 			seg.offset = next_seg_offset;
-			d_file->fetch_segment(seg);
+			seg.id =  next_seg_id;
+			return d_file->fetch_segment(seg);
 		}
-		return seg;
+		return sdb::FAILURE;
 	}
 
-	inline segment pre_seg() {
-		segment seg;
+	int  pre_seg(segment & seg) {
 		if (this->d_file == nullptr) {
 			//ignore this case
 		} else if (d_file->id != pre_seg_dfile_id) {
@@ -368,13 +370,14 @@ public:
 			data_file df(pre_seg_dfile_id, pre_seg_dfile_path);
 			seg.offset = pre_seg_offset;
 			seg.d_file = &df;
-			df.fetch_segment(seg);
+			return df.fetch_segment(seg);
 		} else {
 			seg.d_file = this->d_file;
 			seg.offset = pre_seg_offset;
-			d_file->fetch_segment(seg);
+			seg.id  = pre_seg_id;
+			return d_file->fetch_segment(seg);
 		}
-		return seg;
+		return sdb::FAILURE;
 	}
 
 	inline bool is_valid() {
@@ -587,10 +590,11 @@ struct data_block {
 		return (header->flag >> b & 1) == 1;
 	}
 
-	~ data_block() {
-		if (!ref_flag) {
-			delete[] (buffer - block_header_size);
-		}
+	virtual ~ data_block() {
+//		if (!ref_flag) {
+//			delete header;
+//			delete[] buffer;
+//		}
 	}
 
 };
@@ -814,6 +818,13 @@ struct mem_data_block: data_block {
 
 		memcpy(buffer, cb.data(), cb.size());
 	}
+
+	virtual ~ mem_data_block() {
+			if (!ref_flag) {
+				delete header;
+				delete[] buffer;
+			}
+		}
 }
 ;
 

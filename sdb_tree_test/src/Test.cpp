@@ -138,7 +138,7 @@ void tree_node_test() {
 
 }
 
-void basic_test_bptree() {
+void basic_segment_test() {
 	data_file df(1L, "/tmp/bptree.db");
 	if (df.exist()) {
 		df.remove();
@@ -163,7 +163,92 @@ void basic_test_bptree() {
 	ASSERT(r_seg == root_seg);
 
 	ASSERT(root_seg.has_buffer() == false);
-	bptree tree(&root_seg, 8, 8, K_4);
+}
+
+void page_node_test() {
+	data_file df(1L, "/tmp/bptree.db");
+	if (df.exist()) {
+		df.remove();
+	}
+	df.open();
+
+	index_segment seg(1L, &df, 0);
+	seg.set_length(M_64);
+	seg.set_block_size(K_4);
+	seg.assign_content_buffer();
+
+	// before assign a index page, must know the key length and value length,
+	// whereas create a bptree object
+	bptree tree(&seg, 10, 4, 4, K_4);
+
+	page p1, p2;
+
+	ASSERT(seg.assign_page(&p1) == sdb::SUCCESS);
+	int p1_off = p1.offset;
+	ASSERT(seg.get_block_count() == 2);
+	ASSERT(p1.idx_seg == &seg);
+	ASSERT(p1.length == K_4 * kilo_byte - sdb::tree::index_block_header_size);
+	ASSERT(seg.assign_page(&p2) == sdb::SUCCESS);
+	ASSERT(seg.get_block_count() == 3);
+	ASSERT(p1.test_flag(sdb::storage::REMOVED_BLK_BIT) == false);
+	ASSERT(p1.ref_flag && p2.ref_flag);
+
+	ASSERT(p1.is_root());
+
+	// add node to page
+	node2 n, n1;
+	p1.assign_node(&n);
+	p1.assign_node(&n1);
+	ASSERT(n.length == 4 + 4);
+	ASSERT(n1.length == 4 + 4);
+	ASSERT(n1.ref_flag && n.ref_flag);
+	ASSERT(p1.ref_flag && p2.ref_flag);
+
+	int i = 0xA0B1C2D3;
+	int i1 = 0xA0B1C2D0;
+	int t = 0xE0F09180;
+	int t1 = 0xE0F0918a;
+	short l = sizeof(int);
+	n.set_key_val(to_chars(i), l, to_chars(t), l);
+	ASSERT(n.k.ref && n.v.ref);
+	ASSERT(to_int(n.k.v) == i);
+	ASSERT(to_int(n.v.v) == t);
+	n1.set_key_val(to_chars(i1), l, to_chars(t1), l);
+	ASSERT(p1.ref_flag && p2.ref_flag);
+	ASSERT(n < n1 == false);
+
+	seg.flush();
+	df.close();
+
+	//test read
+	df.open();
+	seg.free_buffer();
+	df.fetch_segment(seg);
+	ASSERT(seg.get_block_count() == 3);
+	df.close();
+
+	page rp;
+	rp.offset = p1_off;
+	ASSERT(seg.read_page(&rp) == sdb::SUCCESS);
+	ASSERT(rp.header->blk_magic == sdb::storage::block_magic);
+	ASSERT(rp.header->node_count == 2);
+
+	node2 nr;
+	node2::head h;
+	h.flag = -1;
+	nr.header = &h;
+	nr.offset = 0;
+	ASSERT(rp.read_node(&nr) == sdb::SUCCESS);
+	ASSERT(rp.ref_flag && nr.ref_flag);
+	ASSERT(nr.offset == 0);
+	ASSERT(nr.header->flag == 0);
+	ASSERT(nr.buffer == rp.buffer + node2_header_size);
+	ASSERT(nr.k.v == nr.buffer);
+	ASSERT(nr.v.v == nr.buffer + 4);
+	ASSERT(to_int(nr.k.v) == i);
+	ASSERT(to_int(nr.v.v) == t);
+	ASSERT(rp.ref_flag && nr.ref_flag);
+
 }
 
 void basic_page_test() {
@@ -180,73 +265,103 @@ void basic_page_test() {
 
 	// before assign a index page, must know the key length and value length,
 	// whereas create a bptree object
-	bptree tree(&seg, 4, 4, K_4);
-
-	page p, s;
-	ASSERT(seg.assign_page(&p) == sdb::SUCCESS);
+	bptree tree(&seg, 10, 4, 4, K_4);
 	ASSERT(seg.get_block_count() == 1);
-	ASSERT(p.idx_seg == &seg);
-	ASSERT(p.length == K_4 * kilo_byte - sdb::tree::index_block_header_size);
-	std::cout << "node_size: " << p.header->node_size << std::endl;
+	page p1, p2;
 
-	ASSERT(seg.assign_page(&s) == sdb::SUCCESS);
+	int t_len = K_4 * kilo_byte - sdb::tree::index_block_header_size;
+	ASSERT(seg.assign_page(&p1) == sdb::SUCCESS);
 	ASSERT(seg.get_block_count() == 2);
-	ASSERT(p.test_flag(sdb::storage::REMOVED_BLK_BIT) == false);
+	ASSERT(p1.idx_seg == &seg);
+	ASSERT(p1.length == t_len);
+	ASSERT(seg.assign_page(&p2) == sdb::SUCCESS);
+	ASSERT(p2.length == t_len);
+	ASSERT(seg.get_block_count() == 3);
+	ASSERT(p1.test_flag(sdb::storage::REMOVED_BLK_BIT) == false);
+	ASSERT(p1.ref_flag && p2.ref_flag);
 
-	ASSERT(p.is_root());
+	ASSERT(p1.is_root() && p1.is_leaf_page());
+}
 
-	node2 n, n1;
-	p.assign_node(&n);
-	p.assign_node(&n1);
-	ASSERT(n.length == 4 + 4);
-	ASSERT(n1.length == 4 + 4);
-
-	int i = 0xA0B1C2D3;
-	int i1 = 0xA0B1C2D0;
-	int t = 0xE0F09180;
-	int t1 = 0xE0F0918a;
-	short l = sizeof(int);
-	n.set_key_val(to_chars(i), l, to_chars(t), l);
-	ASSERT(to_int(n.k.v) == i);
-	ASSERT(to_int(n.v.v) == t);
-	n1.set_key_val(to_chars(i1), l, to_chars(t1), l);
-
-	ASSERT(n < n1 == false);
-
-	seg.flush();
-	df.close();
-
-	//test read
+void basic_bptree_test() {
+	data_file df(1L, "/tmp/basic_bptree_test.db");
+	if (df.exist()) {
+		df.remove();
+	}
 	df.open();
+
+	index_segment seg(1L, &df, 0);
+	seg.set_length(M_64);
+	seg.set_block_size(K_4);
+	seg.assign_content_buffer();
+
+	// before assign a index page, must know the key length and value length,
+	// whereas create a bptree object
+	bptree tree(&seg, 10, 4, 4, K_4);
+	ASSERT(tree.get_m() == 10);
+
+	common::char_buffer kcb(20), vcb(4);
+	vcb << 0xDDDDDDDD;
+	for (int i = 0; i < 10; i++) {
+		kcb << (1 << i) + 0x90000000;
+		key k;
+		val v;
+		k.ref_val(kcb.data() + i * 4, 4);
+		v.ref_val(vcb.data(), 4);
+
+		tree.add_key(k, v);
+	}
+	page fp;
+	fp.offset = 0;
+	ASSERT(tree.get_root_seg()->read_page(&fp) == sdb::SUCCESS);
+	ASSERT(fp.header->node_count == 10);
+
+	df.update_segment(seg);
 	seg.free_buffer();
+	df.close();
+	df.open();
 	df.fetch_segment(seg);
-	std::cout << "seg+block_count:" << seg.get_block_count() << std::endl;
-	ASSERT(seg.get_block_count() == 2);
+	ASSERT(seg.get_block_count() == 1);
 	df.close();
 
+	// test for read
 	page rp;
 	rp.offset = 0;
 	ASSERT(seg.read_page(&rp) == sdb::SUCCESS);
-	ASSERT(rp.header->blk_magic == sdb::storage::block_magic);
-	std::cout << "basic_page_test" << std::endl;
+	for (int i = 0; i < rp.header->node_count; i++) {
+		node2 n;
+		n.offset = i * rp.header->node_size;
+		rp.read_node(&n);
+
+		ASSERT(to_int(n.k.v) == (1 << i) + 0x90000000);
+	}
+
+	// test for page split
+	bptree existed_tree(&seg, 10, 4, 4, K_4);
+	for (int i = 10; i < 20; i++) {
+		kcb << (1 << i) + 0x90000000;
+		key k;
+		val v;
+		k.ref_val(kcb.data() + i * 4, 4);
+		v.ref_val(vcb.data(), 4);
+
+		existed_tree.add_key(k, v);
+	}
+
+	std::cout << "seg:get_block_count: " << seg.get_block_count() << std::endl;
+	ASSERT(seg.get_block_count() == 3);
 	ASSERT(rp.header->node_count == 1);
-
-	node2 nr;
-	nr.offset = 0;
-	ASSERT(rp.read_node(&nr) == sdb::SUCCESS);
-	ASSERT(nr.offset == 0);
-	ASSERT(to_int(nr.k.v) == i);
-	ASSERT(to_int(nr.v.v) == t);
-
-
 }
 
 void runSuite() {
 	cute::suite s;
 	s.push_back(CUTE(test_avl));
 	s.push_back(CUTE(tree_node_test));
-	s.push_back(CUTE(basic_test_bptree));
+	s.push_back(CUTE(basic_segment_test));
 	s.push_back(CUTE(basic_page_test));
+	s.push_back(CUTE(page_node_test));
+	s.push_back(CUTE(basic_bptree_test));
+
 	cute::ide_listener lis;
 	cute::makeRunner(lis)(s, "Sdb Tree Suite");
 }

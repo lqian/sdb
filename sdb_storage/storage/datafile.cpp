@@ -60,7 +60,8 @@ int data_file::open() {
 		if (!exist() && create() != SUCCESS) {
 			return FAILURE;
 		}
-		fs.open(full_path.c_str(), ios_base::binary | ios_base::in | ios_base::out);
+		fs.open(full_path.c_str(),
+				ios_base::binary | ios_base::in | ios_base::out);
 		if (fs.is_open()) {
 			char * data = new char[data_file_head_size];
 			fs.read(data, data_file_head_size);
@@ -250,8 +251,6 @@ int data_file::read_block(segment &seg, data_block &blk) {
 	return FAILURE;
 }
 
-
-
 void data_file::skip_segment(segment & seg) {
 	if (seg.is_valid()) {
 		fs.seekg(seg.length - segment_head_size, ios_base::cur);
@@ -393,7 +392,7 @@ segment::segment(segment && another) {
 }
 
 segment::~segment() {
-	if (content_buffer!=nullptr) {
+	if (content_buffer != nullptr) {
 		delete[] content_buffer;
 	}
 }
@@ -440,9 +439,10 @@ segment & segment::operator=(const segment & another) {
 		next_seg_dfile_id = another.next_seg_dfile_id;
 		next_seg_dfile_path = another.next_seg_dfile_path;
 
-		if (has_buffer()) {
+		if (another.has_buffer()) {
 			assign_content_buffer();
-			memcpy(content_buffer, another.content_buffer, length - segment_head_size);
+			memcpy(content_buffer, another.content_buffer,
+					length - segment_head_size);
 		}
 	}
 
