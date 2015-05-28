@@ -152,7 +152,8 @@ void basic_segment_test() {
 	df.close();
 
 	ASSERT(root_seg.get_seg_type() == sdb::storage::index_segment_type);
-	index_segment r_seg = std::move(root_seg);
+//	index_segment r_seg = std::move(root_seg);
+	index_segment r_seg(root_seg);
 
 	ASSERT(r_seg.get_length() == root_seg.get_length());
 	ASSERT(r_seg.get_seg_type() == sdb::storage::index_segment_type);
