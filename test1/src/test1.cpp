@@ -16,9 +16,15 @@
 using namespace std;
 
 class C1 {
-private:
+protected:
 	int i;
 public:
+	C1(int _i = 0) :
+			i(_i) {
+	}
+	C1(const C1 & o) {
+		i = o.i;
+	}
 	void set(int i) {
 		this->i = i;
 	}
@@ -26,6 +32,22 @@ public:
 	int get() {
 		return i;
 	}
+
+	C1 & operator=(C1 &other) {
+		if (this != &other) {
+			i = other.i;
+		}
+		return *this;
+	}
+};
+
+class C2: public C1 {
+public:
+	C2(const C1 & c1) :
+			C1(c1) {
+
+	}
+
 };
 
 void foo(C1 &c) {
@@ -52,18 +74,55 @@ struct s_child: s_parent {
 	}
 };
 
+class T {
+private:
+	char * buff = nullptr;
+	int len = 0;
+
+public:
+	T(char *buff, int len) {
+		this->buff = buff;
+		this->len = len;
+	}
+
+	T(T && t) {
+		this->len = t.len;
+		this->buff = t.buff;
+		t.buff = nullptr;
+		std::cout << "move...." << std::endl;
+	}
+};
+
 int main() {
+
+	C1 c1(20);
+	C2 c2 = c1;
+	C2 c3(c1);
+
+	std::cout << "c2.i=" << c2.get() << std::endl;
+
+	std::cout << "c3.i=" << c3.get() << std::endl;
+
+	char *buff = new char[10];
+	T t1(buff, 10);
+	T t2 = std::move(t1);
 
 	struct str {
 		int a;
 		int b;
+
+		void foo() {
+		}
+		;
 	};
 
-	str str1;
+	str str1, str2;
 	str1.a = 0x34353637;
 	str1.b = 0x30313233;
-	std::cout << "size of struct: " << sizeof(str1) << std::endl << " str:"
-			<< str1.a << " " << str1.b << std::endl;
+	str2 = str1;
+	std::cout << "size of struct: " << sizeof(str2) << std::endl << " str:"
+			<< str2.a << " " << str2.b << std::endl;
+
 
 	char * pc = new char[sizeof(str1)];
 	memcpy(pc, (char *) &str1, sizeof(str1));
@@ -107,10 +166,13 @@ int main() {
 	bst = K_16;
 	cout << bst << endl;
 
+	s_parent p1;
 	s_child s1;
 	s1.size = 0;
 	s1.add();
 	cout << "s1.size:" << s1.size << endl << true << endl;
+
+	p1.off = 200;
 
 	unsigned short d = 1 << 15;
 	cout << "unsigned short: " << d << endl;

@@ -304,54 +304,85 @@ void basic_bptree_test() {
 	common::char_buffer kcb(20), vcb(4);
 	vcb << 0xDDDDDDDD;
 	for (int i = 0; i < 10; i++) {
-		kcb << (1 << i) + 0x90000000;
+		kcb << i + 1;
 		key k;
 		val v;
 		k.ref_val(kcb.data() + i * 4, 4);
 		v.ref_val(vcb.data(), 4);
 
-		tree.add_key(k, v);
+		ASSERT(tree.add_key(k, v) == sdb::SUCCESS);
 	}
 	page fp;
 	fp.offset = 0;
 	ASSERT(tree.get_root_seg()->read_page(&fp) == sdb::SUCCESS);
-	ASSERT(fp.header->node_count == 10);
+	ASSERT(fp.header->node_count == 1);
 
 	df.update_segment(seg);
 	seg.free_buffer();
 	df.close();
 	df.open();
 	df.fetch_segment(seg);
-	ASSERT(seg.get_block_count() == 1);
+	ASSERT(seg.get_block_count() == 3);
 	df.close();
 
 	// test for read
-	page rp;
-	rp.offset = 0;
-	ASSERT(seg.read_page(&rp) == sdb::SUCCESS);
-	for (int i = 0; i < rp.header->node_count; i++) {
-		node2 n;
-		n.offset = i * rp.header->node_size;
-		rp.read_node(&n);
-
-		ASSERT(to_int(n.k.v) == (1 << i) + 0x90000000);
-	}
+	page pr; // root page;
+	pr.offset = 0;
+	ASSERT(seg.read_page(&pr) == sdb::SUCCESS);
+	// at this time, the root page only has one node
+	node2 rn = pr.get(0);
+	ASSERT(to_int(rn.k.v) == 6);
+	ASSERT(rn.test_flag(ND2_LP_BIT) && rn.test_flag(ND2_RP_BIT));
+	ASSERT(rn.header->left_pg_off == 4096 && rn.header->right_pg_off == 8192);
 
 	// test for page split
 	bptree existed_tree(&seg, 10, 4, 4, K_4);
+
 	for (int i = 10; i < 20; i++) {
-		kcb << (1 << i) + 0x90000000;
+		kcb << i + 1;
 		key k;
 		val v;
 		k.ref_val(kcb.data() + i * 4, 4);
 		v.ref_val(vcb.data(), 4);
-
-		existed_tree.add_key(k, v);
+		std::cout << dec << "i=" << i + 1<< std::endl;
+		ASSERT(existed_tree.add_key(k, v) == sdb::SUCCESS);
 	}
 
-	std::cout << "seg:get_block_count: " << seg.get_block_count() << std::endl;
-	ASSERT(seg.get_block_count() == 3);
-	ASSERT(rp.header->node_count == 1);
+	std::cout << "seg.get_block_count():" << seg.get_block_count() << std::endl;
+	ASSERT(seg.get_block_count() == 4);
+	ASSERT(pr.header->node_count == 2);
+
+	node2 pn; // parent node
+	pn.offset = 0;
+	pr.read_node(&pn);
+	ASSERT(pn.test_flag(ND2_LP_BIT) && pn.header->left_pg_off == 4096);
+	ASSERT(pn.test_flag(ND2_RP_BIT) && pn.header->right_pg_off == 8192);
+	int mk = (1 << 10) + 0x99990000;
+	ASSERT(memcmp(pn.k.v, to_chars(mk), 4));
+
+	page lp, rp; //left page and right page
+	lp.offset = pn.header->left_pg_off;
+	rp.offset = pn.header->right_pg_off;
+	seg.read_page(&lp);
+	seg.read_page(&rp);
+	ASSERT(
+			lp.header->next_blk_off == rp.offset
+					&& rp.header->pre_blk_off == lp.offset);
+	ASSERT(lp.header->node_count == 10 && rp.header->node_count == 10);
+
+	// test for split_2_3
+	for (int i = 20; i < 30; i++) {
+		kcb << i + 1;
+		key k;
+		val v;
+		k.ref_val(kcb.data() + i * 4, 4);
+		v.ref_val(vcb.data(), 4);
+		ASSERT(existed_tree.add_key(k, v) == sdb::SUCCESS);
+	}
+
+	ASSERT(seg.get_block_count() == 5 || seg.get_block_count() == 4);
+	df.update_segment(seg);
+	df.close();
 }
 
 void runSuite() {
