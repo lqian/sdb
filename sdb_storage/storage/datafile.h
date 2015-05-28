@@ -239,7 +239,7 @@ protected:
 	int block_size;
 	int block_count = 0;
 
-	char * content_buffer;
+	char * content_buffer = nullptr;
 
 public:
 
