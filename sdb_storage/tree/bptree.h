@@ -59,7 +59,7 @@ const int node2_header_size = 10;
 /*
  * page head flag bits definition the 0 ~ 7 bit see datafile.h definition
  */
-const int PAGE_NODE_TYPE_BIT = 8; /* when the bit is 0 indicates the page contains leaf node,
+const int PAGE_HAS_LEAF_BIT = 8; /* when the bit is 0 indicates the page contains leaf node,
  else contains  internal node */
 const int PAGE_PP_BIT = 9;
 const int PAGE_PP_SEG_BIT = 10; /* parent page's segment is another */
@@ -84,13 +84,14 @@ const int NODE2_OVERFLOW_MAX_ORDER = -5;
 
 using namespace sdb::storage;
 
-enum key_test_numu {
+enum key_test_enum {
 	invalid_test,
-	key_found,
+	key_equals,
 	key_not_found,
 	key_within_page,
 	key_greater,
 	key_less,
+	not_defenition
 };
 
 struct node2;
@@ -100,7 +101,7 @@ class index_segment;
 struct val {
 	bool ref = false;
 	short len = 0;
-	char * v;
+	char * v = nullptr;
 
 	void set_val(char *buff, short l) {
 		memcpy(v, buff, l);
@@ -177,9 +178,9 @@ struct fixed_size_index_block: data_block {
 //	fixed_size_index_block * next_page;
 //	fixed_size_index_block * parent_page;
 
-	head * pre_page_header;
-	head * next_page_header;
-	head * parent_page_header;
+//	head * pre_page_header;
+//	head * next_page_header;
+//	head * parent_page_header;
 
 	index_segment* idx_seg;
 
@@ -203,8 +204,12 @@ struct fixed_size_index_block: data_block {
 	int assign_node(node2 *n);
 	int read_node(node2 *n);
 	void set_pre_page(fixed_size_index_block *pre);
+	int pre_page(fixed_size_index_block &p);
+	int next_page(fixed_size_index_block &p);
+	int parent_page(fixed_size_index_block &p);
 	void set_next_page(fixed_size_index_block *next);
 	void set_parent_node2(node2 *n);
+	node2 get(int i);
 //	void purge_node();
 
 	/*
@@ -212,16 +217,16 @@ struct fixed_size_index_block: data_block {
 	 */
 	void purge_node(int idx = 0);
 	void sort_in_mem();
-	key_test_numu test_key(const key & k, node2 & n);
+	key_test_enum test_key(const key & k, node2 & n);
 
-	 bool is_full()  ;
+	bool is_full();
 
 	bool is_root() {
 		return test_flag(PAGE_PP_BIT) == false;
 	}
 
 	bool is_leaf_page() {
-		return test_flag(PAGE_NODE_TYPE_BIT) == false;
+		return test_flag(PAGE_HAS_LEAF_BIT) == false;
 	}
 
 	bool is_left();
@@ -279,8 +284,8 @@ struct node2 {
 	val v;
 
 	page * ref_page = nullptr; /* this node's reference page which contains it */
-	page left_page; /* the left page, which nodes key is less then this key */
-	page right_page; /* the right page, which nodes key is equal or greater than this key */
+//	page left_page; /* the left page, which nodes key is less then this key */
+//	page right_page; /* the right page, which nodes key is equal or greater than this key */
 
 	void set_key(key & _k) {
 		k.set_val(_k.v, _k.len);
@@ -341,7 +346,6 @@ struct node2 {
 
 	void set_left(page *p);
 	void set_right(page *p);
-
 	inline bool has_pre_nd2() {
 		return offset > 0;
 	}
@@ -355,6 +359,7 @@ struct node2 {
 	node2 nxt_nd2();
 
 	node2 pre_nd2();
+	bool operator==(const node2 &other) ;
 
 	node2 & operator=(const node2& other) {
 		if (&other != this) {
@@ -384,7 +389,12 @@ class bptree {
 	friend class index_segment;
 public:
 	int load();
-	page & find_page(page &p, const key &k);
+	/*
+	 * find a correct page for a key from a given page, and tell the key test
+	 * to key test enum parameter, tell the page to target page parameter if
+	 * found page successfully, else return FAILURE
+	 */
+	int find_page(page &f, const key &k, page & t, key_test_enum & kt);
 	int add_key(key &k, val& v);
 	int remove_key(key &k);
 	int update_val(key &k, val& v);
@@ -437,7 +447,7 @@ private:
 	void transfer(page &p1, int from, page & p2);
 	void re_organize(page &p1, page &p2);
 
-	int add_key(page & p, key &k, val& v);
+	int add_key(page & p, key &k, val& v, key_test_enum kt = not_defenition);
 
 	int assign_page(page &p);
 	void split_2(page &p, page &left, page &right);
@@ -459,6 +469,14 @@ public:
 	index_segment(index_segment && other);
 	index_segment(segment & other);
 	index_segment & operator=(index_segment & other);
+
+	int fetch_left_page(node2 &n, page & lp);
+	int fetch_right_page(node2 &n, page & rp);
+	int fetch_parent_page(node2 &n, page &pp);
+
+	int fetch_next_page(page &p, page &nxt);
+	int fetch_pre_page(page &p, page &pre);
+
 	const bptree* get_tree() const {
 		return tree;
 	}

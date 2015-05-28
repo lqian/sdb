@@ -72,6 +72,8 @@ const int PRE_BLK_SPAN_DFILE_BIT = 6;
 const int BLK_OFF_OVERFLOW = -2;
 const int BLK_OFF_INVALID = -3;
 const int NO_PRE_BLK = -4;
+const int NO_NEXT_BLK = -5;
+const int NO_PARENT_BLK=-6;
 const int SEGMENT_NOT_ASSIGNED = -0x100;
 const int SEGMENT_IS_FULL = -0x101;
 
@@ -343,7 +345,7 @@ public:
 				|| ((span_dfile_flag >> NEXT_SEG_SPAN_DFILE_BIT) & 1) == 1;
 	}
 
-	 int  next_seg(segment & seg) {
+	int next_seg(segment & seg) {
 		if (this->d_file == nullptr) {
 			//ignore this case
 		} else if (d_file->id != pre_seg_dfile_id) {
@@ -356,13 +358,13 @@ public:
 		} else {
 			seg.d_file = this->d_file;
 			seg.offset = next_seg_offset;
-			seg.id =  next_seg_id;
+			seg.id = next_seg_id;
 			return d_file->fetch_segment(seg);
 		}
 		return sdb::FAILURE;
 	}
 
-	int  pre_seg(segment & seg) {
+	int pre_seg(segment & seg) {
 		if (this->d_file == nullptr) {
 			//ignore this case
 		} else if (d_file->id != pre_seg_dfile_id) {
@@ -374,7 +376,7 @@ public:
 		} else {
 			seg.d_file = this->d_file;
 			seg.offset = pre_seg_offset;
-			seg.id  = pre_seg_id;
+			seg.id = pre_seg_id;
 			return d_file->fetch_segment(seg);
 		}
 		return sdb::FAILURE;
@@ -820,11 +822,11 @@ struct mem_data_block: data_block {
 	}
 
 	virtual ~ mem_data_block() {
-			if (!ref_flag) {
-				delete header;
-				delete[] buffer;
-			}
+		if (!ref_flag) {
+			delete header;
+			delete[] buffer;
 		}
+	}
 }
 ;
 
