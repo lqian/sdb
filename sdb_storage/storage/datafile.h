@@ -56,7 +56,7 @@ const int offset_bytes = 2;
 const int PRE_SEG_SPAN_DFILE_BIT = 0;
 const int NEXT_SEG_SPAN_DFILE_BIT = 1;
 
-const short block_header_size = 42;
+const short block_header_size = 48;
 
 /*
  * block head flag bit define

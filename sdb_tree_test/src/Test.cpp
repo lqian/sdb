@@ -173,6 +173,10 @@ void page_node_test() {
 	}
 	df.open();
 
+	node2::head n_header;
+	int n_size = sizeof(n_header);
+	ASSERT(n_size == node2_header_size);
+
 	index_segment seg(1L, &df, 0);
 	seg.set_length(M_64);
 	seg.set_block_size(K_4);
@@ -216,7 +220,7 @@ void page_node_test() {
 	ASSERT(to_int(n.v.v) == t);
 	n1.set_key_val(to_chars(i1), l, to_chars(t1), l);
 	ASSERT(p1.ref_flag && p2.ref_flag);
-	ASSERT(n < n1 == false);
+	ASSERT((n < n1) == false && n1 > n);
 
 	seg.flush();
 	df.close();
@@ -258,6 +262,12 @@ void basic_page_test() {
 		df.remove();
 	}
 	df.open();
+
+	page::head p_header;
+	data_block::head d_header;
+	int p_size = sizeof(p_header);
+	int d_size = sizeof(d_header);
+	ASSERT(p_size == index_block_header_size && d_size == block_header_size);
 
 	index_segment seg(1L, &df, 0);
 	seg.set_length(M_64);
@@ -312,6 +322,7 @@ void basic_bptree_test() {
 
 		ASSERT(tree.add_key(k, v) == sdb::SUCCESS);
 	}
+
 	page fp;
 	fp.offset = 0;
 	ASSERT(tree.get_root_seg()->read_page(&fp) == sdb::SUCCESS);
@@ -330,12 +341,14 @@ void basic_bptree_test() {
 	pr.offset = 0;
 	ASSERT(seg.read_page(&pr) == sdb::SUCCESS);
 	// at this time, the root page only has one node
-	node2 rn = pr.get(0);
+	node2 rn;
+	rn.offset = 0;
+	pr.read_node(&rn);
 	ASSERT(to_int(rn.k.v) == 6);
 	ASSERT(rn.test_flag(ND2_LP_BIT) && rn.test_flag(ND2_RP_BIT));
 	ASSERT(rn.header->left_pg_off == 4096 && rn.header->right_pg_off == 8192);
 
-	// test for page split
+	// test for page split_2_3
 	bptree existed_tree(&seg, 10, 4, 4, K_4);
 
 	for (int i = 10; i < 20; i++) {
@@ -344,31 +357,30 @@ void basic_bptree_test() {
 		val v;
 		k.ref_val(kcb.data() + i * 4, 4);
 		v.ref_val(vcb.data(), 4);
-		std::cout << dec << "i=" << i + 1<< std::endl;
 		ASSERT(existed_tree.add_key(k, v) == sdb::SUCCESS);
 	}
 
-	std::cout << "seg.get_block_count():" << seg.get_block_count() << std::endl;
 	ASSERT(seg.get_block_count() == 4);
 	ASSERT(pr.header->node_count == 2);
 
-	node2 pn; // parent node
-	pn.offset = 0;
-	pr.read_node(&pn);
-	ASSERT(pn.test_flag(ND2_LP_BIT) && pn.header->left_pg_off == 4096);
-	ASSERT(pn.test_flag(ND2_RP_BIT) && pn.header->right_pg_off == 8192);
-	int mk = (1 << 10) + 0x99990000;
-	ASSERT(memcmp(pn.k.v, to_chars(mk), 4));
+	/*
+	 * after split_2_3, the old parent node loses its right page flag, its next
+	 * node indicates it has hidden shadow right page. the next node is the last
+	 * node in the page. it has left page, either right page.
+	 */
+	node2 pn1, pn2; // parent node
 
-	page lp, rp; //left page and right page
-	lp.offset = pn.header->left_pg_off;
-	rp.offset = pn.header->right_pg_off;
-	seg.read_page(&lp);
-	seg.read_page(&rp);
-	ASSERT(
-			lp.header->next_blk_off == rp.offset
-					&& rp.header->pre_blk_off == lp.offset);
-	ASSERT(lp.header->node_count == 10 && rp.header->node_count == 10);
+	pn1.offset = pr.header->node_size * 0;
+	pn2.offset = pr.header->node_size * 1;
+	pr.read_node(&pn1);
+	pr.read_node(&pn2);
+
+	ASSERT(pn1.test_flag(ND2_LP_BIT) && pn1.header->left_pg_off == 4096);
+	ASSERT(pn1.test_flag(ND2_RP_BIT) == false);
+	ASSERT(pn2.test_flag(ND2_LP_BIT) && pn2.test_flag(ND2_RP_BIT));
+	ASSERT(pn2.header->left_pg_off = 8192 && pn2.header->right_pg_off == 12288);
+
+	page p1, p2, p3;
 
 	// test for split_2_3
 	for (int i = 20; i < 30; i++) {
@@ -377,10 +389,13 @@ void basic_bptree_test() {
 		val v;
 		k.ref_val(kcb.data() + i * 4, 4);
 		v.ref_val(vcb.data(), 4);
+		std::cout << "i:" << i + 1 << std::endl;
 		ASSERT(existed_tree.add_key(k, v) == sdb::SUCCESS);
 	}
 
-	ASSERT(seg.get_block_count() == 5 || seg.get_block_count() == 4);
+	ASSERT(seg.get_block_count() == 5);
+	ASSERT(pr.header->node_count == 3);
+
 	df.update_segment(seg);
 	df.close();
 }

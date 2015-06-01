@@ -53,7 +53,7 @@ namespace sdb {
 namespace tree {
 
 const int storage_page_head_size = 8;
-const int index_block_header_size = 46;
+const int index_block_header_size = 64;
 const int node2_header_size = 10;
 
 /*
@@ -85,7 +85,7 @@ const int NODE2_OVERFLOW_MAX_ORDER = -5;
 using namespace sdb::storage;
 
 enum key_test_enum {
-	invalid_test,
+	key_invalid_test,
 	key_equals,
 	key_not_found,
 	key_within_page,
@@ -140,8 +140,12 @@ struct key: val {
 		return memcmp(v, other.v, len);
 	}
 
-	virtual int compare(const key * other) {
-		return memcmp(v, other->v, len);
+//	virtual int compare(const key * other) {
+//		return memcmp(v, other->v, len);
+//	}
+
+	virtual ~key() {
+
 	}
 }
 ;
@@ -188,7 +192,7 @@ struct fixed_size_index_block: data_block {
 		offset = off;
 		length = len;
 		header = (head *) buff;
-		buffer = buff + block_header_size;
+		buffer = buff + index_block_header_size;
 		ref_flag = true;
 		u_off_start = 0;
 		u_off_end = 0;
@@ -209,13 +213,13 @@ struct fixed_size_index_block: data_block {
 	int parent_page(fixed_size_index_block &p);
 	void set_next_page(fixed_size_index_block *next);
 	void set_parent_node2(node2 *n);
-	node2 get(int i);
 //	void purge_node();
 
 	/*
 	 * purge node from a give index of node2 in the page
 	 */
 	void purge_node(int idx = 0);
+	void purge_node(int idx, int len);
 	void sort_in_mem();
 	key_test_enum test_key(const key & k, node2 & n);
 
@@ -232,6 +236,8 @@ struct fixed_size_index_block: data_block {
 	bool is_left();
 
 	bool is_right();
+
+	void print_all();
 
 	virtual void set_flag(int bit) {
 		header->flag |= (1 << bit);
@@ -356,15 +362,22 @@ struct node2 {
 		return offset / ns < nc - 1;
 	}
 
-	node2 nxt_nd2();
+	void nxt_nd2(node2 &nxt);
 
-	node2 pre_nd2();
-	bool operator==(const node2 &other) ;
+	void pre_nd2(node2 &pre);
+
+	bool operator==(const node2 &other);
+
+	void copy_from(const node2 & other) {
+		memcpy(header, other.header, other.length);
+		memcpy(buffer, other.buffer, other.length);
+	}
 
 	node2 & operator=(const node2& other) {
 		if (&other != this) {
 			header = other.header;
 			length = other.length;
+			ref_page = other.ref_page;
 			buffer = new char[length];
 			memcpy(buffer, other.buffer, other.length);
 			ref_flag = false;
@@ -374,6 +387,10 @@ struct node2 {
 
 	bool operator<(const node2 & other) {
 		return k.compare(other.k) < 0;
+	}
+
+	bool operator>(const node2 & other) {
+		return k.compare(other.k) > 0;
 	}
 
 	~ node2() {
@@ -396,6 +413,7 @@ public:
 	 */
 	int find_page(page &f, const key &k, page & t, key_test_enum & kt);
 	int add_key(key &k, val& v);
+	int add_node2(node2 &n);
 	int remove_key(key &k);
 	int update_val(key &k, val& v);
 
@@ -444,11 +462,10 @@ private:
 	 * transfer node2 from a given position to the tail of another page without
 	 * range check
 	 */
-	void transfer(page &p1, int from, page & p2);
-	void re_organize(page &p1, page &p2);
-
+	void transfer(page &p1, int from, int count, page & p2);
 	int add_key(page & p, key &k, val& v, key_test_enum kt = not_defenition);
-
+	int add_node2(page &p, node2 &n, key_test_enum kt = not_defenition);
+	int check_split(page &p, key_test_enum kt = not_defenition);
 	int assign_page(page &p);
 	void split_2(page &p, page &left, page &right);
 	void split_2_3(page &p1, page &p2, page & empty);
