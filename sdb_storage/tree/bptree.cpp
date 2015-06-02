@@ -115,25 +115,22 @@ int bptree::fetch_right_page(node2 & n, page & rp) {
 int bptree::fetch_parent_page(page &p, page & parent) {
 	if (p.test_flag(PAGE_PP_BIT)) {
 		parent.offset = p.header->parent_blk_off;
-		if (p.test_flag(PAGE_PP_SEG_BIT)
-				|| p.test_flag(PAGE_PP_DF_BIT)) {
+		if (p.test_flag(PAGE_PP_SEG_BIT) || p.test_flag(PAGE_PP_DF_BIT)) {
 			unsigned long seg_id = p.header->parent_seg_id;
 			auto it = seg_map.find(seg_id);
-			if (it!=seg_map.end()) {
+			if (it != seg_map.end()) {
 				return (*it).second.read_page(&parent);
-			}
-			else {
+			} else {
 				index_segment p_seg(seg_id);
 				root_seg->get_file()->fetch_segment(p_seg);
-				seg_map.insert(std::pair<unsigned long, index_segment>(seg_id, p_seg));
+				seg_map.insert(
+						std::pair<unsigned long, index_segment>(seg_id, p_seg));
 				return p_seg.read_page(&parent);
 			}
-		}
-		else {
+		} else {
 			return p.idx_seg->read_page(&parent);
 		}
-	}
-	else {
+	} else {
 		return PAGE_NO_PARENT_PAGE;
 	}
 }
@@ -317,26 +314,25 @@ void bptree::split_2_3(page &p1, page &p2, page & target) {
 }
 
 int bptree::re_organize_page(page &p, key_test_enum kt) {
+
 	if (p.test_flag(PAGE_HAS_LEAF_BIT)) {
 		p.sort_in_mem();
 	}
 
-	if (p.is_full()) {
-		if (p.is_root()) {  // the root page only 2-split
-			page left, right;
-			if (curr_seg->assign_page(&left) == sdb::SUCCESS
-					&& curr_seg->assign_page(&right) == sdb::SUCCESS) {
-				p.sort_in_mem();
-				split_2(p, left, right);
-			} else {
-				return sdb::FAILURE;
-			}
+	if (p.is_root()) {  // the root page only 2-split
+		page left, right;
+		if (curr_seg->assign_page(&left) == sdb::SUCCESS
+				&& curr_seg->assign_page(&right) == sdb::SUCCESS) {
+			p.sort_in_mem();
+			split_2(p, left, right);
 		} else {
-			if (kt == key_less || kt == key_within_page) {
-				p.parent->has_pre_nd2() ? to_left(p) : to_right(p);
-			} else if (kt == key_greater) {
-				to_left(p);
-			}
+			return sdb::FAILURE;
+		}
+	} else {
+		if (kt == key_less || kt == key_within_page) {
+			p.parent->has_pre_nd2() ? to_left(p) : to_right(p);
+		} else if (kt == key_greater) {
+			to_left(p);
 		}
 	}
 
@@ -347,27 +343,18 @@ int bptree::add_key(page & p, key &k, val& v, key_test_enum kt) {
 	p.assign_node(&n);
 	n.set_key_val(k, v);
 
-	if (p.test_flag(PAGE_HAS_LEAF_BIT)) {
-		p.sort_in_mem();
-	}
-
 	if (p.is_full()) {
-		if (p.is_root()) {  // the root page only 2-split
-			page left, right;
-			if (curr_seg->assign_page(&left) == sdb::SUCCESS
-					&& curr_seg->assign_page(&right) == sdb::SUCCESS) {
-				p.sort_in_mem();
-				split_2(p, left, right);
-			} else {
-				return sdb::FAILURE;
-			}
-		} else {
-			if (kt == key_less || kt == key_within_page) {
-				p.parent->has_pre_nd2() ? to_left(p) : to_right(p);
-			} else if (kt == key_greater) {
-				to_left(p);
-			}
+
+		//make sure the page has RIGHT parent node
+		if (p.test_flag(PAGE_PP_BIT)) {
+			page pp;
+			fetch_parent_page(p, pp);
+			node2 pn;
+			pn.offset = p.header->parent_nd2_off;
+			pp.read_node(&pn);
+			p.parent = &pn;
 		}
+		re_organize_page(p, kt);
 	}
 	return sdb::SUCCESS;
 }
