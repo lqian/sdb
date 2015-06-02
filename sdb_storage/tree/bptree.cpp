@@ -112,19 +112,29 @@ int bptree::fetch_right_page(node2 & n, page & rp) {
 	return r;
 }
 
-int bptree::fetch_parent_page(node2 &n, page & pp) {
-	int off = n.ref_page->header->parent_blk_off;
-	pp.offset = off;
-	index_segment *ref_seg = n.ref_page->idx_seg;
-	if (n.ref_page->test_flag(ND2_PP_SEG_BIT)
-			|| n.ref_page->test_flag(ND2_PP_DF_BIT)) {
-		segment seg;
-		if (ref_seg->next_seg(seg)) {
-			index_segment idx_seg(seg);
-			return idx_seg.read_page(&pp);
+int bptree::fetch_parent_page(page &p, page & parent) {
+	if (p.test_flag(PAGE_PP_BIT)) {
+		parent.offset = p.header->parent_blk_off;
+		if (p.test_flag(PAGE_PP_SEG_BIT)
+				|| p.test_flag(PAGE_PP_DF_BIT)) {
+			unsigned long seg_id = p.header->parent_seg_id;
+			auto it = seg_map.find(seg_id);
+			if (it!=seg_map.end()) {
+				return (*it).second.read_page(&parent);
+			}
+			else {
+				index_segment p_seg(seg_id);
+				root_seg->get_file()->fetch_segment(p_seg);
+				seg_map.insert(std::pair<unsigned long, index_segment>(seg_id, p_seg));
+				return p_seg.read_page(&parent);
+			}
 		}
-	} else {
-		return n.ref_page->idx_seg->read_page(&pp);
+		else {
+			return p.idx_seg->read_page(&parent);
+		}
+	}
+	else {
+		return PAGE_NO_PARENT_PAGE;
 	}
 }
 
@@ -296,17 +306,17 @@ void bptree::split_2_3(page &p1, page &p2, page & target) {
 		nn.set_left(&p2);
 		nn.set_right(&target);
 		p2.set_next_page(&target);
-		check_split(*parent_page, kt);
+		re_organize_page(*parent_page, kt);
 	} else {
 		// the new key n2 is greater than n1 but less than next key of n1
 		// also, the new key only has left page
 		p1.parent->set_key(n1.k);
 		n2.remove_flag(ND2_RP_BIT);
-		check_split(*parent_page, kt);
+		re_organize_page(*parent_page, kt);
 	}
 }
 
-int bptree::check_split(page &p, key_test_enum kt) {
+int bptree::re_organize_page(page &p, key_test_enum kt) {
 	if (p.test_flag(PAGE_HAS_LEAF_BIT)) {
 		p.sort_in_mem();
 	}
@@ -1020,7 +1030,7 @@ int index_segment::fetch_right_page(node2 &n, page & rp) {
 	return tree->fetch_right_page(n, rp);
 }
 int index_segment::fetch_parent_page(node2 &n, page &pp) {
-	return tree->fetch_parent_page(n, pp);
+	return tree->fetch_parent_page(*n.ref_page, pp);
 }
 
 int index_segment::fetch_next_page(page &p, page &nxt) {

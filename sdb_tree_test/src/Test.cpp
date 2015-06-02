@@ -348,6 +348,26 @@ void basic_bptree_test() {
 	ASSERT(rn.test_flag(ND2_LP_BIT) && rn.test_flag(ND2_RP_BIT));
 	ASSERT(rn.header->left_pg_off == 4096 && rn.header->right_pg_off == 8192);
 
+	page left_page, right_page;
+	left_page.offset = rn.header->left_pg_off;
+	seg.read_page(&left_page);
+	right_page.offset = rn.header->right_pg_off;
+	seg.read_page(&right_page);
+	ASSERT(
+			left_page.header->parent_blk_off == 0
+					&& left_page.header->parent_nd2_off == 0
+					&& left_page.header->node_count == 5);
+	ASSERT(
+			right_page.header->parent_blk_off == 0
+					&& right_page.header->parent_nd2_off == 0
+					&& right_page.header->node_count == 5);
+
+	std::cout << "print left page :" << std::endl;
+	left_page.print_all();
+
+	std::cout << "print right page:" << std::endl;
+	right_page.print_all();
+
 	// test for page split_2_3
 	bptree existed_tree(&seg, 10, 4, 4, K_4);
 

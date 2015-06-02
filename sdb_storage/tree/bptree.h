@@ -53,7 +53,7 @@ namespace sdb {
 namespace tree {
 
 const int storage_page_head_size = 8;
-const int index_block_header_size = 64;
+const int index_block_header_size = 72;
 const int node2_header_size = 10;
 
 /*
@@ -81,6 +81,7 @@ const int NODE2_OVERFLOW_OFFSET = -2;
 const int NODE2_INVALID_OFFSET = -3;
 const int NODE2_REF_INVALID_BLOCK = -4;
 const int NODE2_OVERFLOW_MAX_ORDER = -5;
+const int PAGE_NO_PARENT_PAGE = -100;
 
 using namespace sdb::storage;
 
@@ -172,7 +173,8 @@ struct fixed_size_index_block: data_block {
 	struct head: data_block::head {
 		short node_count = 0; /* node count */
 		short node_size; /* node size */
-		int parent_blk_off; /* parent block offset within segment */
+		unsigned long parent_seg_id;
+		int parent_blk_off; /* parent block offset within a segment */
 		short parent_nd2_off; /* parent node2 offset of parent block if the block has parent node*/
 	}* header;
 
@@ -452,12 +454,36 @@ private:
 	std::map<unsigned long, index_segment> seg_map;
 	page root_page;
 
+	/*
+	 * fetch the node's left page
+	 */
 	int fetch_left_page(node2 &n, page & lp);
-	int fetch_right_page(node2 &n, page & rp);
-	int fetch_parent_page(node2 &n, page &pp);
 
+	/*
+	 * fetch the node's right page
+	 */
+	int fetch_right_page(node2 &n, page & rp);
+
+	/*
+	 * fetch a page's parent page
+	 */
+	int fetch_parent_page(page &p, page &parent);
+
+	/*
+	 * fetch a page's parent node
+	 */
+	int fetch_parent_node(page &p, node2 &n);
+
+	/*
+	 * fetch the page's next page if it has
+	 */
 	int fetch_next_page(page &p, page &nxt);
+
+	/*
+	 * fetch the page's previous page if it has
+	 */
 	int fetch_pre_page(page &p, page &pre);
+
 	/*
 	 * transfer node2 from a given position to the tail of another page without
 	 * range check
@@ -465,7 +491,7 @@ private:
 	void transfer(page &p1, int from, int count, page & p2);
 	int add_key(page & p, key &k, val& v, key_test_enum kt = not_defenition);
 	int add_node2(page &p, node2 &n, key_test_enum kt = not_defenition);
-	int check_split(page &p, key_test_enum kt = not_defenition);
+	int re_organize_page(page &p, key_test_enum kt = not_defenition);
 	int assign_page(page &p);
 	void split_2(page &p, page &left, page &right);
 	void split_2_3(page &p1, page &p2, page & empty);
