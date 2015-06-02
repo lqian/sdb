@@ -280,7 +280,8 @@ void bptree::split_2_3(page &p1, page &p2, page & target) {
 	p2.sort_in_mem();
 	target.sort_in_mem();
 
-	page * parent_page = p1.parent->ref_page;
+	page parent_page;
+	fetch_parent_page(p1, parent_page);
 
 	node2 n1;
 	n1.offset = 0;
@@ -289,10 +290,18 @@ void bptree::split_2_3(page &p1, page &p2, page & target) {
 	n2.offset = 0;
 	target.read_node(&n2);
 	node2 nt;
-	key_test_enum kt = parent_page->test_key(n2.k, nt);
+	key_test_enum kt = parent_page.test_key(n2.k, nt);
 
 	node2 nn; // the new node to be add parent;
-	parent_page->assign_node(&nn);
+	parent_page.assign_node(&nn);
+
+	node2 pn1, pn2;
+	pn1.offset = p1.header->parent_nd2_off;
+	pn2.offset = p2.header->parent_nd2_off;
+	parent_page.read_node(&pn1);
+	parent_page.read_node(&pn2);
+	p1.parent = &pn1;
+	p2.parent = &pn2;
 
 	// the parent node is last key of its page
 	if (*p1.parent == *p2.parent) {
@@ -300,16 +309,34 @@ void bptree::split_2_3(page &p1, page &p2, page & target) {
 		p1.parent->remove_flag(ND2_RP_BIT);  //remove right page flag
 		p1.set_next_page(&p2);
 
+		nn.set_key(n2.k);
 		nn.set_left(&p2);
 		nn.set_right(&target);
 		p2.set_next_page(&target);
-		re_organize_page(*parent_page, kt);
+
 	} else {
 		// the new key n2 is greater than n1 but less than next key of n1
 		// also, the new key only has left page
 		p1.parent->set_key(n1.k);
 		n2.remove_flag(ND2_RP_BIT);
-		re_organize_page(*parent_page, kt);
+		p2.parent->set_key(n2.k);
+
+		node2 uncle;
+		p2.parent->nxt_nd2(uncle);
+		page nxt_page;
+		fetch_left_page(uncle, nxt_page);
+		node2 fn;
+		fn.offset = 0;
+		nxt_page.read_node(&fn);
+
+		nn.set_key(fn.k);
+		nn.set_left(&target);
+		nn.remove_flag(ND2_RP_BIT);
+		target.set_next_page(&nxt_page);
+	}
+
+	if (parent_page.is_full()) {
+		re_organize_page(parent_page, kt);
 	}
 }
 
@@ -685,7 +712,8 @@ void fixed_size_index_block::print_all() {
 	for (int i = 0; i < header->node_count; i++) {
 		n.offset = header->node_size * i;
 		read_node(&n);
-		std::cout << "node(" << i << ").key:" << to_int(n.k.v) << std::endl;
+		std::cout << "node(" << i << ").key:" << to_int(n.k.v) << " left page offset:" << n.header->left_pg_off
+			<< " right page off:" << n.header->right_pg_off << " flag:" << n.header->flag	<< std::endl;
 	}
 }
 
@@ -782,6 +810,7 @@ void fixed_size_index_block::set_parent_node2(node2 *n) {
 //	parent_page_header = n->ref_page->header;
 	header->parent_blk_off = n->ref_page->offset;
 	header->parent_nd2_off = n->offset;
+	header->parent_seg_id = n->ref_page->idx_seg->get_id();
 	set_flag(PAGE_PP_BIT);
 
 	if (idx_seg != n->ref_page->idx_seg) {

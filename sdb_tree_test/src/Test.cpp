@@ -362,12 +362,6 @@ void basic_bptree_test() {
 					&& right_page.header->parent_nd2_off == 0
 					&& right_page.header->node_count == 5);
 
-	std::cout << "print left page :" << std::endl;
-	left_page.print_all();
-
-	std::cout << "print right page:" << std::endl;
-	right_page.print_all();
-
 	// test for page split_2_3
 	bptree existed_tree(&seg, 10, 4, 4, K_4);
 
@@ -400,8 +394,6 @@ void basic_bptree_test() {
 	ASSERT(pn2.test_flag(ND2_LP_BIT) && pn2.test_flag(ND2_RP_BIT));
 	ASSERT(pn2.header->left_pg_off = 8192 && pn2.header->right_pg_off == 12288);
 
-	page p1, p2, p3;
-
 	// test for split_2_3
 	for (int i = 20; i < 30; i++) {
 		kcb << i + 1;
@@ -409,7 +401,6 @@ void basic_bptree_test() {
 		val v;
 		k.ref_val(kcb.data() + i * 4, 4);
 		v.ref_val(vcb.data(), 4);
-		std::cout << "i:" << i + 1 << std::endl;
 		ASSERT(existed_tree.add_key(k, v) == sdb::SUCCESS);
 	}
 
@@ -417,6 +408,17 @@ void basic_bptree_test() {
 	ASSERT(pr.header->node_count == 3);
 
 	df.update_segment(seg);
+
+	pr.print_all();
+
+	page p;
+	for (int i = 0; i < 4; i++) {
+		p.offset = (i+1) * 4096;
+		seg.read_page(&p);
+		std::cout << "print page node:" << p.offset << std::endl;
+		p.print_all();
+	}
+
 	df.close();
 }
 
