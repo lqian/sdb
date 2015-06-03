@@ -214,7 +214,7 @@ int bptree::find_page(page &f, const key &k, page & t, key_test_enum & kt) {
 				fetch_left_page(n, lp);
 				return find_page(lp, k, t, kt);
 			}
-		} else if (kt == key_greater || kt == key_equals) {
+		} else if (kt == key_greater || kt == key_equal) {
 			if (n.test_flag(ND2_RP_BIT)) {
 				page rp;
 				fetch_right_page(n, rp);
@@ -236,7 +236,125 @@ int bptree::add_key(key & k, val& v) {
 	}
 }
 
-void bptree::split_2(page &p, page &left, page &right) {
+int bptree::add_node2(node2 &n) {
+	return add_key(n.k, n.v);
+}
+
+/*
+ * unary scan a key and denotes key scan type.
+ * after find page for the key, it return key_greater or key_less indicates that
+ * the tree does not have node matched the searching key. both key_equal and key_within
+ * _page indicate may scan node matched the search key.
+ *
+ * 1) when scan_less, fill n parameter with a node floor with searching key
+ *
+ * 2) when scan_less_equal, fill n parameter with a node floor with searching key,
+ * if found a equal node fill n parameter with the equal node
+ *
+ * 3) when scan_equal, fill n parameter with a node equal with searching key
+ *
+ * 4) when scan_greater, fill n parameter with a node ceil with searching key.
+ *
+ * 5) when scan_greater_equal, fill n parameter with a node ceil with searching key.
+ * if there is a equal node, fill n parameter with the equal node
+ */
+int bptree::scan(const key& k, const scan_type & st, page &p, node2 & n) {
+	key_test_enum kt, pt;
+	node2 t;
+	int r = find_page(root_page, k, p, kt);
+	if (r == sdb::SUCCESS) {
+		// the key in a page's range, search it;
+		switch (st) {
+		case scan_less:
+			if (kt == key_equal || kt == key_within_page) {
+				pt = p.test_key(k, t);
+				if (pt == key_equal || pt == key_within_page) {
+					n.pre_nd2(n);
+					return sdb::SUCCESS;
+				}
+			}
+			return KEY_NOT_IN_RANGE;
+		case scan_less_equal:
+			if (kt == key_equal) {
+				kt = p.test_key(k, n);
+				if (kt == key_equal)
+					return sdb::SUCCESS;
+			}
+			if (kt == key_within_page) {
+				pt = p.test_key(k, t);
+				if (pt == key_within_page) {
+					n.pre_nd2(n);
+					return sdb::SUCCESS;
+				}
+			}
+			return KEY_NOT_IN_RANGE;
+		case scan_equal:
+			if (kt == key_equal) {
+				kt = p.test_key(k, n);
+				if (kt == key_equal) {
+					return sdb::SUCCESS;
+				}
+			}
+			return KEY_NOT_IN_RANGE;
+		case scan_greater:
+			if (kt == key_equal) {
+				kt = p.test_key(k, t);
+				if (kt == key_equal) {
+					t.nxt_nd2(n);
+					return sdb::SUCCESS;
+				}
+			}
+			if (kt == key_within_page) {
+				pt = p.test_key(k, n);
+				if (pt == key_within_page) {
+					return sdb::SUCCESS;
+				}
+			}
+			return KEY_NOT_IN_RANGE;
+		case scan_greater_equal:
+			if (kt == key_equal || kt == key_within_page) {
+				kt = p.test_key(k, n);
+				if (kt == key_equal || kt == key_within_page) {
+					return sdb::SUCCESS;
+				}
+			}
+			return KEY_NOT_IN_RANGE;
+		default:
+			return sdb::FAILURE;
+		}
+	} else {
+		return KEY_NOT_IN_RANGE;
+	}
+}
+
+/*
+ * not implement yet
+ */
+int bptree::scan(const key&k1, const scan_type & st1, const key&k2,
+		const scan_type & st2) {
+
+}
+
+int bptree::remove_key(const key &k) {
+	page p;
+	key_test_enum kt;
+	int r = find_page(root_page, k, p, kt);
+	if (r == sdb::SUCCESS) {
+		// the key in a page's range, search it;
+		node2 n;
+		if (p.find(k, n)) {
+			n.set_flag(ND2_DEL_BIT);
+			return sdb::SUCCESS;
+		} else {
+			return KEY_NOT_FOUND;
+		}
+
+	} else {
+		return KEY_NOT_IN_RANGE;
+	}
+}
+
+void bptree::split_1_2(page &p, page &left, page &right) {
 	int h = (p.header->node_count + 1) / 2;
 	int h_off = h * p.header->node_size;
 	int r_len = p.header->node_size * p.header->node_count - h_off;
@@ -351,7 +469,7 @@ int bptree::re_organize_page(page &p, key_test_enum kt) {
 		if (curr_seg->assign_page(&left) == sdb::SUCCESS
 				&& curr_seg->assign_page(&right) == sdb::SUCCESS) {
 			p.sort_in_mem();
-			split_2(p, left, right);
+			split_1_2(p, left, right);
 		} else {
 			return sdb::FAILURE;
 		}
@@ -559,7 +677,7 @@ key_test_enum fixed_size_index_block::test_key(const key & k, node2 & n) {
 
 		int t = n.k.compare(k);
 		if (t == 0) {
-			return key_equals;
+			return key_equal;
 		} else if (t > 0) {  // key less
 			if (i == 0) {
 				return key_less;
@@ -712,8 +830,10 @@ void fixed_size_index_block::print_all() {
 	for (int i = 0; i < header->node_count; i++) {
 		n.offset = header->node_size * i;
 		read_node(&n);
-		std::cout << "node(" << i << ").key:" << to_int(n.k.v) << " left page offset:" << n.header->left_pg_off
-			<< " right page off:" << n.header->right_pg_off << " flag:" << n.header->flag	<< std::endl;
+		std::cout << "node(" << i << ").key:" << to_int(n.k.v)
+				<< " left page offset:" << n.header->left_pg_off
+				<< " right page off:" << n.header->right_pg_off << " flag:"
+				<< n.header->flag << std::endl;
 	}
 }
 
