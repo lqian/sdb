@@ -84,8 +84,11 @@ const int NODE2_OVERFLOW_MAX_ORDER = -5;
 const int PAGE_NO_PARENT_PAGE = -100;
 const int KEY_NOT_FOUND = -200;
 const int KEY_NOT_IN_RANGE = -201;
+<<<<<<< HEAD
 
 const int BORROW_NOT_SUPPORT = -300;
+=======
+>>>>>>> 16d847d1b7b1e4caa912304d2b6a1248870a6ba6
 
 using namespace sdb::storage;
 
@@ -231,6 +234,7 @@ struct fixed_size_index_block: data_block {
 	int parent_page(fixed_size_index_block &p);
 	void set_next_page(fixed_size_index_block *next);
 	void set_parent_node2(node2 *n);
+	int find(const key &k, node2 &n);
 //	void purge_node();
 
 	/*
@@ -535,6 +539,7 @@ private:
 	void transfer(page &p1, int from, int count, page & p2);
 	int add_key(page & p, key &k, val& v, key_test_enum kt = not_defenition);
 	int add_node2(page &p, node2 &n, key_test_enum kt = not_defenition);
+<<<<<<< HEAD
 	int assign_page(page &p);
 	int expand_organize(page &p, key_test_enum kt = not_defenition);
 	void split_1_2(page &p, page &left, page &right);
@@ -546,6 +551,16 @@ private:
 	/*
 	 * if both p1 and p2 are less or equals half full, where p1i < p2i, i=0,1,,,k-1.
 	 *  merge them to the first page p1 and remove the page p2
+=======
+	int re_organize_page(page &p, key_test_enum kt = not_defenition);
+
+	int assign_page(page &p);
+	void split_1_2(page &p, page &left, page &right);
+	void split_2_3(page &p1, page &p2, page & empty);
+	/*
+	 * if both p1 and p2 are less or equals half full, merge them to the first page p1
+	 * and remove the page p2
+>>>>>>> 16d847d1b7b1e4caa912304d2b6a1248870a6ba6
 	 */
 	int merge_2_1(page &p1, page &p2);
 
@@ -556,8 +571,16 @@ private:
 	 */
 	int merge_3_2(page &p1, page &p2, page &p3);
 
+<<<<<<< HEAD
 	int borrow_left(page &p);
 	int borrow_right(page &p);
+=======
+	/*
+	 * the less than half full page borrows node from a page b1 which has more than
+	 * half full page.
+	 */
+	int borrow(page &p, page&b1);
+>>>>>>> 16d847d1b7b1e4caa912304d2b6a1248870a6ba6
 
 	void to_right(page &p);
 	void to_left(page &p);

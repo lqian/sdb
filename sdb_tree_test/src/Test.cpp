@@ -68,7 +68,6 @@ void test_avl() {
 
 	ASSERT(tree.exists(4));
 	tree.insert_node(&n6);
-
 	echo_handler<int, int> handler;
 
 	cout << "traverse in order" << endl;
@@ -92,7 +91,6 @@ void test_avl() {
 	for (int i = 0; i < 20; i++) {
 		sdb::tree::node<int, int> n;
 		n.k = std::abs(std::rand());
-		std::cout << "rand:" << n.k << std::endl;
 		tree.insert_node(&n);
 	}
 
@@ -374,6 +372,8 @@ void basic_bptree_test() {
 		ASSERT(existed_tree.add_key(k, v) == sdb::SUCCESS);
 	}
 
+	pr.print_all();
+
 	ASSERT(seg.get_block_count() == 4);
 	ASSERT(pr.header->node_count == 2);
 
@@ -392,7 +392,8 @@ void basic_bptree_test() {
 	ASSERT(pn1.test_flag(ND2_LP_BIT) && pn1.header->left_pg_off == 4096);
 	ASSERT(pn1.test_flag(ND2_RP_BIT) == false);
 	ASSERT(pn2.test_flag(ND2_LP_BIT) && pn2.test_flag(ND2_RP_BIT));
-	ASSERT(pn2.header->left_pg_off = 8192 && pn2.header->right_pg_off == 12288);
+	ASSERT(pn2.header->left_pg_off == 8192 && pn2.header->right_pg_off == 12288);
+
 
 	// test for split_2_3
 	for (int i = 20; i < 30; i++) {
@@ -413,12 +414,48 @@ void basic_bptree_test() {
 
 	page p;
 	for (int i = 0; i < 4; i++) {
-		p.offset = (i+1) * 4096;
+		p.offset = (i + 1) * 4096;
 		seg.read_page(&p);
-		std::cout << "print page node:" << p.offset << std::endl;
-		p.print_all();
+//		std::cout << "----- print page node offset: " << p.offset << std::endl;
+//		p.print_all();
 	}
 
+	/* --------------------------------------------------------
+	 *
+	 * tptree scan test
+	 *
+	 *--------------------------------------------------------*/
+	page sp;
+	node2 sn;
+	key sk1, sk2;
+	kcb.rewind();
+	kcb << 27 << 6;
+	sk1.ref_val(kcb.data(), 4);
+	sk2.ref_val(kcb.data() + 4, 4);
+	ASSERT(existed_tree.scan(sk1, scan_greater, sp, sn) == sdb::SUCCESS);
+	ASSERT(to_int(sn.k.v) == 28);
+
+	ASSERT(existed_tree.scan(sk2, scan_less, sp, sn));
+	ASSERT(to_int(sn.k.v) == 5);
+
+	/*-----------------------------------------------------
+	 *
+	 * test for tree delete
+	 *
+	 *--------------------------------------------------------*/
+
+	ASSERT(existed_tree.remove_key(sk1));
+	ASSERT(existed_tree.scan(sk1, scan_equal, sp, sn) == KEY_NOT_IN_RANGE);
+
+	key rk;
+	kcb.rewind();
+	for (int i=0; i<10; i++) {
+		kcb << i+1 ;
+		rk.ref_val(kcb.data() + i * 4, 4);
+		ASSERT(existed_tree.remove_key(rk));
+	}
+	std::cout << "after remove first 10 node:::" << std::endl;
+	pr.print_all();
 	df.close();
 }
 

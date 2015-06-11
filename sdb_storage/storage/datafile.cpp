@@ -419,6 +419,12 @@ bool segment::operator ==(const segment & other) {
 			&& length == other.length;
 }
 
+bool segment::operator !=(const segment & other) {
+	return other.id != id || magic != other.magic || other.status != status
+			|| seg_type != other.seg_type || create_time != other.create_time
+			|| length != other.length;
+}
+
 segment & segment::operator=(const segment & another) {
 	if (&another != this) {
 		magic = another.magic;

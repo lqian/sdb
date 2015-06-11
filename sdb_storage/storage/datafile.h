@@ -18,7 +18,7 @@
 
 namespace sdb {
 
-const int SUCCESS = 0;
+const int SUCCESS = 1;
 const int FAILURE = -1;
 
 namespace storage {
@@ -294,6 +294,7 @@ public:
 	int flush(int off, int len);
 
 	bool operator ==(const segment & other);
+	bool operator !=(const segment & other);
 	segment & operator=(const segment & other);
 
 	inline time_t get_create_time() const {
