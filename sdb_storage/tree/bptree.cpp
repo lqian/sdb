@@ -135,6 +135,21 @@ int bptree::fetch_parent_page(page &p, page & parent) {
 	}
 }
 
+int bptree::fetch_parent_node(page & parent, page &p, node2 & pn) {
+	pn.offset = p.header->parent_nd2_off;
+	p.parent = &pn;
+	return parent.read_node(&pn);
+}
+
+int bptree::fetch_parent_node(page &p, node2 &n) {
+	page pp;
+	if (fetch_parent_page(p, pp)) {
+		n.offset = p.header->parent_nd2_off;
+		p.parent = &n;
+		return pp.read_node(&n);
+	}
+	return sdb::FAILURE;
+}
 int bptree::fetch_pre_page(page &p, page & pre) {
 	pre.offset = p.header->pre_blk_off;
 	if (p.test_flag(PRE_BLK_BIT)) {
@@ -196,6 +211,7 @@ int bptree::fetch_next_page(page &p, page & next) {
 int bptree::find_page(page &f, const key &k, page & t, key_test_enum & kt) {
 	if (f.is_leaf_page()) {
 		t = f;
+		f.idx_seg->read_page(&t);
 		return sdb::SUCCESS;
 	} else {
 		node2 n;
@@ -214,7 +230,7 @@ int bptree::find_page(page &f, const key &k, page & t, key_test_enum & kt) {
 				fetch_left_page(n, lp);
 				return find_page(lp, k, t, kt);
 			}
-		} else if (kt == key_greater || kt == key_equals) {
+		} else if (kt == key_greater || kt == key_equal) {
 			if (n.test_flag(ND2_RP_BIT)) {
 				page rp;
 				fetch_right_page(n, rp);
@@ -236,7 +252,148 @@ int bptree::add_key(key & k, val& v) {
 	}
 }
 
-void bptree::split_2(page &p, page &left, page &right) {
+int bptree::add_node2(node2 &n) {
+	return add_key(n.k, n.v);
+}
+
+/*
+ * unary scan a key and denotes key scan type. via find_page the function find
+ * a page there the key may is in. and then test the key and the page
+ *
+ * 1) when scan_less, fill n parameter with a node floor with searching key
+ *
+ * 2) when scan_less_equal, fill n parameter with a node floor with searching key,
+ * if found a equal node fill n parameter with the equal node
+ *
+ * 3) when scan_equal, fill n parameter with a node equal with searching key
+ *
+ * 4) when scan_greater, fill n parameter with a node ceil with searching key.
+ *
+ * 5) when scan_greater_equal, fill n parameter with a node ceil with searching key.
+ * if there is a equal node, fill n parameter with the equal node
+ */
+int bptree::scan(const key& k, const scan_type & st, page &p, node2 & n) {
+	key_test_enum ppkt, pkt; // parent page key test and page key test
+	node2 t;
+	int r = find_page(root_page, k, p, ppkt);
+	if (r == sdb::SUCCESS) {
+		pkt = p.test_key(k, t);
+		// the key in a page's range, search it;
+		switch (st) {
+		case scan_less:
+			if (pkt == key_equal || pkt == key_within_page) {
+				if (t.pre_nd2(n)) {
+//					p.read_node(&n);
+					return sdb::SUCCESS;
+				}
+			}
+			return KEY_NOT_IN_RANGE;
+		case scan_less_equal:
+			if (pkt == key_equal) {
+				n = t;
+				p.read_node(&n);
+				return sdb::SUCCESS;
+			} else if (pkt == key_within_page) {
+				if (t.pre_nd2(n)) {
+					p.read_node(&n);
+					return sdb::SUCCESS;
+				}
+			}
+			return KEY_NOT_IN_RANGE;
+		case scan_equal:
+			if (pkt == key_equal) {
+				n = t;
+				p.read_node(&n);
+				return sdb::SUCCESS;
+			}
+			return KEY_NOT_IN_RANGE;
+		case scan_greater:
+			if (pkt == key_equal) {
+				if (t.nxt_nd2(n)) {
+					p.read_node(&n);
+					return sdb::SUCCESS;
+				}
+			} else if (pkt == key_within_page) {
+				n = t;
+				p.read_node(&n);
+				return sdb::SUCCESS;
+			}
+			return KEY_NOT_IN_RANGE;
+		case scan_greater_equal:
+			if (pkt == key_equal || pkt == key_within_page) {
+				n = t;
+				p.read_node(&n);
+				return sdb::SUCCESS;
+			}
+			return KEY_NOT_IN_RANGE;
+		default:
+			return sdb::FAILURE;
+		}
+	} else {
+		return KEY_NOT_IN_RANGE;
+	}
+}
+
+/*
+ * not implement yet
+ */
+int bptree::scan(const key&k1, const scan_type & st1, const key&k2,
+		const scan_type & st2) {
+
+}
+
+int bptree::remove_key(const key &k) {
+	page p;
+	key_test_enum kt;
+	int r = find_page(root_page, k, p, kt);
+	if (r == sdb::SUCCESS) {
+		node2 n;
+		if (p.test_key(k, n) == key_equal) {
+			return remove_key(p, k, kt);
+		} else
+			return KEY_NOT_FOUND;
+	} else {
+		return KEY_NOT_IN_RANGE;
+	}
+}
+
+int bptree::remove_key(page &p, const key &k, const key_test_enum &pkt) {
+	node2 n;
+	if (p.test_key(k, n) == key_equal) {
+		p.delete_node(n);
+		if (!p.is_root()) {
+			if (p.header->node_count == 0) {
+				p.set_flag(REMOVED_BLK_BIT);
+				if (p.test_flag(PAGE_PP_BIT)) {
+					page pp;
+					node2 pn;
+					fetch_parent_page(p, pp);
+					fetch_parent_node(pp, p, pn);
+
+					if (pp.test_flag(PAGE_PP_BIT)) { // read grandpa page
+						page gp;
+						fetch_parent_page(pp, gp);
+						key_test_enum gpkt = gp.test_key(pn.k);
+						return remove_key(pp, pn.k, gpkt);
+					} else {
+						pp.delete_node(pn);
+						return sdb::SUCCESS;
+					}
+				}
+			} else if (p.less_half_full()) {
+				return shrink_organize(p, pkt);
+			} else {
+				return sdb::SUCCESS;
+			}
+		} else {
+			return sdb::SUCCESS;
+		}
+	} else {
+		return KEY_NOT_FOUND;
+	}
+}
+
+void bptree::split_1_2(page &p, page &left, page &right) {
 	int h = (p.header->node_count + 1) / 2;
 	int h_off = h * p.header->node_size;
 	int r_len = p.header->node_size * p.header->node_count - h_off;
@@ -289,8 +446,6 @@ void bptree::split_2_3(page &p1, page &p2, page & target) {
 	node2 n2;
 	n2.offset = 0;
 	target.read_node(&n2);
-	node2 nt;
-	key_test_enum kt = parent_page.test_key(n2.k, nt);
 
 	node2 nn; // the new node to be add parent;
 	parent_page.assign_node(&nn);
@@ -336,12 +491,12 @@ void bptree::split_2_3(page &p1, page &p2, page & target) {
 	}
 
 	if (parent_page.is_full()) {
-		re_organize_page(parent_page, kt);
+		key_test_enum kt = parent_page.test_key(n2.k);
+		expand_organize(parent_page, kt);
 	}
 }
 
-int bptree::re_organize_page(page &p, key_test_enum kt) {
-
+int bptree::expand_organize(page &p, key_test_enum kt) {
 	if (p.test_flag(PAGE_HAS_LEAF_BIT)) {
 		p.sort_in_mem();
 	}
@@ -351,13 +506,14 @@ int bptree::re_organize_page(page &p, key_test_enum kt) {
 		if (curr_seg->assign_page(&left) == sdb::SUCCESS
 				&& curr_seg->assign_page(&right) == sdb::SUCCESS) {
 			p.sort_in_mem();
-			split_2(p, left, right);
+			split_1_2(p, left, right);
 		} else {
 			return sdb::FAILURE;
 		}
 	} else {
 		if (kt == key_less || kt == key_within_page) {
-			p.parent->has_pre_nd2() ? to_left(p) : to_right(p);
+			node2 n;
+			p.parent->pre_nd2(n) ? to_left(p) : to_right(p);
 		} else if (kt == key_greater) {
 			to_left(p);
 		}
@@ -365,23 +521,100 @@ int bptree::re_organize_page(page &p, key_test_enum kt) {
 
 	return sdb::SUCCESS;
 }
+
+int bptree::shrink_organize(page &p, const key_test_enum & kt) {
+	if (kt == key_less) {
+		return borrow_right(p);
+	} else if (kt == key_within_page) {
+		return borrow_left(p) == sdb::SUCCESS ? sdb::SUCCESS : borrow_right(p);
+	} else if (kt == key_greater) {
+		return borrow_left(p);
+	}
+}
+
+// the page is first child of its parent. it borrows nodes from previous page
+// its parent node key becomes greater than before
+int bptree::borrow_left(page &p) {
+	page pre;
+	int r = 0;
+	if (fetch_pre_page(p, pre)) {
+		if (pre.at_least_full(r)) {
+			transfer(pre, 0, r, p);
+			node2 yun; // younger uncle node
+			fetch_parent_node(pre, yun);
+			node2 nk;  // new key node
+			nk.offset = 0;
+			p.read_node(&nk);
+			pre.parent->set_key(nk.k);
+			return sdb::SUCCESS;
+		} else if (pre.less_half_full()) {
+			return merge_2_1(pre, p);
+		} else {
+			return BORROW_NOT_SUPPORT;
+		}
+	}
+	return sdb::FAILURE;
+}
+// the page is the last child of its parent. it borrow nodes from next page.
+// its parent node key becomes greater than before, either the previous page
+int bptree::borrow_right(page &p) {
+	page nxt;
+	int r = 0;
+	if (fetch_next_page(p, nxt)) {
+		if (nxt.at_least_full(r)) {
+			transfer(nxt, 0, r, p);
+			node2 nk;
+			nk.offset = 0;
+			nxt.read_node(&nk);
+			p.parent->set_key(nk.k);
+			return sdb::SUCCESS;
+		} else if (nxt.less_half_full()) {
+			return merge_2_1(p, nxt);
+		} else {
+			return BORROW_NOT_SUPPORT;
+		}
+
+	}
+	return sdb::FAILURE;
+}
+
+int bptree::merge_2_1(page &p1, page &p2) {
+	node2 pn1, pn2, nk;
+	if (fetch_parent_node(p1, pn1) && fetch_parent_node(p2, pn2)) {
+		int nc = p1.header->node_count;
+		transfer(p1, 0, nc, p2);
+		p1.purge_node();
+
+		nk.offset = 0;
+		p2.read_node(&nk);
+		p2.parent->set_key(nk.k);
+
+		page pp1;
+		fetch_parent_page(p1, pp1);
+		pp1.delete_node(pn1);
+		if (pp1.test_flag(PAGE_PP_BIT) && pp1.less_half_full()) {
+			page gp; // grandpa
+			fetch_parent_page(pp1, gp);
+			key_test_enum kt = gp.test_key(pn1.k);
+			return shrink_organize(pp1, kt);
+		}
+	}
+	return sdb::FAILURE;
+}
+
 int bptree::add_key(page & p, key &k, val& v, key_test_enum kt) {
 	node2 n;
 	p.assign_node(&n);
 	n.set_key_val(k, v);
+	p.sort_in_mem();
 
 	if (p.is_full()) {
-
 		//make sure the page has RIGHT parent node
-		if (p.test_flag(PAGE_PP_BIT)) {
-			page pp;
-			fetch_parent_page(p, pp);
-			node2 pn;
-			pn.offset = p.header->parent_nd2_off;
-			pp.read_node(&pn);
-			p.parent = &pn;
-		}
-		re_organize_page(p, kt);
+//		if (p.test_flag(PAGE_PP_BIT)) {
+//			node2 pn;
+//			fetch_parent_node(p, pn);
+//		}
+		expand_organize(p, kt);
 	}
 	return sdb::SUCCESS;
 }
@@ -422,10 +655,15 @@ int bptree::assign_page(page &p) {
 
 void bptree::to_right(page &p) {
 	page nxt_page;
+	node2 n;
 	fetch_next_page(p, nxt_page);
-	if (p.parent->has_nxt_nd2()) {
-		node2 n;
-		p.parent->nxt_nd2(n);
+	if (p.parent->test_flag(ND2_RP_BIT)) {
+		nxt_page.parent = p.parent;
+	} else if (p.parent->test_flag(ND2_LP_BIT) && p.parent->nxt_nd2(n)) {
+		nxt_page.parent = &n;
+	}
+
+	if (p.parent->nxt_nd2(n)) {
 		nxt_page.parent = &n;
 	} else {
 		nxt_page.parent = p.parent;
@@ -465,15 +703,12 @@ void bptree::to_right(page &p) {
 }
 
 void bptree::to_left(page &p) {
+
 	page pre_page;
 	fetch_pre_page(p, pre_page);
-	if (p.parent->has_pre_nd2()) {
-		node2 n;
-		p.parent->pre_nd2(n);
-		pre_page.parent = &n;
-	} else {
-		pre_page.parent = p.parent;
-	}
+	node2 pn, ppn;
+	fetch_parent_node(p, pn);
+	fetch_parent_node(pre_page, ppn);
 
 	if (pre_page.is_full()) {
 		page empty;
@@ -496,13 +731,13 @@ void bptree::to_left(page &p) {
 }
 
 void bptree::transfer(page &p1, int from, int count, page & p2) {
-	p1.sort_in_mem();
 	int ns = p1.header->node_size;
 	int src_off = ns * from;
 	int dest_off = ns * p2.header->node_count;  // the end of page p2
 	memcpy(p2.buffer + dest_off, p1.buffer + src_off, count * ns);
 	p2.header->node_count += count;
 	p1.purge_node(from, count);  // purge node in p1
+	p2.sort_in_mem();
 }
 
 /*
@@ -545,38 +780,46 @@ bptree::~bptree() {
  *  n references the last node2.
  */
 key_test_enum fixed_size_index_block::test_key(const key & k, node2 & n) {
-	if (is_leaf_page()) {
-		return key_invalid_test;
-	}
+//	if (is_leaf_page()) {
+//		return key_invalid_test;
+//	}
 
-	int off;
+	int off = 0;
 	int i = 0;
 	key_test_enum flag = not_defenition;
 	while (i < header->node_count) {
-		off = i * header->node_size;
 		n.offset = off;
 		read_node(&n);
+		if (!n.test_flag(ND2_DEL_BIT)) {
 
-		int t = n.k.compare(k);
-		if (t == 0) {
-			return key_equals;
-		} else if (t > 0) {  // key less
-			if (i == 0) {
-				return key_less;
-			} else if (flag == key_greater) {
-				return key_within_page;
+			int t = n.k.compare(k);
+			if (t == 0) {
+				return key_equal;
+			} else if (t > 0) {  // key less
+				if (i == 0) {
+					return key_less;
+				} else if (flag == key_greater) {
+					return key_within_page;
+				}
+				flag = key_less;
+			} else if (t < 0) { // key greater
+				if (i == header->node_count) {
+					return key_greater;
+				}
+				flag = key_greater;
 			}
-			flag = key_less;
-		} else if (t < 0) { // key greater
-			if (i == header->node_count) {
-				return key_greater;
-			}
-			flag = key_greater;
+			i++;
 		}
-		i++;
+
+		off += header->node_size;
 	}
 
 	return flag;
+}
+
+key_test_enum fixed_size_index_block::test_key(const key & k) {
+	node2 n;
+	return test_key(k, n);
 }
 
 int fixed_size_index_block::assign_node(node2 *n) {
@@ -696,6 +939,11 @@ void fixed_size_index_block::purge_node(int idx, int count) {
 	header->node_count -= count;
 }
 
+void fixed_size_index_block::delete_node(node2 &n) {
+	n.set_flag(ND2_DEL_BIT);
+	header->node_count--;
+}
+
 //node2 fixed_size_index_block::get(int i) {
 //	node2 n;
 //	n.offset = i * header->node_size;
@@ -709,12 +957,29 @@ bool fixed_size_index_block::is_left() {
 
 void fixed_size_index_block::print_all() {
 	node2 n;
-	for (int i = 0; i < header->node_count; i++) {
-		n.offset = header->node_size * i;
+	int off = 0;
+	for (int i = 0; i < header->node_count;) {
+		n.offset = off;
 		read_node(&n);
-		std::cout << "node(" << i << ").key:" << to_int(n.k.v) << " left page offset:" << n.header->left_pg_off
-			<< " right page off:" << n.header->right_pg_off << " flag:" << n.header->flag	<< std::endl;
+		off += header->node_size;
+
+		if (n.test_flag(ND2_DEL_BIT))
+			continue;
+		i++;
+		std::cout << "node(" << i << ")" << to_int(n.k.v)
+				<< " left page offset:" << n.header->left_pg_off
+				<< " right page off:" << n.header->right_pg_off << " flag:"
+				<< n.header->flag << std::endl;
 	}
+
+}
+
+bool fixed_size_index_block::operator ==(const fixed_size_index_block & other) {
+	return offset == other.offset && (*idx_seg) == (*other.idx_seg);
+}
+
+bool fixed_size_index_block::operator !=(const fixed_size_index_block & other) {
+	return offset != other.offset || (*idx_seg) != (*other.idx_seg);
 }
 
 bool fixed_size_index_block::is_right() {
@@ -725,6 +990,16 @@ bool fixed_size_index_block::is_full() {
 	return header->node_count >= idx_seg->get_tree()->get_m()
 			|| length - header->node_count * header->node_size
 					< header->node_size;
+}
+
+bool fixed_size_index_block::at_least_full(int &r) {
+	int m = idx_seg->get_tree()->get_m();
+	int alf = m * 2 / 3;
+	if (header->node_count > alf) {
+		r = header->node_count - alf;
+		return true;
+	}
+	return false;
 }
 
 int fixed_size_index_block::pre_page(fixed_size_index_block &p) {
@@ -747,6 +1022,10 @@ int fixed_size_index_block::parent_page(fixed_size_index_block &p) {
 		p.offset = header->parent_blk_off;
 	}
 	return NO_PARENT_BLK;
+}
+
+bool fixed_size_index_block::less_half_full() {
+	return header->node_count < (idx_seg->get_tree()->get_m() + 1) / 2;
 }
 
 /*
@@ -838,8 +1117,8 @@ void node2::set_left(page *p) {
 		p->set_next_page(&rp);
 	}
 
-	if (has_pre_nd2()) {
-		node2 pre_node;
+	node2 pre_node;
+	if (pre_nd2(pre_node)) {
 		pre_nd2(pre_node);
 		if (pre_node.test_flag(ND2_RP_BIT)) {
 			page pre_right_page;
@@ -862,9 +1141,8 @@ void node2::set_right(page * p) {
 		p->set_pre_page(&lp);
 	}
 
-	if (has_nxt_nd2()) {
-		node2 n;
-		nxt_nd2(n);
+	node2 n;
+	if (nxt_nd2(n)) {
 		if (n.test_flag(ND2_LP_BIT)) {
 			page nxt_left_page;
 			ref_page->idx_seg->fetch_left_page(n, nxt_left_page);
@@ -873,22 +1151,32 @@ void node2::set_right(page * p) {
 	}
 }
 
-void node2::pre_nd2(node2 &pre) {
+bool node2::pre_nd2(node2 &pre) {
 	int ns = ref_page->header->node_size;
-	int nc = ref_page->header->node_count;
-	int kl = ref_page->idx_seg->get_tree()->get_key_len();
-	int vl = ref_page->idx_seg->get_tree()->get_val_len();
-	pre.ref(buffer - ns, offset - ns, nc - node2_header_size, kl, vl);
-	pre.ref_page = ref_page;
-
+	int off = offset;
+	bool has = false;
+	while (!has && off > 0) {
+		off -= ns;
+		pre.offset = off;
+		if (ref_page->read_node(&pre)) {
+			has = !pre.test_flag(ND2_DEL_BIT);
+		}
+	}
+	return has;
 }
-void node2::nxt_nd2(node2 &nxt) {
+
+bool node2::nxt_nd2(node2 &nxt) {
 	int ns = ref_page->header->node_size;
-	int nc = ref_page->header->node_count;
-	int kl = ref_page->idx_seg->get_tree()->get_key_len();
-	int vl = ref_page->idx_seg->get_tree()->get_val_len();
-	nxt.ref(buffer + ns, offset + ns, nc - node2_header_size, kl, vl);
-	nxt.ref_page = ref_page;
+	int off = offset;
+	bool has = false;
+	while (!has && off < ref_page->length) {
+		off += ns;
+		nxt.offset = off;
+		if (ref_page->read_node(&nxt)) {
+			has = !nxt.test_flag(ND2_DEL_BIT);
+		}
+	}
+	return has;
 }
 
 bool node2::operator==(const node2 &other) {
@@ -907,6 +1195,7 @@ bool node2::operator==(const node2 &other) {
 		}
 	}
 }
+
 
 index_segment::index_segment(unsigned long _id) :
 		segment(_id) {

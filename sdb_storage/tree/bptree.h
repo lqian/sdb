@@ -82,17 +82,28 @@ const int NODE2_INVALID_OFFSET = -3;
 const int NODE2_REF_INVALID_BLOCK = -4;
 const int NODE2_OVERFLOW_MAX_ORDER = -5;
 const int PAGE_NO_PARENT_PAGE = -100;
+const int KEY_NOT_FOUND = -200;
+const int KEY_NOT_IN_RANGE = -201;
+
+const int BORROW_NOT_SUPPORT = -300;
 
 using namespace sdb::storage;
 
 enum key_test_enum {
-	key_invalid_test,
-	key_equals,
-	key_not_found,
-	key_within_page,
-	key_greater,
+	key_invalid_test = 0,
+	key_equal,
 	key_less,
+	key_greater,
+	key_within_page = 0x10,
 	not_defenition
+};
+
+enum scan_type {
+	scan_equal = 1,
+	scan_less = 2,
+	scan_greater = 4,
+	scan_less_equal = scan_equal | scan_less,
+	scan_greater_equal = scan_equal | scan_greater
 };
 
 struct node2;
@@ -165,7 +176,7 @@ struct key: val {
  * fixed-size index. all node2 of the index has the same length.
  *
  * in order to operate on an index block, must load it from disk. any operation
- * only store in memory. outerside must flush the block to disk before close it
+ * only store in memory. outer side must flush the block to disk before close it
  * or evict it from memory.
  *
  */
@@ -207,6 +218,11 @@ struct fixed_size_index_block: data_block {
 		time(&header->create_time);
 	}
 
+	bool operator==(const fixed_size_index_block & other);
+	bool operator!=(const fixed_size_index_block & other);
+
+	bool less_half_full();
+
 	int assign_node(node2 *n);
 	int read_node(node2 *n);
 	void set_pre_page(fixed_size_index_block *pre);
@@ -222,10 +238,14 @@ struct fixed_size_index_block: data_block {
 	 */
 	void purge_node(int idx = 0);
 	void purge_node(int idx, int len);
+	void delete_node(node2 &n);
 	void sort_in_mem();
 	key_test_enum test_key(const key & k, node2 & n);
+	key_test_enum test_key(const key & k);
 
 	bool is_full();
+
+	bool at_least_full(int &r);
 
 	bool is_root() {
 		return test_flag(PAGE_PP_BIT) == false;
@@ -280,11 +300,11 @@ struct node2 {
 		short flag = 0;
 		unsigned short left_pg_off, right_pg_off; /* left page offset, right page offset */
 		unsigned short lpwp, rpwp; /* left page write pointer, right page write pointer */
-	}* header;
+	}* header = nullptr;
 
 	/* the storage define */
 	int offset; /* the offset behind start of the block  */
-	char * buffer;
+	char * buffer = nullptr;
 	int length; /* total length of the node2 bytes, excludes header */
 
 	bool ref_flag = false;
@@ -354,19 +374,28 @@ struct node2 {
 
 	void set_left(page *p);
 	void set_right(page *p);
-	inline bool has_pre_nd2() {
-		return offset > 0;
-	}
 
-	inline bool has_nxt_nd2() {
-		int ns = ref_page->header->node_size;
-		int nc = ref_page->header->node_count;
-		return offset / ns < nc - 1;
-	}
+//	inline bool has_pre_nd2() {
+//		return offset > 0;
+//	}
+//
+//	inline bool has_nxt_nd2() {
+//		int ns = ref_page->header->node_size;
+//		int nc = ref_page->header->node_count;
+//		return offset / ns < nc - 1;
+//	}
 
-	void nxt_nd2(node2 &nxt);
+	/*
+	 * if current node has next next, fill it to next node parameter
+	 * and return 1, else return 0;
+	 */
+	bool nxt_nd2(node2 &nxt);
 
-	void pre_nd2(node2 &pre);
+	/*
+	 * if current node has previous next, fill it to nxt node parameter
+	 * and return 1, else return 0;
+	 */
+	bool pre_nd2(node2 &pre);
 
 	bool operator==(const node2 &other);
 
@@ -397,8 +426,12 @@ struct node2 {
 
 	~ node2() {
 		if (!ref_flag) {
-			delete header;
-			delete[] buffer;
+			if (header) {
+				delete header;
+			}
+			if (buffer) {
+				delete[] buffer;
+			}
 		}
 	}
 }
@@ -416,8 +449,17 @@ public:
 	int find_page(page &f, const key &k, page & t, key_test_enum & kt);
 	int add_key(key &k, val& v);
 	int add_node2(node2 &n);
-	int remove_key(key &k);
-	int update_val(key &k, val& v);
+	int remove_key(const key &k);
+	int update_val(const key &k, const val& v);
+
+	/*
+	 * scan the tree to find a key which relations ship denoted by kt.
+	 * if find return the first page and offset denote the corresponding
+	 * nodes.
+	 */
+	int scan(const key&k, const scan_type & st, page &p, node2 & n);
+	int scan(const key&k1, const scan_type & st1, const key&k2,
+			const scan_type & st2);
 
 	bptree(index_segment * _root_seg, int kl, int vl, int bs);
 	bptree(index_segment * _root_seg, int m, int kl, int vl, int bs);
@@ -474,6 +516,8 @@ private:
 	 */
 	int fetch_parent_node(page &p, node2 &n);
 
+	int fetch_parent_node( page & parent, page &p, node2 & pn);
+
 	/*
 	 * fetch the page's next page if it has
 	 */
@@ -491,10 +535,30 @@ private:
 	void transfer(page &p1, int from, int count, page & p2);
 	int add_key(page & p, key &k, val& v, key_test_enum kt = not_defenition);
 	int add_node2(page &p, node2 &n, key_test_enum kt = not_defenition);
-	int re_organize_page(page &p, key_test_enum kt = not_defenition);
 	int assign_page(page &p);
-	void split_2(page &p, page &left, page &right);
+	int expand_organize(page &p, key_test_enum kt = not_defenition);
+	void split_1_2(page &p, page &left, page &right);
 	void split_2_3(page &p1, page &p2, page & empty);
+
+	int remove_key(page &p, const key &k, const key_test_enum &pkt);
+	int shrink_organize(page &p, const key_test_enum & kt);
+
+	/*
+	 * if both p1 and p2 are less or equals half full, where p1i < p2i, i=0,1,,,k-1.
+	 *  merge them to the first page p1 and remove the page p2
+	 */
+	int merge_2_1(page &p1, page &p2);
+
+	/*
+	 * if p1, p2, p3 are less or equals half full, merge them to two pages p1, p2, and remove
+	 * the page p3, the function assumes that k1i < k2i < k3i, which k1i means key in p1 and
+	 * i = 0, 1, m-1, as same as k2i, k3i respects for p2, p3.
+	 */
+	int merge_3_2(page &p1, page &p2, page &p3);
+
+	int borrow_left(page &p);
+	int borrow_right(page &p);
+
 	void to_right(page &p);
 	void to_left(page &p);
 };
