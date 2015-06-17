@@ -11,39 +11,41 @@
 #include <string.h>
 #include <ctime>
 #include "sdb.h"
-#include "./../common/char_buffer.h"
+#include "../common/char_buffer.h"
 
+namespace sdb {
 namespace enginee {
 using namespace std;
+using namespace sdb::enginee;
 
-class FieldValue {
+class field_value {
 private:
 	sdb_table_field_type type;
 	char * value;
 	int len = 0;
 public:
 
-	FieldValue() {
+	field_value() {
 	}
 
-	FieldValue(const FieldValue & other) :
+	field_value(const field_value & other) :
 			type(other.type), len(other.len) {
 		value = new char[len];
 		memcpy(value, other.value, len);
 	}
 
-	explicit FieldValue(const sdb_table_field_type & _type) :
+	explicit field_value(const sdb_table_field_type & _type) :
 			type(_type) {
 	}
 
-	explicit FieldValue(const sdb_table_field_type & _type, const char * _value,
+	explicit field_value(const sdb_table_field_type & _type, const char * _value,
 			const int & _len) :
 			type(_type), len(_len) {
 		value = new char[len];
 		memcpy(value, _value, _len);
 	}
 
-	void operator=(const FieldValue & other) {
+	void operator=(const field_value & other) {
 		type = other.type;
 		len = other.len;
 		value = new char[len];
@@ -54,9 +56,9 @@ public:
 	void set_short(const short & val);
 	void set_int(const int &val);
 	void set_long(const long &val);
-//	void set_unsigned_short(const unsigned short & val);
-//	void set_unsigned_int(const unsigned int & val);
-//	void set_unsigned_long(const unsigned long & val);
+	void set_ushort(const unsigned short & val);
+	void set_uint(const unsigned int & val);
+	void set_ulong(const unsigned long & val);
 	void set_float(const float & val);
 	void set_double(const double &val);
 	void set_cstr(const char * p, int len);
@@ -67,9 +69,9 @@ public:
 	short short_val();
 	int int_val();
 	long long_val();
-//	unsigned short to_unsigned_short();
-//	unsigned int to_unsigned_int();
-//	unsigned long to_unsigned_long();
+	unsigned short ushort_val();
+	unsigned int uint_val();
+	unsigned long ulong_val();
 	float float_val();
 	double double_val();
 	const char * cstr_val();
@@ -85,7 +87,7 @@ public:
 
 	void fill_buffer(common::char_buffer * buff);
 
-	virtual ~FieldValue() {
+	virtual ~field_value() {
 		if (len > 0) {
 			delete[] value;
 		}
@@ -117,5 +119,6 @@ public:
 };
 
 } /* namespace enginee */
+} /* namespace sdb */
 
 #endif /* FIELD_VALUE_STORE_H_ */

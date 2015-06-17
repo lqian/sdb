@@ -10,7 +10,7 @@
 
 #include <string.h>
 #include <time.h>
-#include <iostream>
+//#include <iostream>
 #include "encoding.h"
 
 /**
@@ -30,6 +30,8 @@ private:
 	int cap = 0;
 	float grow_factor = 2;
 
+	bool ref = false;
+
 public:
 	char_buffer(const char * buff, int size) {
 		cap = size;
@@ -37,8 +39,9 @@ public:
 		memcpy(buffer, buff, cap);
 	}
 
-	char_buffer(char * buff, int size, bool wrapped = false) {
-		if (wrapped) {
+	char_buffer(char * buff, int size, bool ref = false) {
+		if (ref) {
+			this->ref = ref;
 			cap = size;
 			buffer = buff;
 		} else {
@@ -82,7 +85,9 @@ public:
 	}
 
 	~char_buffer() {
-		delete[] buffer;
+		if (!ref) {
+			delete[] buffer;
+		}
 	}
 
 	int capacity() {
@@ -101,7 +106,7 @@ public:
 	 * size of push chars has'nt been pop
 	 */
 	const int remain() const {
-		return push_pos - pop_pos;
+		return b_size - pop_pos;
 	}
 
 	/*
@@ -138,6 +143,17 @@ public:
 	char_buffer * skip(int off) {
 		pop_pos += off;
 		return this;
+	}
+
+	char_buffer * push_back(const char & val) {
+		ensure_capacity(CHAR_LEN);
+		push_chars(&val, CHAR_LEN);
+		return this;
+	}
+
+	char_buffer * push_back(const unsigned char & val) {
+		char c = (char) val;
+		return push_back(c);
 	}
 
 	char_buffer * push_back(const short & val) {
@@ -177,7 +193,8 @@ public:
 
 	char_buffer * push_back(const bool &val) {
 		ensure_capacity(BOOL_CHARS);
-		push_chars(to_chars(val), BOOL_CHARS);
+		buffer[push_pos++] = val ? 1 : 0;
+		++b_size;
 		return this;
 	}
 
@@ -225,34 +242,46 @@ public:
 		return (*p);
 	}
 
+	const char pop_char() {
+		char *p = (buffer + pop_pos);
+		pop_pos += CHAR_LEN;
+		return (*p);
+	}
+
+	const unsigned char pop_uchar() {
+		return (unsigned char) pop_char();
+	}
+
 	bool pop_bool() {
 		return buffer[pop_pos++] == 1;
 	}
-	const int & pop_int() {
+	const int pop_int() {
 		int * p = (int *) (buffer + pop_pos);
 		pop_pos += INT_CHARS;
 		return (*p);
 	}
 
-	const unsigned & pop_unsigned_int() {
+	const unsigned int pop_uint() {
 		unsigned * p = (unsigned *) (buffer + pop_pos);
 		pop_pos += INT_CHARS;
 		return (*p);
 	}
 
 	std::string pop_string() {
-		return std::string(pop_cstr());
+		int len = pop_int();
+		std::string str(buffer + pop_pos, len);
+		pop_pos += len;
+		return str;
 	}
 
-	char * pop_cstr() {
+	void pop_cstr( char * p) {
 		int len = pop_int();
-		char *p = new char[len];
+		p =  new char[len];
 		memcpy(p, buffer + pop_pos, len);
 		if (strlen(p) > len) {
 			p[len] = '\0';
 		}
 		pop_pos += len;
-		return p;
 	}
 
 	/**
@@ -297,10 +326,8 @@ public:
 		int len = pop_int();
 		if (len <= 0)
 			return false;
-		char *p = new char[len];
-		memcpy(p, buffer + pop_pos, len);
+		memcpy(p_buffer->buffer, buffer + pop_pos, len);
 		pop_pos += len;
-		p_buffer->set_buffer(p);
 		p_buffer->rewind();
 		p_buffer->b_size = len;
 		return true;
@@ -321,6 +348,12 @@ public:
 	}
 
 	friend char_buffer& operator<<(char_buffer & buff, const bool & val) {
+		buff.push_back(val);
+		return buff;
+	}
+
+	friend char_buffer& operator<<(char_buffer & buff,
+			const unsigned char & val) {
 		buff.push_back(val);
 		return buff;
 	}
@@ -395,6 +428,11 @@ public:
 		return buff;
 	}
 
+	friend char_buffer& operator>>(char_buffer & buff, unsigned char & val) {
+		val = buff.pop_uchar();
+		return buff;
+	}
+
 	friend char_buffer& operator>>(char_buffer & buff, unsigned short & val) {
 		val = buff.pop_unsigned_short();
 		return buff;
@@ -411,7 +449,7 @@ public:
 	}
 
 	friend char_buffer & operator>>(char_buffer & buff, unsigned & val) {
-		val = buff.pop_unsigned_int();
+		val = buff.pop_uint();
 		return buff;
 	}
 
@@ -431,12 +469,13 @@ public:
 	}
 
 	friend char_buffer& operator>>(char_buffer & buff, char * val) {
-		val = buff.pop_cstr();
+		int len = buff.pop_int();
+		buff.pop_cstr(val);
 		return buff;
 	}
 
 	friend char_buffer& operator>>(char_buffer & buff, char & val) {
-		val = *(buff.pop_cstr());
+		val = buff.pop_char();
 		return buff;
 	}
 
@@ -458,13 +497,12 @@ public:
 	void push_chars(const char* chars, int len) {
 		if (len == BOOL_CHARS) {
 			buffer[push_pos++] = chars[0];
-			if (chars[0] == 1) {
-				cout << "this is a c++ bug" << endl;
-			}
+//			if (chars[0] == 1) {
+//				cout << "this is a c++ bug" << endl;
+//			}
 		} else {
-			for (int i = 0; i < len;) {
-				buffer[push_pos++] = chars[i++];
-			}
+			memcpy(buffer + push_pos, chars, len);
+			push_pos += len;
 		}
 
 		b_size += len;

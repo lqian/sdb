@@ -77,6 +77,7 @@ char * to_chars(const unsigned long &ul) {
 	}
 	return pc;
 }
+
 char* to_chars(const bool &b) {
 	char c = b ? 1 : 0;
 	char * pc = &c;
@@ -100,7 +101,7 @@ int to_int(const char* p_chars) {
 	return i;
 }
 
-unsigned int to_unsigned_int(const char* p_chars) {
+unsigned int to_uint(const char* p_chars) {
 	unsigned int * pui = (unsigned int *) p_chars;
 	unsigned int ui(*pui);
 	return ui;
@@ -108,8 +109,12 @@ unsigned int to_unsigned_int(const char* p_chars) {
 
 short to_short(const char* p_chars) {
 	short * pi = (short *) p_chars;
-	short i(*pi);
-	return i;
+	return (*pi);
+}
+
+unsigned short to_ushort(const char* p_chars) {
+	unsigned short * pi = (unsigned short *) p_chars;
+	return (*pi);
 }
 
 bool to_bool(const char* p_char) {
@@ -118,13 +123,11 @@ bool to_bool(const char* p_char) {
 
 long to_long(const char* p_char) {
 	long *pl = (long *) p_char;
-	long l(*pl);
-	return l;
+	return (*pl);
 }
 
-unsigned long to_unsigned_long(const char* p_char) {
+unsigned long to_ulong(const char* p_char) {
 	unsigned long *pul = (unsigned long *) p_char;
-	unsigned long ul(*pul);
-	return ul;
+	return (*pul);
 }
 

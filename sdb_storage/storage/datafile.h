@@ -82,6 +82,7 @@ class segment;
 struct data_block;
 
 enum segment_type {
+	system_segment_type =0x10,
 	index_segment_type = 0x30,
 	data_segment_type,
 	undo_segment_type,

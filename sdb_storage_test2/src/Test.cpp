@@ -7,10 +7,13 @@
 #include "storage/datafile.h"
 #include <algorithm>
 #include "tree/avl.h"
+#include "enginee/table_desc.h"
 
 using namespace std;
+using namespace common;
 using namespace sdb::tree;
 using namespace sdb::storage;
+using namespace sdb::enginee;
 
 void data_file_basic_test() {
 
@@ -231,6 +234,37 @@ void test_block_write() {
 
 }
 
+void table_desc_test() {
+	table_desc td1("tab1", "db1", "comment for tab1");
+	field_desc fd1("fd1", int_type, 4, "comment for field desc 1", false), fd2(
+			"fd2", varchar_type, 40, "comment for field desc 2", false);
+
+	//TODO
+	td1.add_field_desc(fd1);
+	td1.add_field_desc(fd2);
+	ASSERT(fd1.is_assigned() && fd2.is_assigned());
+
+	char_buffer fd_buff(100);
+	fd1.write_to(fd_buff);
+	fd_buff.rewind();
+	field_desc fd1_clone;
+	fd1_clone.load_from(fd_buff);
+	ASSERT(fd1 == fd1_clone);
+
+	ASSERT(td1.delete_field("fd2"));
+	ASSERT(td1.store_field_count() == 2);
+
+	// test for table description load and write to buffer
+	char_buffer td_buff(512);
+	td1.write_to(td_buff);
+	td_buff.rewind();
+	table_desc td1_clone;
+	td1_clone.load_from(td_buff);
+
+	ASSERT(td1_clone == td1);
+
+}
+
 void runSuite() {
 	cute::suite s;
 
@@ -243,6 +277,7 @@ void runSuite() {
 	s.push_back(CUTE(segment_basic_test));
 	s.push_back(CUTE(test_delete_segment));
 	s.push_back(CUTE(test_update_segment));
+	s.push_back(CUTE(table_desc_test));
 
 	cute::ide_listener lis;
 	cute::makeRunner(lis)(s, "storage test suite");

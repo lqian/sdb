@@ -11,15 +11,17 @@
 #include <map>
 #include <string.h>
 #include "field_value.h"
-#include "field_description.h"
+#include "table_desc.h"
 #include "./../common/char_buffer.h"
 
+namespace sdb {
 namespace enginee {
+
 using namespace std;
 
-const static int ROW_STORE_IN_USAGE = 1;
-const static int ROW_STORE_DELETED = -1;
-const static int ROW_STORE_HEAD = 12;
+const  int ROW_STORE_IN_USAGE = 1;
+const  int ROW_STORE_DELETED = -1;
+const  int ROW_STORE_HEAD = 12;
 
 class RowStore {
 
@@ -46,7 +48,7 @@ private:
 	 */
 	int extended = -1;
 
-	map<short, FieldValue> field_value_map;
+	map<unsigned char, field_value> field_value_map;
 
 public:
 
@@ -70,16 +72,15 @@ public:
 	}
 	virtual ~RowStore();
 
-	bool exist_filed(const FieldDescription & desc);
+	bool exist_filed(const field_desc & desc);
 	bool exist_filed(const short & key);
-	void add_field_value_store(const FieldDescription & desc,
-			const FieldValue & val);
-	void add_field_value_store(const short & key, const FieldValue & val);
-	void delete_field_value_store(const FieldDescription & desc);
+	void add_field_value_store(const field_desc & desc,
+			const field_value & val);
+	void add_field_value_store(const short & key, const field_value & val);
+	void delete_field_value_store(const field_desc & desc);
 	void delete_field_value_store(const short & inner_key);
-	void set_field_value_store(const FieldDescription & desc,
-			const FieldValue & val);
-
+	void set_field_value_store(const field_desc & desc,
+			const field_value & val);
 	void fill_char_buffer(common::char_buffer * p_buffer);
 
 	void read_char_buffer(common::char_buffer * p_buffer);
@@ -101,14 +102,13 @@ public:
 		this->extended = extended;
 	}
 
-	FieldValue & get_field_value(short key) {
+	field_value & get_field_value(short key) {
 		return field_value_map.at(key);
 	}
 
 	int get_row_head_count() const {
 		return field_value_map.size();
 	}
-
 	int get_content_size() const {
 		return content_size;
 	}
@@ -172,15 +172,16 @@ public:
 		block_start_pos = blockstartpos;
 	}
 
-	map<short, FieldValue>& get_field_value_map() {
+	map<short, field_value>& get_field_value_map() {
 		return field_value_map;
 	}
 
-	void set_field_value_map(const map<short, FieldValue>& fieldvaluemap) {
+	void set_field_value_map(const map<unsigned char, field_value>& fieldvaluemap) {
 		field_value_map = fieldvaluemap;
 	}
 };
 
 } /* namespace enginee */
+} /* namespace sdb */
 
 #endif /* ROW_STORE_H_ */
