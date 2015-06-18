@@ -8,6 +8,7 @@
 #include <algorithm>
 #include "tree/avl.h"
 #include "enginee/table_desc.h"
+#include "enginee/field_value.h"
 
 using namespace std;
 using namespace common;
@@ -237,7 +238,7 @@ void test_block_write() {
 void table_desc_test() {
 	table_desc td1("tab1", "db1", "comment for tab1");
 	field_desc fd1("fd1", int_type, 4, "comment for field desc 1", false), fd2(
-			"fd2", varchar_type, 40, "comment for field desc 2", false);
+			"fd2", varchar_type, 64, "comment for field desc 2", false);
 
 	//TODO
 	td1.add_field_desc(fd1);
@@ -265,6 +266,37 @@ void table_desc_test() {
 
 }
 
+void row_store_test() {
+	table_desc td1("tab1", "db1", "comment for tab1");
+	field_desc fd1("col1", int_type, "comment for field desc 1", false), fd2(
+			"col2", varchar_type, 64, "comment for field desc 2", false), fd3(
+			"col3", long_type, "comment for field desc 3", false);
+
+	td1.add_field_desc(fd1);
+	td1.add_field_desc(fd2);
+	td1.add_field_desc(fd3);
+
+	field_value fv1, fv2, fv3;
+	fv1.set_int(20150618);
+	fv2.set_string(fd2.get_comment());
+	fv3.set_long(1651L);
+
+	row_store rs(&td1);
+	rs.set_field_value(fd1, fv1);
+	rs.set_field_value(fd2, fv2);
+	rs.set_field_value(fd3, fv3);
+
+	char_buffer row_buff(128);
+	rs.write_to(row_buff);
+
+	row_store rs_clone;
+	rs_clone.set_table_desc(&td1);
+	row_buff.rewind();
+	rs_clone.load_from(row_buff);
+
+	ASSERT(rs_clone.value_equals(rs));
+}
+
 void runSuite() {
 	cute::suite s;
 
@@ -278,6 +310,7 @@ void runSuite() {
 	s.push_back(CUTE(test_delete_segment));
 	s.push_back(CUTE(test_update_segment));
 	s.push_back(CUTE(table_desc_test));
+	s.push_back(CUTE(row_store_test));
 
 	cute::ide_listener lis;
 	cute::makeRunner(lis)(s, "storage test suite");

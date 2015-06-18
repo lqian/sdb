@@ -12,69 +12,85 @@ namespace sdb {
 namespace enginee {
 
 void field_value::set_bool(const bool & val) {
+	type = bool_type;
 	len = BOOL_CHARS;
 	value = new char[len];
 	memcpy(value, (char*) &val, len);
 }
 
 void field_value::set_short(const short & val) {
+	type = short_type;
 	len = SHORT_CHARS;
 	value = new char[len];
 	memcpy(value, (char*) &val, len);
 }
 
 void field_value::set_ushort(const unsigned short & val) {
+	type = unsigned_short_type;
 	len = SHORT_CHARS;
 	value = new char[len];
 	memcpy(value, (char*) &val, len);
 }
 void field_value::set_uint(const unsigned int & val) {
+	type = unsigned_int_type;
 	len = INT_CHARS;
 	value = new char[len];
 	memcpy(value, (char*) &val, len);
 }
 void field_value::set_ulong(const unsigned long & val) {
+	type = unsigned_long_type;
 	len = LONG_CHARS;
 	value = new char[len];
 	memcpy(value, (char*) &val, len);
 }
 void field_value::set_int(const int & val) {
+	type = int_type;
 	len = INT_CHARS;
 	value = new char[len];
 	memcpy(value, (char*) &val, len);
 }
 
 void field_value::set_long(const long & val) {
+	type = long_type;
 	len = LONG_CHARS;
 	value = new char[len];
 	memcpy(value, (char*) &val, len);
 }
 
 void field_value::set_time(const time_t & val) {
+	type = time_type;
 	len = LONG_CHARS;
 	value = new char[len];
 	memcpy(value, (char*) &val, len);
 }
 
 void field_value::set_float(const float & val) {
+	type = float_type;
 	len = FLOAT_CHARS;
 	value = new char[len];
 	memcpy(value, (char*) &val, len);
 }
 
 void field_value::set_double(const double & val) {
+	type = double_type;
 	len = DOUBLE_CHARS;
 	value = new char[len];
 	memcpy(value, (char*) &val, len);
 }
 
 void field_value::set_cstr(const char *p, int l) {
+	if (type == unknow_type) {
+		type = varchar_type;
+	}
 	len = l;
 	value = new char[len];
 	memcpy(value, p, len);
 }
 
 void field_value::set_string(const string & val) {
+	if (type == unknow_type) {
+		type = varchar_type;
+	}
 	len = val.size();
 	value = new char[len];
 	memcpy(value, (char*) &val, len);

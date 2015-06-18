@@ -216,9 +216,13 @@ public:
 		return this;
 	}
 
-	char_buffer * push_back(const char * chars, int len) {
-		ensure_capacity(len + INT_CHARS);
-		push_chars(to_chars(len), INT_CHARS);
+	char_buffer * push_back(const char * chars, int len, bool with_len = true) {
+		if (with_len) {
+			ensure_capacity(len + INT_CHARS);
+			push_chars(to_chars(len), INT_CHARS);
+		} else {
+			ensure_capacity(len);
+		}
 		push_chars(chars, len);
 		return this;
 	}
@@ -274,13 +278,18 @@ public:
 		return str;
 	}
 
-	void pop_cstr( char * p) {
+	void pop_cstr(char * p) {
 		int len = pop_int();
-		p =  new char[len];
+		p = new char[len];
 		memcpy(p, buffer + pop_pos, len);
-		if (strlen(p) > len) {
-			p[len] = '\0';
+		pop_pos += len;
+	}
+
+	void pop_cstr(char * p, int len, bool with_alloc = true) {
+		if (with_alloc) {
+			p = new char[len];
 		}
+		memcpy(p, buffer + pop_pos, len);
 		pop_pos += len;
 	}
 

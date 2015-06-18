@@ -18,31 +18,35 @@ namespace enginee {
 using namespace std;
 using namespace sdb::enginee;
 
+class row_store;
+
 class field_value {
+	friend class row_store;
 private:
-	sdb_table_field_type type;
-	char * value;
+	sdb_table_field_type type = unknow_type;
+	char * value = nullptr;
 	int len = 0;
 public:
 
 	field_value() {
 	}
 
+	explicit field_value(const sdb_table_field_type & _type, const int _len) :
+			type(_type), len(_len) {
+		value = new char[len];
+	}
+
+	explicit field_value(const sdb_table_field_type & _type,
+			const char * _value, const int & _len) :
+			type(_type), len(_len) {
+		value = new char[len];
+		memcpy(value, _value, _len);
+	}
+
 	field_value(const field_value & other) :
 			type(other.type), len(other.len) {
 		value = new char[len];
 		memcpy(value, other.value, len);
-	}
-
-	explicit field_value(const sdb_table_field_type & _type) :
-			type(_type) {
-	}
-
-	explicit field_value(const sdb_table_field_type & _type, const char * _value,
-			const int & _len) :
-			type(_type), len(_len) {
-		value = new char[len];
-		memcpy(value, _value, _len);
 	}
 
 	void operator=(const field_value & other) {
@@ -115,6 +119,10 @@ public:
 
 	void set_value(char* value) {
 		this->value = value;
+	}
+
+	bool operator ==(const field_value & other) {
+		return type == other.type && memcmp(value, other.value, len) == 0;
 	}
 };
 

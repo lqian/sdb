@@ -12,6 +12,7 @@
 #include <list>
 #include "sdb.h"
 #include "../common/char_buffer.h"
+#include "field_value.h"
 
 namespace sdb {
 namespace enginee {
@@ -26,6 +27,10 @@ static const int block_head_pos = -1;
 const int FIELD_ALREADY_EXISTED = -0x1000;
 const int FIELD_NOT_EXISTED = -0x1001;
 const int FIELD_EXCEED_MAX = -0x1002;
+const int FIELD_NOT_ASSIGNED = -0x1003;
+const int FIELD_VALUE_NOT_FOUND = -0x1004;
+
+const int INNER_KEY_INVALID = -0x2000;
 
 class table_desc;
 
@@ -51,6 +56,39 @@ public:
 			const bool _deleted = false) :
 			inner_key(unassign_inner_key), field_name(_field_name), field_type(
 					_field_type), comment(_comment), deleted(_deleted) {
+
+		//
+		switch (field_type) {
+		case bool_type:
+			size = BOOL_CHARS;
+			break;
+		case short_type:
+		case unsigned_short_type:
+			size = SHORT_CHARS;
+			break;
+		case int_type:
+		case unsigned_int_type:
+			size = INT_CHARS;
+			break;
+
+		case time_type:
+		case long_type:
+		case unsigned_long_type:
+			size = LONG_CHARS;
+			break;
+
+		case float_type:
+		case unsigned_float_type:
+			size = FLOAT_CHARS;
+			break;
+		case double_type:
+		case unsigned_double_type:
+			size = DOUBLE_CHARS;
+			break;
+		default:
+			break;
+
+		}
 	}
 
 	field_desc(const string & _fn, const sdb_table_field_type _ft,
@@ -71,27 +109,28 @@ public:
 	}
 
 	field_desc(const field_desc & other) {
-		this->inner_key = other.inner_key;
-		this->field_name = other.field_name;
-		this->field_type = other.field_type;
-		this->size = other.size;
-		this->comment = other.comment;
-		this->deleted = other.deleted;
+		inner_key = other.inner_key;
+		field_name = other.field_name;
+		field_type = other.field_type;
+		size = other.size;
+		comment = other.comment;
+		deleted = other.deleted;
 	}
 
 	/**
 	 * determine the field description object is empty
 	 */
-	const bool is_assigned() {
+	bool is_assigned() const {
 		return inner_key > 0;
 	}
 
 	void operator=(const field_desc & other) {
-		this->inner_key = other.inner_key;
-		this->field_name = other.field_name;
-		this->field_type = other.field_type;
-		this->comment = other.comment;
-		this->deleted = other.deleted;
+		inner_key = other.inner_key;
+		field_name = other.field_name;
+		field_type = other.field_type;
+		size = other.size;
+		comment = other.comment;
+		deleted = other.deleted;
 	}
 
 	friend bool operator==(const field_desc & a, const field_desc & b) {
@@ -154,8 +193,12 @@ private:
 	string table_name;
 	string comment;
 
-	//description map, excludes deleted field_desc
-	map<string, field_desc> fd_map;
+	//field name, field_desc  map, excludes deleted field_desc
+	map<string, field_desc> fn_fd_map;
+
+	//field inner key, field_desc map, excludes delete field_desc.
+	// fn_fd_map and ik_fd_map must has the same content in literal.
+	map<unsigned char, field_desc> ik_fd_map;
 
 	// all field description, include deleted field description
 	list<field_desc> fd_list;
@@ -186,27 +229,37 @@ public:
 
 	int delete_field(const string & field_name);
 
+	int delete_field(const unsigned char & ik);
+
 	field_desc get_field_desc(const string& s);
+
+	field_desc get_field_desc(const unsigned char & ik);
 
 	int add_field_desc(field_desc & fd);
 
 	bool operator==(const table_desc & other) {
 		return schema_name == other.schema_name
 				&& table_name == other.table_name && deleted == other.deleted
-				&& fd_map == other.fd_map && fd_list == other.fd_list;
+				&& fn_fd_map == other.fn_fd_map && fd_list == other.fd_list
+				&& ik_fd_map == other.ik_fd_map;
 
 	}
 
 	bool exists_field(const string& field_name) {
-		return fd_map.size() > 0 && (fd_map.find(field_name) != fd_map.end());
+		return fn_fd_map.size() > 0
+				&& (fn_fd_map.find(field_name) != fn_fd_map.end());
 	}
+
 	bool exists_field(const field_desc & fd) {
-		return fd_map.size() > 0
-				&& (fd_map.find(fd.get_field_name()) != fd_map.end());
+		return exists_field(fd.field_name);
+	}
+
+	bool exists_field(const unsigned char & ik) {
+		return ik_fd_map.size() > 0 && ik_fd_map.find(ik) != ik_fd_map.end();
 	}
 
 	const int field_count() const {
-		return fd_map.size();
+		return fn_fd_map.size();
 	}
 
 	const int store_field_count() const {
@@ -241,12 +294,24 @@ public:
 		this->comment = other.comment;
 		this->deleted = other.deleted;
 		this->fd_list = other.fd_list;
-		this->fd_map = other.fd_map;
+		this->fn_fd_map = other.fn_fd_map;
 	}
 };
 
 /*
  * a row store is a class that store a row data include row data header and all field values
+ *
+ * currently, the row_store DOES NOT validate type of value. for example, it a field_desc has
+ * int_type, but field_value has a char array of '\0x31\0x32\0x33\0x43'.
+ *
+ * TODO, the feature should be implemented in field_value class self.
+ *
+ * serialize a row_store into char_buffer or char array. the format as
+ * |store_field_count| row_bit_map | {field value} .... |
+ *
+ * the sotre_field_count has one byte which value denotes the bytes of row_bit_map, for
+ * example, the store_field_count is 9, the row_bit_map has two bytes.
+ *
  */
 class row_store {
 private:
@@ -256,21 +321,68 @@ private:
 	unsigned char store_field_count;
 
 	/* a few chars store the field_desc index in table_desc.fd_list,
-	 * the bit map include deleted and active field_desc. */
-	char * row_bit_map;
+	 * the bit map include deleted and active field_desc.
+	 * LOW_ENDIAN, the first char denote 1-8, the second char denote 9-16 and etc */
+	char * row_bitmap;
 
-	table_desc * tdesc;
+	int rbm_len;
 
+	table_desc * tdesc = nullptr;
+
+	/*
+	 * a map store field_values
+	 */
+	map<unsigned char, field_value> fv_map;
+
+	void set_bit(const unsigned char i, const bool v = true);
+	bool test_bit(const unsigned char i);
+	void init_row_bitmap();
 
 public:
-
-	void init_header();
-
-	int set_field_value(const unsigned char & ik, const char * val, const int & len ) ;
-	int set_field_value(const field_desc & fd, const field_value & fv) ;
+	int set_field_value(const unsigned char & ik, const char * val,
+			const int & len, const bool verify = false);
+	int set_field_value(const field_desc & fd, const field_value & fv);
 	int get_field_value(const unsigned char &ik, field_value & fv);
 	int get_field_value(const field_desc & fd, field_value & fv);
+	void delete_field(const unsigned char & ik);
+	void delete_field(const string & field_name);
 
+	void write_to(char_buffer & buff);
+	void load_from(char_buffer & buff);
+
+	row_store() {
+	}
+
+	row_store(table_desc * tdesc) {
+		this->tdesc = tdesc;
+		store_field_count = tdesc->store_field_count();
+		init_row_bitmap();
+	}
+
+	table_desc * get_table_desc() {
+		return tdesc;
+	}
+
+	void set_table_desc(table_desc * tdesc) {
+		this->tdesc = tdesc;
+	}
+
+	bool value_equals(const row_store & other) {
+		if (store_field_count == other.store_field_count
+				&& fv_map.size() == other.fv_map.size()) {
+			auto sit = fv_map.begin();
+			auto oit = other.fv_map.begin();
+			bool equals = true;
+			for (; equals && sit != fv_map.end() && oit != other.fv_map.end();
+					++sit, ++oit) {
+				equals = sit->first == oit->first && sit->second == oit->second;
+			}
+			return equals;
+		}
+
+		return false;
+
+	}
 };
 }
 }
