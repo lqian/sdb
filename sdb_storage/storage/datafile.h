@@ -15,11 +15,9 @@
 #include <algorithm>
 #include <iostream>
 #include "../common/char_buffer.h"
+#include "../sdb_def.h"
 
 namespace sdb {
-
-const int SUCCESS = 1;
-const int FAILURE = -1;
 
 namespace storage {
 
@@ -85,8 +83,7 @@ enum segment_type {
 	system_segment_type =0x10,
 	index_segment_type = 0x30,
 	data_segment_type,
-	undo_segment_type,
-	redo_segment_type,
+	log_segment_type,
 	tmp_segment_type
 };
 

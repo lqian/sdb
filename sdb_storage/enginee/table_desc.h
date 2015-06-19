@@ -46,18 +46,21 @@ private:
 	int size;
 	string comment;
 	bool deleted;
+
+	bool primary_key = false;
+	bool nullable = false;
+	bool auto_increment = false;
 public:
 
 	field_desc() {
 	}
 
-	field_desc(const string & _field_name,
-			const sdb_table_field_type _field_type, const string & _comment,
-			const bool _deleted = false) :
-			inner_key(unassign_inner_key), field_name(_field_name), field_type(
-					_field_type), comment(_comment), deleted(_deleted) {
+	field_desc(const string & fn, const sdb_table_field_type ft, const bool na =
+			false, const bool pk = false, const string & c = "", const bool d =
+			false,) :
+			field_name(fn), field_type(ft), nullable(na), primary_key(pk), comment(
+					c), deleted(d) {
 
-		//
 		switch (field_type) {
 		case bool_type:
 			size = BOOL_CHARS;
@@ -91,20 +94,23 @@ public:
 		}
 	}
 
-	field_desc(const string & _fn, const sdb_table_field_type _ft,
-			const int & _s, const string & _c, const bool _d = false) :
-			inner_key(unassign_inner_key), field_name(_fn), field_type(_ft), size(
-					_s), comment(_c), deleted(_d) {
+	field_desc(const string & fn, const sdb_table_field_type ft, const int s,
+			const bool na = false, const bool pk = false, const string & c = "",
+			const bool d = false,) :
+			field_name(fn), field_type(ft), size(s), nullable(na), primary_key(
+					pk), comment(c), deleted(d) {
 	}
 
 	void write_to(common::char_buffer &buff) {
 		int ft = field_type;
-		buff << inner_key << field_name << ft << size << comment << deleted;
+		buff << inner_key << field_name << ft << size << comment << deleted
+				<< nullable << primary_key;
 	}
 
 	void load_from(common::char_buffer & buff) {
 		int ft;
-		buff >> inner_key >> field_name >> ft >> size >> comment >> deleted;
+		buff >> inner_key >> field_name >> ft >> size >> comment >> deleted
+				>> nullable >> primary_key;
 		field_type = (sdb_table_field_type) ft;
 	}
 
@@ -182,6 +188,37 @@ public:
 	bool is_variant() const {
 		return (field_type == char_type || field_type == varchar_type)
 				|| field_type > varchar_type;
+	}
+
+	bool is_nullable() const {
+		return nullable;
+	}
+
+	void set_nullable(bool nullable = true) {
+		this->nullable = nullable;
+	}
+
+	bool is_primary_key() const {
+		return primary_key;
+	}
+
+	void set_primary_key(bool primaryKey = false) {
+		primary_key = primaryKey;
+		if (primary_key) {
+			nullable = false;
+		}
+	}
+
+	bool is_auto_increment() const {
+		return auto_increment;
+	}
+
+	void set_auto_increment(bool autoIncrement = false) {
+		auto_increment = autoIncrement;
+	}
+
+	int get_size() const {
+		return size;
 	}
 };
 

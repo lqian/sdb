@@ -56,6 +56,10 @@ public:
 		memcpy(value, other.value, len);
 	}
 
+	bool is_null() {
+		return len == 0 && value == nullptr;
+	}
+
 	void set_bool(const bool & val);
 	void set_short(const short & val);
 	void set_int(const int &val);

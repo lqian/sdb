@@ -6,7 +6,7 @@
  */
 
 #include "table_desc.h"
-#include "../storage/datafile.h"
+#include "../sdb_def.h"
 
 namespace sdb {
 namespace enginee {
