@@ -9,6 +9,7 @@
 #include "tree/avl.h"
 #include "enginee/table_desc.h"
 #include "enginee/field_value.h"
+#include "enginee/sys_seg.h"
 
 using namespace std;
 using namespace common;
@@ -297,8 +298,50 @@ void row_store_test() {
 	ASSERT(rs_clone.value_equals(rs));
 }
 
+void test_sys_seg(){
+	sys_seg seg("/tmp");
+
+	if (seg.is_initialized()) {
+		seg.clean();
+	}
+	seg.initialize();
+
+	ASSERT(seg.is_initialized());
+
+	table_desc  tdsm;
+	seg.get_table_desc("schemas", tdsm);
+	unsigned char ik = 1;
+	ASSERT(tdsm.get_field_desc("schema_id").get_field_name() == "schema_id");
+	ASSERT(tdsm.get_field_desc(1).get_field_name() == "schema_id");
+
+	// add a row for create a new schema in database
+	ik = 0;
+	row_store rs;
+	rs.set_table_desc(&tdsm);
+	field_value fv0, fv1, fv2, fv3, fv4, fv5;
+	fv0.set_uint(123L);
+	fv1.set_string("db1");
+	fv2.set_uint(0x10);
+	fv3.set_string("a test schema");
+	fv4.set_ulong(123991281829L);
+	fv5.set_ulong(123991281829L);
+
+	rs.set_field_value(ik++, fv0);
+	rs.set_field_value(ik++, fv1);
+	rs.set_field_value(ik++, fv2);
+	rs.set_field_value(ik++, fv3);
+	rs.set_field_value(ik++, fv4);
+	rs.set_field_value(ik++, fv5);
+
+	seg.add_row(SCHEMA_OBJ, rs);
+
+	seg.flush();
+
+}
+
 void runSuite() {
 	cute::suite s;
+
 
 	//memory block test
 	s.push_back(CUTE(mem_block_test));
@@ -311,6 +354,7 @@ void runSuite() {
 	s.push_back(CUTE(test_update_segment));
 	s.push_back(CUTE(table_desc_test));
 	s.push_back(CUTE(row_store_test));
+	s.push_back(CUTE(test_sys_seg));
 
 	cute::ide_listener lis;
 	cute::makeRunner(lis)(s, "storage test suite");

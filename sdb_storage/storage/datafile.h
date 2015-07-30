@@ -48,6 +48,8 @@ const int kilo_byte = 1024;
 
 const int UNKNOWN_OFFSET = -1;
 const int DELETE_OFFSET = -2;
+const int ROW_NOT_FOUND = -3;
+const int ROW_NOT_IN_BLOCK = -4;
 
 const int offset_bytes = 2;
 
@@ -71,16 +73,23 @@ const int BLK_OFF_OVERFLOW = -2;
 const int BLK_OFF_INVALID = -3;
 const int NO_PRE_BLK = -4;
 const int NO_NEXT_BLK = -5;
-const int NO_PARENT_BLK=-6;
+const int NO_PARENT_BLK = -6;
 const int SEGMENT_NOT_ASSIGNED = -0x100;
 const int SEGMENT_IS_FULL = -0x101;
+
+const int IO_READ_BLOCK_ERROR = -0x200;
+const int IO_READ_SEGMENT_ERROR = -0x201;
+const int ROW_DATA_SIZE_TOO_LARGE = -0x202;
+
+/* row data flag define */
+const int ROW_DELETED_FLAG_BIT = 15;
 
 class segment;
 
 struct data_block;
 
 enum segment_type {
-	system_segment_type =0x10,
+	system_segment_type = 0x10,
 	index_segment_type = 0x30,
 	data_segment_type,
 	log_segment_type,
@@ -133,7 +142,7 @@ public:
 
 	int close();
 
-	/**
+	/**int
 	 * create physical disk file for the this object
 	 * and write correct head information
 	 */
@@ -203,6 +212,14 @@ public:
 
 	inline const unsigned long get_id() {
 		return id;
+	}
+
+	inline void set_id(unsigned long id) {
+		this->id = id;
+	}
+
+	inline void set_path(const std::string full_path) {
+		this->full_path = full_path;
 	}
 };
 
@@ -645,6 +662,22 @@ struct mem_data_block: data_block {
 		}
 	}
 
+	int get_row(const int idx, common::char_buffer & buff) {
+		unsigned short offset = off_tbl[idx];
+		if (offset >> ROW_DELETED_FLAG_BIT) {
+			return DELETE_OFFSET;
+		}
+		int rl = -1;
+		if (idx == 0) {
+			rl = length - offset;
+		} else {
+			rl = off_tbl[idx - 1] - offset;
+		}
+
+		buff.push_back(buffer + offset, rl, false);
+		return sdb::SUCCESS;
+	}
+
 	bool enough_reserved_space(short len) {
 		int s = off_tbl.size();
 		return ((off_tbl[s - 1] - s * offset_bytes - len - offset_bytes) * 100
@@ -668,7 +701,7 @@ struct mem_data_block: data_block {
 	 */
 	void parse_off_tbl() {
 		unsigned short * p = (unsigned short *) buffer;
-		while ((*p) > 0) {
+		while ((*p) > 0) { // TODO maybe this incur a bug
 			off_tbl.push_back((*p));
 			++p;
 		}
@@ -710,6 +743,10 @@ struct mem_data_block: data_block {
 		return r;
 	}
 
+	int update_row_data_by_index(int idx, const char *rb, const int rl) {
+		unsigned short off = off_tbl[idx];
+		return update_row_data(off, rb, rl);
+	}
 	/**
 	 * update a existed row with a new given row and the row's existed offset, return new offset
 	 * if update successfully, else UNKNOWN_OFFSET or DELETE_OFFSET.
@@ -778,7 +815,6 @@ struct mem_data_block: data_block {
 					}
 				}
 			}
-
 			calc_free_perct();
 		}
 
@@ -791,16 +827,17 @@ struct mem_data_block: data_block {
 	}
 
 	bool delete_row_by_idx(int idx) {
-		if (idx != -1) {
-			unsigned short n = (1 << 15); /* the 15th bit as 1, DELETE flag*/
+		if (idx != -1 && idx < off_tbl.size()) {
+			unsigned short n = (1 << ROW_DELETED_FLAG_BIT); /* the 15th bit as 1, DELETE flag*/
 			unsigned short off = off_tbl[idx];
 			off_tbl[idx] = off | n;
 
 			if (u_off_start > idx * offset_bytes)
 				u_off_start = idx * offset_bytes;
 			return true;
+		} else {
+			return false;
 		}
-		return false;
 	}
 
 	int index(const unsigned short off) {

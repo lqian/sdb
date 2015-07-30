@@ -57,7 +57,7 @@ public:
 
 	field_desc(const string & fn, const sdb_table_field_type ft, const bool na =
 			false, const bool pk = false, const string & c = "", const bool d =
-			false,) :
+			false) :
 			field_name(fn), field_type(ft), nullable(na), primary_key(pk), comment(
 					c), deleted(d) {
 
@@ -96,7 +96,7 @@ public:
 
 	field_desc(const string & fn, const sdb_table_field_type ft, const int s,
 			const bool na = false, const bool pk = false, const string & c = "",
-			const bool d = false,) :
+			const bool d = false) :
 			field_name(fn), field_type(ft), size(s), nullable(na), primary_key(
 					pk), comment(c), deleted(d) {
 	}
@@ -332,6 +332,8 @@ public:
 		this->deleted = other.deleted;
 		this->fd_list = other.fd_list;
 		this->fn_fd_map = other.fn_fd_map;
+		this->ik_fd_map = other.ik_fd_map;
+		this->deleted = other.deleted;
 	}
 };
 
@@ -341,7 +343,7 @@ public:
  * currently, the row_store DOES NOT validate type of value. for example, it a field_desc has
  * int_type, but field_value has a char array of '\0x31\0x32\0x33\0x43'.
  *
- * TODO, the feature should be implemented in field_value class self.
+ * TODO, the feature should be implemented in field_value class self in future
  *
  * serialize a row_store into char_buffer or char array. the format as
  * |store_field_count| row_bit_map | {field value} .... |
@@ -379,8 +381,14 @@ public:
 	int set_field_value(const unsigned char & ik, const char * val,
 			const int & len, const bool verify = false);
 	int set_field_value(const field_desc & fd, const field_value & fv);
+	int set_field_value(const unsigned char & ik, const field_value & fv);
+	int set_field_value(const std::string name, const field_value & fv);
 	int get_field_value(const unsigned char &ik, field_value & fv);
 	int get_field_value(const field_desc & fd, field_value & fv);
+
+	/*
+	 * delete field value from the row store, it's values is null after delete
+	 */
 	void delete_field(const unsigned char & ik);
 	void delete_field(const string & field_name);
 

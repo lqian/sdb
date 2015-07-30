@@ -51,7 +51,7 @@ public:
 		}
 	}
 
-	explicit char_buffer(int capacity) {
+	explicit char_buffer(int capacity = 1024) {
 		this->cap = capacity;
 		buffer = new char[capacity];
 	}

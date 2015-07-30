@@ -12,15 +12,15 @@
 
 namespace sio {
 
-bool exist_file(char * path, int mode);
+bool exist_file(const char * path, int mode);
 
-bool exist_file(std::string & path, int mode);
+bool exist_file(const std::string & path, int mode);
 
-bool exist_file(char * path);
+bool exist_file(const char * path);
 
-bool exist_file(std::string & path);
+bool exist_file(const std::string & path);
 
-bool remove_file(std::string &path);
+bool remove_file(const std::string &path);
 }
 ;
 

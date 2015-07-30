@@ -146,6 +146,17 @@ int row_store::set_field_value(const field_desc & fd, const field_value & fv) {
 	}
 }
 
+int row_store::set_field_value(const unsigned char & ik,
+		const field_value & fv) {
+	if (tdesc->exists_field(ik)) {
+		fv_map.insert(pair<unsigned char, field_value>(ik, fv));
+		set_bit(ik, true);
+		return sdb::SUCCESS;
+	} else {
+		return FIELD_NOT_EXISTED;
+	}
+}
+
 int row_store::get_field_value(const unsigned char &ik, field_value & fv) {
 	if (tdesc->exists_field(ik)) {
 		auto it = fv_map.find(ik);
