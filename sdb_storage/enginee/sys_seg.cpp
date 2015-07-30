@@ -516,7 +516,7 @@ sys_seg::sys_seg(const std::string pathname) {
 	id = 0L;
 	seg_type = sdb::storage::system_segment_type;
 	length = M_64;
-	block_size = K_8 * kilo_byte;
+	block_size = K_4 * kilo_byte;
 
 	std::string dfn = std::string(path_name);
 	dfn.append("/");
@@ -537,7 +537,7 @@ sys_seg::sys_seg() {
 	id = 0L;
 	seg_type = sdb::storage::system_segment_type;
 	length = M_64;
-	block_size = K_8 * kilo_byte;
+	block_size = K_4 * kilo_byte;
 }
 sys_seg::~sys_seg() {
 	if (this->d_file != nullptr) {

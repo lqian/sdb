@@ -399,7 +399,8 @@ public:
 	}
 
 	inline bool is_valid() {
-		return magic == segment_magic && id > unused_id;
+//		return magic == segment_magic && id > unused_id;
+		return magic == segment_magic;
 	}
 
 	inline time_t get_assign_time() const {
@@ -541,7 +542,6 @@ struct data_block {
 		ref_flag = true;
 		u_off_start = 0;
 		u_off_end = 0;
-
 	}
 
 	virtual void init_header() {
@@ -858,10 +858,10 @@ struct mem_data_block: data_block {
 	}
 
 	virtual ~ mem_data_block() {
-		if (!ref_flag) {
-			delete header;
-			delete[] buffer;
-		}
+//		if (!ref_flag) {
+//			delete header;
+//			delete[] buffer;
+//		}
 	}
 }
 ;
