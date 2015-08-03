@@ -674,7 +674,8 @@ struct mem_data_block: data_block {
 			rl = off_tbl[idx - 1] - offset;
 		}
 
-		buff.push_back(buffer + offset, rl, false);
+//		buff.push_back(buffer + offset, rl, false);
+		buff.ref_buff(buffer + offset, rl);
 		return sdb::SUCCESS;
 	}
 

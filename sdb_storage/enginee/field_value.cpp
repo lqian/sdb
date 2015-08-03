@@ -93,7 +93,7 @@ void field_value::set_string(const string & val) {
 	}
 	len = val.size();
 	value = new char[len];
-	memcpy(value, (char*) &val, len);
+	memcpy(value, val.c_str(), len);
 }
 
 bool field_value::read_buffer(common::char_buffer * buff) {

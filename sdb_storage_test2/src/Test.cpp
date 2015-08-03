@@ -315,9 +315,9 @@ void test_sys_seg(){
 	ASSERT(tdsm.get_field_desc(1).get_field_name() == "schema_id");
 
 	// add a row for create a new schema in database
-	ik = 0;
-	row_store rs;
-	rs.set_table_desc(&tdsm);
+	ik = 1;
+	row_store rs(&tdsm);
+//	rs.set_table_desc(&tdsm);
 	field_value fv0, fv1, fv2, fv3, fv4, fv5;
 	fv0.set_uint(123L);
 	fv1.set_string("db1");
@@ -334,8 +334,15 @@ void test_sys_seg(){
 	rs.set_field_value(ik++, fv5);
 
 	seg.add_row(SCHEMA_OBJ, rs);
-
 	seg.flush();
+
+	// find that row store
+	row_store trs;
+	field_value tfv;
+	tfv.set_string("db1");
+	ASSERT(seg.find_row(SCHEMA_OBJ, "schema_name", tfv, trs) == sdb::SUCCESS);
+	ASSERT(trs.value_equals(rs));
+//	seg.flush();
 
 }
 

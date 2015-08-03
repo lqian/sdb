@@ -41,6 +41,7 @@ int sys_seg::add_row(const object_type & ot, row_store & rs) {
 				return sdb::SUCCESS;
 			}
 		} else {
+			lblk.write_off_tbl();
 			return sdb::SUCCESS;
 		}
 	} else {
@@ -48,16 +49,15 @@ int sys_seg::add_row(const object_type & ot, row_store & rs) {
 	}
 }
 
-int sys_seg::find_row(const object_type & ot, const string & obj_name,
-		row_store & rs) {
+int sys_seg::find_row(const object_type & ot, const string & col_name,
+		const field_value fv, row_store & rs) {
 	table_desc td;
 	if (find_table_desc(ot, td)) {
-		rs.set_table_desc(&td);
-		field_desc fd = td.get_field_desc(obj_name);
-		field_value fv;
+		field_desc fd = td.get_field_desc(col_name);
 		if (!fd.is_assigned()) {
 			return NOT_FIND_FIELD_NAME;
 		}
+		rs.set_table_desc(&td);
 
 		mem_data_block blk;
 		sys_seg seg;
@@ -66,7 +66,7 @@ int sys_seg::find_row(const object_type & ot, const string & obj_name,
 			return IO_READ_BLOCK_ERROR;
 		}
 
-		while (find_row(blk, obj_name, fd, fv, rs) == ROW_NOT_IN_BLOCK) {
+		while (find_row(blk, fd, fv, rs) == ROW_NOT_IN_BLOCK) {
 			if (blk.test_flag(NEXT_BLK_BIT)) {
 				blk.offset = blk.header->next_blk_off;
 				if (blk.test_flag(NEXT_BLK_SPAN_SEG_BIT)) {
@@ -74,15 +74,14 @@ int sys_seg::find_row(const object_type & ot, const string & obj_name,
 					if (!seg.read_block(blk)) {
 						return IO_READ_BLOCK_ERROR;
 					}
-				} else {
-					if (!read_block(blk)) {
-						return IO_READ_BLOCK_ERROR;
-					}
+				} else if (!read_block(blk)) {
+					return IO_READ_BLOCK_ERROR;
 				}
 			} else {
 				return ROW_NOT_FOUND;
 			}
 		}
+		return sdb::SUCCESS;
 	} else {
 		return NO_SYS_TABLE_DESC;
 	}
@@ -103,7 +102,7 @@ int sys_seg::update_row(const object_type & ot, const string & obj_name,
 		mem_data_block blk;
 		blk.offset = block_size * (int) ot;
 		int idx = ROW_NOT_IN_BLOCK;
-		while ((idx = find_row(blk, obj_name, fd, fv, ors)) == ROW_NOT_IN_BLOCK) {
+		while ((idx = find_row(blk, fd, fv, ors)) == ROW_NOT_IN_BLOCK) {
 			if (blk.test_flag(NEXT_BLK_BIT)) {
 				blk.offset = blk.header->next_blk_off;
 				if (blk.test_flag(NEXT_BLK_SPAN_SEG_BIT)) {
@@ -155,7 +154,7 @@ int sys_seg::update_row(const object_type & ot, const string & obj_name,
 
 int sys_seg::delete_row(const object_type & ot, const string & obj_name) {
 	row_store ors;
-	table_desc  td;
+	table_desc td;
 	sys_seg seg;
 	if (find_table_desc(ot, td)) {
 		ors.set_table_desc(&td);
@@ -167,7 +166,7 @@ int sys_seg::delete_row(const object_type & ot, const string & obj_name) {
 		mem_data_block blk;
 		blk.offset = block_size * (int) ot;
 		int idx = ROW_NOT_IN_BLOCK;
-		while ((idx = find_row(blk, obj_name, fd, fv, ors)) == ROW_NOT_IN_BLOCK) {
+		while ((idx = find_row(blk, fd, fv, ors)) == ROW_NOT_IN_BLOCK) {
 			if (blk.test_flag(NEXT_BLK_BIT)) {
 				blk.offset = blk.header->next_blk_off;
 				if (blk.test_flag(NEXT_BLK_SPAN_SEG_BIT)) {
@@ -193,19 +192,18 @@ int sys_seg::delete_row(const object_type & ot, const string & obj_name) {
 	}
 }
 
-int sys_seg::find_row(mem_data_block &blk, const string & obj_name,
-		const field_desc &fd, field_value & fv, row_store & rs) {
+int sys_seg::find_row(mem_data_block &blk, const field_desc &fd,
+		const field_value & tfv, row_store & rs) {
 	blk.parse_off_tbl();
-	common::char_buffer buff(block_size);
+	field_value fv;
+	common::char_buffer buff;
 	for (int i = 0; i < blk.off_tbl.size(); i++) {
 		if (blk.get_row(i, buff)) {
-			rs.load_from(buff);
 			buff.rewind();
+			rs.load_from(buff);
 			if (rs.get_field_value(fd, fv)) {
-				if (memcmp(obj_name.c_str(), fv.cstr_val(), obj_name.size())
-						== 0) {
+				if (fv == tfv)
 					return i;
-				}
 			}
 		}
 	}
@@ -215,7 +213,7 @@ int sys_seg::find_row(mem_data_block &blk, const string & obj_name,
 int sys_seg::find_table_desc(const object_type &ot, table_desc & td) {
 	auto it = type_map.find(ot);
 	if (it != type_map.end()) {
-		td =  it->second;
+		td = it->second;
 		return sdb::SUCCESS;
 	} else {
 		return sdb::FAILURE;
@@ -261,23 +259,23 @@ int sys_seg::initialize() {
 		append_schemas_desc(buff);
 		fst_blk.add_row_data(buff.data(), buff.size());
 
-		buff.rewind();
+		buff.reset();
 		append_tables_desc(buff);
 		fst_blk.add_row_data(buff.data(), buff.size());
 
-		buff.rewind();
+		buff.reset();
 		append_columns_desc(buff);
 		fst_blk.add_row_data(buff.data(), buff.size());
 
-		buff.rewind();
+		buff.reset();
 		append_sequences_desc(buff);
 		fst_blk.add_row_data(buff.data(), buff.size());
 
-		buff.rewind();
+		buff.reset();
 		append_indexes_desc(buff);
 		fst_blk.add_row_data(buff.data(), buff.size());
 
-		buff.rewind();
+		buff.reset();
 		append_index_attrs_desc(buff);
 		fst_blk.add_row_data(buff.data(), buff.size());
 

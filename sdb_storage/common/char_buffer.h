@@ -33,6 +33,9 @@ private:
 	bool ref = false;
 
 public:
+
+	char_buffer() {}
+
 	char_buffer(const char * buff, int size) {
 		cap = size;
 		buffer = new char[cap];
@@ -51,7 +54,7 @@ public:
 		}
 	}
 
-	explicit char_buffer(int capacity = 1024) {
+	explicit char_buffer(int capacity) {
 		this->cap = capacity;
 		buffer = new char[capacity];
 	}
@@ -82,6 +85,13 @@ public:
 			buffer = new char[cap];
 		}
 		memcpy(buffer, other.buffer, b_size);
+	}
+
+	void ref_buff(char * buff, int size) {
+		this->ref = true;
+		cap = size;
+		this->b_size = size;
+		buffer = buff;
 	}
 
 	~char_buffer() {
@@ -136,6 +146,13 @@ public:
 		pop_pos = 0;
 		return this;
 	}
+
+	char_buffer * reset() {
+			push_pos = 0;
+			pop_pos = 0;
+			b_size = 0;
+			return this;
+		}
 
 	/**
 	 * skip off size of chars from current pop position

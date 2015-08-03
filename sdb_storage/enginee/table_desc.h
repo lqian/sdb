@@ -410,6 +410,8 @@ public:
 
 	void set_table_desc(table_desc * tdesc) {
 		this->tdesc = tdesc;
+		store_field_count = tdesc->store_field_count();
+		init_row_bitmap();
 	}
 
 	bool value_equals(const row_store & other) {

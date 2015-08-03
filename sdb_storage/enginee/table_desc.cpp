@@ -261,8 +261,14 @@ void row_store::load_from(char_buffer & buff) {
 							pair<unsigned char, field_value>(fd.inner_key, fv));
 				}
 
-			} else {  // skip size defined by deleted field
-				buff.skip(fd.size + fd.is_variant() ? INT_CHARS : 0);
+			} else {  // skip deleted field
+				if (fd.is_variant()) {
+					int len = buff.pop_int();
+					buff.skip(len);
+				}
+				else {
+					buff.skip(fd.size); // fixed size field
+				}
 			}
 		}
 	}

@@ -82,7 +82,7 @@ public:
 	int clean();
 
 	int add_row(const object_type & ot, row_store & rs);
-	int find_row(const object_type & ot, const string & obj_name,
+	int find_row(const object_type & ot, const string & col_name, const field_value fv,
 			row_store & rs);
 	int update_row(const object_type & ot, const string & obj_name,
 			row_store & rs);
@@ -116,8 +116,8 @@ private:
 	void append_index_attrs_desc(char_buffer & buff);
 	void append_sequences_desc(char_buffer & buff);
 
-	int find_row(mem_data_block &blk, const string & obj_name,
-			const field_desc &fd, field_value & fv, row_store & rs);
+	int find_row(mem_data_block &blk,
+			const field_desc &fd, const field_value & tfv, row_store & rs);
 
 	int find_row(mem_data_block &blk, const string & obj_name);
 
