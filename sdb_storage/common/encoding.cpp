@@ -5,7 +5,9 @@
  *      Author: linkqian
  */
 
+#include <stdio.h>
 #include "encoding.h"
+
 
 char* to_chars(const double &l) {
 	char * pv = (char *) &l;
@@ -129,5 +131,9 @@ long to_long(const char* p_char) {
 unsigned long to_ulong(const char* p_char) {
 	unsigned long *pul = (unsigned long *) p_char;
 	return (*pul);
+}
+
+int ultoa(unsigned long lv, char * p) {
+	return sprintf(p , "%016lX", lv);
 }
 

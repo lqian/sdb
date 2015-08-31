@@ -82,11 +82,16 @@ public:
 	int clean();
 
 	int add_row(const object_type & ot, row_store & rs);
+
+	/*
+	 * find an object type of table in sys_seg with a column name and its value equals a field value,
+	 * if found the the system object, return the object value to row_store parameter specified
+	 */
 	int find_row(const object_type & ot, const string & col_name, const field_value fv,
 			row_store & rs);
-	int update_row(const object_type & ot, const string & obj_name,
+	int update_row(const object_type & ot,const string & col_name, const field_value & ffv,
 			row_store & rs);
-	int delete_row(const object_type & ot, const string & obj_name);
+	int delete_row(const object_type & ot, const string & col_name, const field_value & fv);
 
 	void get_table_desc(const string & name, table_desc &ptd);
 

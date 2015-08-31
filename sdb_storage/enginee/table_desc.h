@@ -381,9 +381,11 @@ public:
 	int set_field_value(const unsigned char & ik, const char * val,
 			const int & len, const bool verify = false);
 	int set_field_value(const field_desc & fd, const field_value & fv);
-	int set_field_value(const unsigned char & ik, const field_value & fv);
+	int set_field_value(const unsigned char & ik, const field_value & fv,
+			bool check_exist = false);
 	int set_field_value(const std::string name, const field_value & fv);
-	int get_field_value(const unsigned char &ik, field_value & fv);
+	int get_field_value(const unsigned char &ik, field_value & fv,
+			bool check_exist = false);
 	int get_field_value(const field_desc & fd, field_value & fv);
 
 	/*
@@ -396,6 +398,11 @@ public:
 	void load_from(char_buffer & buff);
 
 	row_store() {
+	}
+
+	row_store(unsigned char sfc) :
+			store_field_count(sfc) {
+		init_row_bitmap();
 	}
 
 	row_store(table_desc * tdesc) {

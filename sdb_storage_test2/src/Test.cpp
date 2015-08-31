@@ -10,6 +10,7 @@
 #include "enginee/table_desc.h"
 #include "enginee/field_value.h"
 #include "enginee/sys_seg.h"
+#include "enginee/seg_mgr.h"
 
 using namespace std;
 using namespace common;
@@ -298,7 +299,7 @@ void row_store_test() {
 	ASSERT(rs_clone.value_equals(rs));
 }
 
-void test_sys_seg(){
+void test_sys_seg() {
 	sys_seg seg("/tmp");
 
 	if (seg.is_initialized()) {
@@ -308,7 +309,7 @@ void test_sys_seg(){
 
 	ASSERT(seg.is_initialized());
 
-	table_desc  tdsm;
+	table_desc tdsm;
 	seg.get_table_desc("schemas", tdsm);
 	unsigned char ik = 1;
 	ASSERT(tdsm.get_field_desc("schema_id").get_field_name() == "schema_id");
@@ -323,8 +324,8 @@ void test_sys_seg(){
 	fv1.set_string("db1");
 	fv2.set_uint(0x10);
 	fv3.set_string("a test schema");
-	fv4.set_ulong(123991281829L);
-	fv5.set_ulong(123991281829L);
+	fv4.set_time(123991281829L);
+	fv5.set_time(123991281829L);
 
 	rs.set_field_value(ik++, fv0);
 	rs.set_field_value(ik++, fv1);
@@ -334,21 +335,50 @@ void test_sys_seg(){
 	rs.set_field_value(ik++, fv5);
 
 	seg.add_row(SCHEMA_OBJ, rs);
-	seg.flush();
 
 	// find that row store
 	row_store trs;
 	field_value tfv;
 	tfv.set_string("db1");
 	ASSERT(seg.find_row(SCHEMA_OBJ, "schema_name", tfv, trs) == sdb::SUCCESS);
-	ASSERT(trs.value_equals(rs));
-//	seg.flush();
+	// the trs row store object's tdesc doesn't point a invalid table_desc object because that it was free
 
+	ASSERT(trs.value_equals(rs));
+	fv1.set_string("db1_1");
+	ik = 2;
+	trs.set_field_value(ik, fv1);
+	ASSERT(seg.update_row(SCHEMA_OBJ, "schema_name", fv1, trs) >= 0);
+
+	ASSERT(seg.delete_row(SCHEMA_OBJ, "schema_name", fv1) == 0);
+	seg.flush();
+
+}
+
+void test_seg_mgr() {
+	using namespace sdb::enginee;
+	using namespace std;
+
+	LOCAL_SEG_MGR.add_datafile_paths("/tmp/dir1,/tmp/dir2");
+	LOCAL_SEG_MGR.add_datafile_paths("/tmp/dir3,/tmp/dir4");
+
+	LOCAL_SEG_MGR.load();
+
+	data_file *pdf = nullptr;
+	ASSERT(LOCAL_SEG_MGR.assign_data_file(pdf) == sdb::SUCCESS);
+
+	data_file *f = LOCAL_SEG_MGR.find_data_file(0L);
+	std::cout<< f->get_path() <<" " << f <<  std::endl;
+
+	data_file *df1 = new data_file;
+	data_file *df2 = new data_file;
+	data_file *df3 = new data_file;
+	ASSERT(LOCAL_SEG_MGR.assign_data_file(df1) == sdb::SUCCESS);
+	ASSERT(LOCAL_SEG_MGR.assign_data_file(df2) == sdb::SUCCESS);
+	ASSERT(LOCAL_SEG_MGR.assign_data_file(df3) == sdb::SUCCESS);
 }
 
 void runSuite() {
 	cute::suite s;
-
 
 	//memory block test
 	s.push_back(CUTE(mem_block_test));
@@ -362,6 +392,7 @@ void runSuite() {
 	s.push_back(CUTE(table_desc_test));
 	s.push_back(CUTE(row_store_test));
 	s.push_back(CUTE(test_sys_seg));
+	s.push_back(CUTE(test_seg_mgr));
 
 	cute::ide_listener lis;
 	cute::makeRunner(lis)(s, "storage test suite");

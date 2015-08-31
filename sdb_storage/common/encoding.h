@@ -41,4 +41,8 @@ bool to_bool(const char* p_chars);
 long to_long(const char* p_chars);
 unsigned long to_ulong(const char* p_chars);
 
+int ultoa(unsigned long lv, char * p);
+
+
+
 #endif /* ENCODING_H_ */

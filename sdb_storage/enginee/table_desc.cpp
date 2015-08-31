@@ -123,6 +123,7 @@ int row_store::set_field_value(const unsigned char & ik, const char * val,
 		field_desc fd = tdesc->get_field_desc(ik);
 		if (fd.is_assigned()) {
 			field_value fv(fd.field_type, val, len);
+			fv_map.erase(fd.inner_key);
 			fv_map.insert(pair<unsigned char, field_value>(ik, fv));
 			set_bit(ik, true);
 			return sdb::SUCCESS;
@@ -135,6 +136,7 @@ int row_store::set_field_value(const unsigned char & ik, const char * val,
 int row_store::set_field_value(const field_desc & fd, const field_value & fv) {
 	if (fd.is_assigned()) {
 		if (tdesc->exists_field(fd)) {
+			fv_map.erase(fd.inner_key);
 			fv_map.insert(pair<unsigned char, field_value>(fd.inner_key, fv));
 			set_bit(fd.inner_key, true);
 			return sdb::SUCCESS;
@@ -146,29 +148,42 @@ int row_store::set_field_value(const field_desc & fd, const field_value & fv) {
 	}
 }
 
-int row_store::set_field_value(const unsigned char & ik,
-		const field_value & fv) {
-	if (tdesc->exists_field(ik)) {
-		fv_map.insert(pair<unsigned char, field_value>(ik, fv));
-		set_bit(ik, true);
-		return sdb::SUCCESS;
+int row_store::set_field_value(const unsigned char & ik, const field_value & fv,
+		bool check) {
+	if (check && !tdesc->exists_field(ik)) {
+		return FIELD_NOT_EXISTED;
+	}
+
+	fv_map.erase(ik);
+	fv_map.insert(pair<unsigned char, field_value>(ik, fv));
+	set_bit(ik, true);
+	return sdb::SUCCESS;
+
+}
+
+int row_store::set_field_value(const std::string name, const field_value & fv) {
+	field_desc fd = tdesc->get_field_desc(name);
+	if (fd.is_assigned()) {
+		return set_field_value(fd.inner_key, fv);
 	} else {
 		return FIELD_NOT_EXISTED;
 	}
 }
 
-int row_store::get_field_value(const unsigned char &ik, field_value & fv) {
-	if (tdesc->exists_field(ik)) {
-		auto it = fv_map.find(ik);
-		if (it != fv_map.end()) {
-			fv = it->second;
-			return sdb::SUCCESS;
-		} else {
-			return FIELD_VALUE_NOT_FOUND;
-		}
-	} else {
+int row_store::get_field_value(const unsigned char &ik, field_value & fv,
+		bool check_exist) {
+	if (check_exist && !tdesc->exists_field(ik)) {
 		return FIELD_NOT_EXISTED;
 	}
+
+	auto it = fv_map.find(ik);
+	if (it != fv_map.end()) {
+		fv = it->second;
+		return sdb::SUCCESS;
+	} else {
+		return FIELD_VALUE_NOT_FOUND;
+	}
+
 }
 
 int row_store::get_field_value(const field_desc & fd, field_value & fv) {
@@ -212,7 +227,7 @@ bool row_store::test_bit(const unsigned char i) {
 }
 
 void row_store::init_row_bitmap() {
-	// initialize store field count and row bit map
+// initialize store field count and row bit map
 	rbm_len = store_field_count / 8;
 	if (store_field_count % 8 > 0) {
 		rbm_len++;
@@ -265,8 +280,7 @@ void row_store::load_from(char_buffer & buff) {
 				if (fd.is_variant()) {
 					int len = buff.pop_int();
 					buff.skip(len);
-				}
-				else {
+				} else {
 					buff.skip(fd.size); // fixed size field
 				}
 			}
@@ -274,5 +288,5 @@ void row_store::load_from(char_buffer & buff) {
 	}
 }
 
-}
-}
+} /* end namespace enginee */
+} /* end namespace sdb */

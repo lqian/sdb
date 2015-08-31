@@ -24,7 +24,7 @@ namespace storage {
 using namespace std;
 using namespace common;
 
-const int unused_id = 0;
+const unsigned int valid_data_file_id = 0;
 const unsigned int data_file_magic = 0x7A9E401C;
 const unsigned int block_magic = 0x98C2E0F9; /* default block magic */
 const unsigned int segment_magic = 0x50FED398;
@@ -121,12 +121,12 @@ private:
 public:
 	data_file() {
 	}
-	explicit data_file(std::string _full_path);
-	explicit data_file(unsigned long id, std::string _full_path);
-	explicit data_file(const data_file & another) = delete;
+	data_file(std::string _full_path);
+	data_file(unsigned long id, std::string _full_path);
+	data_file(const data_file & another);
 	virtual ~data_file();
 
-	data_file operator=(const data_file & another) = delete;
+	data_file & operator=(const data_file & another);
 
 	bool operator==(const data_file & another);
 
@@ -142,7 +142,7 @@ public:
 
 	int close();
 
-	/**int
+	/*
 	 * create physical disk file for the this object
 	 * and write correct head information
 	 */
@@ -154,6 +154,8 @@ public:
 	 * assign disk space for a new segment, especially, the segment is empty
 	 */
 	int assgin_segment(segment & seg);
+
+	int assgin_segment(segment * seg);
 
 	/**
 	 * write a in-memory segment to disk, both segment head and segment content
@@ -182,6 +184,8 @@ public:
 
 	int read_block(segment &seg, data_block &blk);
 
+	int read_block(segment *seg, data_block *blk);
+
 	/**
 	 *  check has a segment from current position of the data file,
 	 *  if read a valid segment from current position, store the segment into the parameter
@@ -198,6 +202,8 @@ public:
 	 */
 	int fetch_segment(segment & seg);
 
+	int fetch_segment(segment * seg);
+
 	int fetch_segment_head(segment & seg);
 
 	void fill_head_to_buff(common::char_buffer & buff);
@@ -206,7 +212,11 @@ public:
 
 	bool is_valid();
 
-	bool has_free_space() const {
+	inline bool is_open() {
+		return opened;
+	}
+
+	inline bool has_free_space() const {
 		return free_perct > 0;
 	}
 
@@ -218,8 +228,12 @@ public:
 		this->id = id;
 	}
 
-	inline void set_path(const std::string full_path) {
+	inline void set_path(const std::string & full_path) {
 		this->full_path = full_path;
+	}
+
+	const string & get_path() {
+		return this->full_path;
 	}
 };
 
@@ -300,9 +314,11 @@ public:
 	 *  flush_blcok method. operation of block has the same manner.
 	 */
 	int assign_block(data_block & blk);
+	int assign_block(data_block * blk);
 	int remove_block(data_block & blk);
 	int flush_block(data_block & blk);
 	int read_block(data_block &blk);
+	int read_block(data_block *blk);
 
 	int flush();
 
@@ -331,8 +347,16 @@ public:
 		}
 	}
 
+	inline unsigned int last_block_off() {
+		return block_count == 0 ? 0 : (block_count - 1) * block_size;
+	}
+
 	inline unsigned long get_id() const {
 		return id;
+	}
+
+	inline void set_id(unsigned long id) {
+		this->id = id;
 	}
 
 	inline int get_length() const {
@@ -380,6 +404,25 @@ public:
 		return sdb::FAILURE;
 	}
 
+	int next_seg(segment * seg) {
+		if (this->d_file == nullptr) {
+			//ignore this case
+		} else if (d_file->id != pre_seg_dfile_id) {
+			//the code cause invalid pointer
+			data_file df(next_seg_dfile_id, next_seg_dfile_path);
+			seg->offset = pre_seg_offset;
+			seg->d_file = &df;
+			df.open();
+			return df.fetch_segment(seg);
+		} else {
+			seg->d_file = this->d_file;
+			seg->offset = next_seg_offset;
+			seg->id = next_seg_id;
+			return d_file->fetch_segment(seg);
+		}
+		return sdb::FAILURE;
+	}
+
 	int pre_seg(segment & seg) {
 		if (this->d_file == nullptr) {
 			//ignore this case
@@ -393,6 +436,24 @@ public:
 			seg.d_file = this->d_file;
 			seg.offset = pre_seg_offset;
 			seg.id = pre_seg_id;
+			return d_file->fetch_segment(seg);
+		}
+		return sdb::FAILURE;
+	}
+
+	int pre_seg(segment * seg) {
+		if (this->d_file == nullptr) {
+			//ignore this case
+		} else if (d_file->id != pre_seg_dfile_id) {
+			//the code cause invalid pointer
+			data_file df(pre_seg_dfile_id, pre_seg_dfile_path);
+			seg->offset = pre_seg_offset;
+			seg->d_file = &df;
+			return df.fetch_segment(seg);
+		} else {
+			seg->d_file = this->d_file;
+			seg->offset = pre_seg_offset;
+			seg->id = pre_seg_id;
 			return d_file->fetch_segment(seg);
 		}
 		return sdb::FAILURE;
@@ -439,6 +500,9 @@ public:
 		return status;
 	}
 
+	inline bool has_remain_block() {
+		return remain() >= block_size;
+	}
 	inline int remain() {
 		return length - segment_head_size - block_count * block_size;
 	}
@@ -487,6 +551,38 @@ public:
 	short int get_seg_type() const {
 		return seg_type;
 	}
+
+	unsigned long get_next_seg_dfile_id() const {
+		return next_seg_dfile_id;
+	}
+
+	void set_next_seg_dfile_id(unsigned long nextSegDfileId = 0) {
+		next_seg_dfile_id = nextSegDfileId;
+	}
+
+	unsigned long get_next_seg_id() const {
+		return next_seg_id;
+	}
+
+	void set_next_seg_id(unsigned long nextSegId = 0) {
+		next_seg_id = nextSegId;
+	}
+
+	unsigned long get_pre_seg_dfile_id() const {
+		return pre_seg_dfile_id;
+	}
+
+	void set_pre_seg_dfile_id(unsigned long preSegDfileId = 0) {
+		pre_seg_dfile_id = preSegDfileId;
+	}
+
+	unsigned long get_pre_seg_id() const {
+		return pre_seg_id;
+	}
+
+	void set_pre_seg_id(unsigned long preSegId = 0) {
+		pre_seg_id = preSegId;
+	}
 };
 
 /*
@@ -505,7 +601,7 @@ struct data_block {
 	}*header = nullptr;
 
 	bool ref_flag = false;
-	int offset; /* block offset from start of segment which the block belong to,
+	unsigned int offset; /* block offset from start of segment which the block belong to,
 	 the first data block offset is 0 within a segment */
 
 	char *buffer; /* all data store in the buffer, include ROW DIRECTORY & DATA,
@@ -655,6 +751,10 @@ struct mem_data_block: data_block {
 	vector<unsigned short> off_tbl;
 	short free_perct = 100;
 
+	const int row_count() {
+		return off_tbl.size();
+	}
+
 	void calc_free_perct() {
 		int s = off_tbl.size();
 		if (s > 0) {
@@ -662,7 +762,7 @@ struct mem_data_block: data_block {
 		}
 	}
 
-	int get_row(const int idx, common::char_buffer & buff) {
+	int get_row_by_idx(const int idx, common::char_buffer & buff) {
 		unsigned short offset = off_tbl[idx];
 		if (offset >> ROW_DELETED_FLAG_BIT) {
 			return DELETE_OFFSET;
@@ -677,6 +777,11 @@ struct mem_data_block: data_block {
 //		buff.push_back(buffer + offset, rl, false);
 		buff.ref_buff(buffer + offset, rl);
 		return sdb::SUCCESS;
+	}
+
+	int get_row(const unsigned short off, common::char_buffer & buff) {
+		int r = index(off);
+		return r == -1 ? UNKNOWN_OFFSET : get_row_by_idx(r, buff);
 	}
 
 	bool enough_reserved_space(short len) {
@@ -850,7 +955,7 @@ struct mem_data_block: data_block {
 	 * write off table to the buffer
 	 */
 	void write_off_tbl() {
-		common::char_buffer cb(length / 10);
+		common::char_buffer cb(128);
 		for (auto it = off_tbl.begin(); it != off_tbl.end(); ++it) {
 			cb << (*it);
 		}

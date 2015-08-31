@@ -23,10 +23,14 @@ int sys_seg::add_row(const object_type & ot, row_store & rs) {
 	int r = seek_last_blk(ot, seg, lblk);
 	if (r) {
 		if (lblk.add_row_data(p, rl) == UNKNOWN_OFFSET) {
-			//TODO maybe the segment is full, the issue also find in update_row
 			if (seg == *this) {
-				if (!assign_block(nblk)) {
-					return IO_READ_BLOCK_ERROR;
+				if (this->has_remain_block()) {
+					if (!assign_block(nblk)) {
+						return IO_READ_BLOCK_ERROR;
+					}
+				} else {
+//					sys_seg nseg = new sys_seg;
+//					nseg.seg_type = sdb::storage::system_segment_type;
 				}
 			} else {
 				if (!seg.assign_block(nblk)) {
@@ -87,22 +91,22 @@ int sys_seg::find_row(const object_type & ot, const string & col_name,
 	}
 }
 
-int sys_seg::update_row(const object_type & ot, const string & obj_name,
-		row_store & rs) {
+int sys_seg::update_row(const object_type & ot, const string & col_name,
+		const field_value & ffv, row_store & rs) {
 	row_store ors;
 	table_desc td;
 	sys_seg seg;
 	if (find_table_desc(ot, td)) {
-		ors.set_table_desc(&td);
-		field_desc fd = td.get_field_desc(obj_name);
-		field_value fv;
+		field_desc fd = td.get_field_desc(col_name);
 		if (!fd.is_assigned()) {
 			return NOT_FIND_FIELD_NAME;
 		}
+		ors.set_table_desc(&td);
 		mem_data_block blk;
 		blk.offset = block_size * (int) ot;
+		read_block(blk);
 		int idx = ROW_NOT_IN_BLOCK;
-		while ((idx = find_row(blk, fd, fv, ors)) == ROW_NOT_IN_BLOCK) {
+		while ((idx = find_row(blk, fd, ffv, ors)) == ROW_NOT_IN_BLOCK) {
 			if (blk.test_flag(NEXT_BLK_BIT)) {
 				blk.offset = blk.header->next_blk_off;
 				if (blk.test_flag(NEXT_BLK_SPAN_SEG_BIT)) {
@@ -126,6 +130,7 @@ int sys_seg::update_row(const object_type & ot, const string & obj_name,
 		char *p = buff.data();
 		int rl = buff.size();
 		int r = blk.update_row_data_by_index(idx, p, rl);
+		blk.write_off_tbl();
 		if (r == DELETE_OFFSET) {   // row move between block
 			mem_data_block nblk;
 			if (seg == *this) {
@@ -152,19 +157,20 @@ int sys_seg::update_row(const object_type & ot, const string & obj_name,
 	}
 }
 
-int sys_seg::delete_row(const object_type & ot, const string & obj_name) {
+int sys_seg::delete_row(const object_type & ot, const string & col_name,
+		const field_value & fv) {
 	row_store ors;
 	table_desc td;
 	sys_seg seg;
 	if (find_table_desc(ot, td)) {
 		ors.set_table_desc(&td);
-		field_desc fd = td.get_field_desc(obj_name);
-		field_value fv;
+		field_desc fd = td.get_field_desc(col_name);
 		if (!fd.is_assigned()) {
 			return NOT_FIND_FIELD_NAME;
 		}
 		mem_data_block blk;
 		blk.offset = block_size * (int) ot;
+		read_block(blk);
 		int idx = ROW_NOT_IN_BLOCK;
 		while ((idx = find_row(blk, fd, fv, ors)) == ROW_NOT_IN_BLOCK) {
 			if (blk.test_flag(NEXT_BLK_BIT)) {
@@ -198,7 +204,8 @@ int sys_seg::find_row(mem_data_block &blk, const field_desc &fd,
 	field_value fv;
 	common::char_buffer buff;
 	for (int i = 0; i < blk.off_tbl.size(); i++) {
-		if (blk.get_row(i, buff)) {
+		buff.reset();
+		if (blk.get_row_by_idx(i, buff)) {
 			buff.rewind();
 			rs.load_from(buff);
 			if (rs.get_field_value(fd, fv)) {
@@ -278,6 +285,8 @@ int sys_seg::initialize() {
 		buff.reset();
 		append_index_attrs_desc(buff);
 		fst_blk.add_row_data(buff.data(), buff.size());
+
+		fst_blk.write_off_tbl();
 
 		//assign a empty block for each table desc
 		mem_data_block empty_blk;

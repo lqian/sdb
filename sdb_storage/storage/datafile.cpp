@@ -29,6 +29,41 @@ data_file::data_file(unsigned long id, std::string full_path) {
 	this->opened = false;
 }
 
+data_file::data_file(const data_file &another) {
+	if (another.opened)
+		throw "another data file already opened";
+
+	this->id = another.id;
+	this->full_path = another.full_path;
+	this->free_perct = another.free_perct;
+	this->magic = another.magic;
+	this->create_time = another.create_time;
+	this->closed = another.closed;
+	this->last_seg_offset = another.last_seg_offset;
+	this->length = another.length;
+	this->update_time = another.update_time;
+	this->opened = another.opened;
+	this->version = another.version;
+}
+
+data_file & data_file::operator=(const data_file & another) {
+	if (another.opened) {
+		throw "another data file already opened";
+	}
+	this->id = another.id;
+	this->full_path = another.full_path;
+	this->free_perct = another.free_perct;
+	this->magic = another.magic;
+	this->create_time = another.create_time;
+	this->closed = another.closed;
+	this->last_seg_offset = another.last_seg_offset;
+	this->length = another.length;
+	this->update_time = another.update_time;
+	this->opened = another.opened;
+	this->version = another.version;
+	return *this;
+}
+
 bool data_file::operator ==(const data_file & another) {
 	return magic == data_file_magic && magic == another.magic
 			&& id == another.id && full_path == another.full_path;
@@ -39,10 +74,10 @@ bool data_file::exist() {
 }
 
 int data_file::create() {
-	if (id == unused_id) {
-		perror("invalid data file id");
-		return FAILURE;
-	}
+//	if (id == valid_data_file_id) {
+//		perror("invalid data file id");
+//		return FAILURE;
+//	}
 
 	time(&attach_time);
 	common::char_buffer buff(data_file_head_size);
@@ -84,7 +119,7 @@ int data_file::open() {
 }
 
 bool data_file::is_valid() {
-	return magic == data_file_magic && id > unused_id && exist();
+	return magic == data_file_magic && id >= valid_data_file_id && exist();
 }
 
 int data_file::seek_segment(const segment & seg) {
@@ -129,6 +164,32 @@ int data_file::assgin_segment(segment & seg) {
 	}
 }
 
+int data_file::assgin_segment(segment * seg) {
+	fs.seekg(0, ios_base::end);
+	unsigned int g = fs.tellg();
+	seg->offset = (g - data_file_head_size);
+
+	if (fs.fail()) {
+		return FAILURE;
+	}
+	time(&seg->assign_time);
+	common::char_buffer head_buff(segment_head_size);
+	seg->fill_head_to_buff(head_buff);
+	fs.write(head_buff.data(), segment_head_size);
+	seg->assign_content_buffer();
+	fs.write(seg->content_buffer, seg->length - segment_head_size);
+	fs.flush();
+	if (!fs.fail()) {
+		free_perct = free_perct
+				- ceil((seg->length * 100.0) / data_file_max_size);
+		time(&update_time);
+		seg->d_file = this;
+		return SUCCESS;
+	} else {
+		return FAILURE;
+	}
+}
+
 int data_file::delete_segment(segment & seg) {
 
 	if (seg.status == storage::segment_deleted) {
@@ -152,6 +213,8 @@ int data_file::delete_segment(segment & seg) {
 				fs.flush();
 				return fs.good() ? SUCCESS : FAILURE;
 			}
+		} else {
+			return FAILURE;
 		}
 	} else {
 		return FAILURE;
@@ -251,6 +314,21 @@ int data_file::read_block(segment &seg, data_block &blk) {
 	return FAILURE;
 }
 
+int data_file::read_block(segment *seg, data_block *blk) {
+	long pos = fs.tellg();
+	long off = seg->offset + data_file_head_size + blk->offset
+			+ segment_head_size - pos;
+	fs.seekg(off - pos, ios_base::cur);
+	if (!fs.eof()) {
+		fs.read(blk->buffer - block_header_size,
+				blk->length + block_header_size);
+		if (fs.good()) {
+			return SUCCESS;
+		}
+	}
+	return FAILURE;
+}
+
 void data_file::skip_segment(segment & seg) {
 	if (seg.is_valid()) {
 		fs.seekg(seg.length - segment_head_size, ios_base::cur);
@@ -285,6 +363,27 @@ int data_file::fetch_segment(segment & seg) {
 		if (s1.is_valid() && s1 == seg) {
 			seg.assign_content_buffer();
 			fs.read(seg.content_buffer, seg.length - segment_head_size);
+			if (!fs.fail()) {
+				r = SUCCESS;
+			}
+		}
+	}
+	return r;
+}
+
+int data_file::fetch_segment(segment * seg) {
+	int r = FAILURE;
+	long pos = fs.tellg();
+	fs.seekg(seg->offset + data_file_head_size - pos, ios_base::cur);
+	if (fs.good() && !fs.eof()) {
+		char_buffer head_buff(segment_head_size);
+		fs.read(head_buff.data(), segment_head_size);
+		segment s1;
+		s1.fetch_head_from_buff(head_buff);
+
+		if (s1.is_valid() && s1 == *seg) {
+			seg->assign_content_buffer();
+			fs.read(seg->content_buffer, seg->length - segment_head_size);
 			if (!fs.fail()) {
 				r = SUCCESS;
 			}
@@ -474,6 +573,7 @@ int segment::flush() {
 	}
 	return SEGMENT_NOT_ASSIGNED;
 }
+
 int segment::assign_block(data_block &blk) {
 	int r = length - segment_head_size - block_size * block_count;
 	if (r > block_size) {
@@ -484,6 +584,24 @@ int segment::assign_block(data_block &blk) {
 			time(&blk.header->assign_time);
 		} else {
 			blk.init(off, block_size - block_header_size);
+		}
+		block_count++;
+		return sdb::SUCCESS;
+	} else {
+		return sdb::FAILURE;
+	}
+}
+
+int segment::assign_block(data_block * blk) {
+	int r = length - segment_head_size - block_size * block_count;
+	if (r > block_size) {
+		int off = block_size * block_count;
+		if (has_buffer()) {
+			blk->ref(off, content_buffer + off, block_size - block_header_size);
+			blk->init_header();
+			time(&blk->header->assign_time);
+		} else {
+			blk->init(off, block_size - block_header_size);
 		}
 		block_count++;
 		return sdb::SUCCESS;
@@ -510,12 +628,26 @@ int segment::flush_block(data_block &blk) {
 int segment::read_block(data_block &blk) {
 	if (blk.offset + block_size > length) {
 		return BLK_OFF_OVERFLOW;
+	} else if (blk.offset % block_size != 0) {
+		return BLK_OFF_INVALID;
 	} else if (has_buffer()) {
 		blk.ref(blk.offset, content_buffer + blk.offset,
 				block_size - block_header_size);
 		return SUCCESS;
 	} else {
 		return d_file->read_block(*this, blk);
+	}
+}
+
+int segment::read_block(data_block * blk) {
+	if (blk->offset + block_size > length) {
+		return BLK_OFF_OVERFLOW;
+	} else if (has_buffer()) {
+		blk->ref(blk->offset, content_buffer + blk->offset,
+				block_size - block_header_size);
+		return SUCCESS;
+	} else {
+		return d_file->read_block(this, blk);
 	}
 }
 
