@@ -11,6 +11,7 @@
 #include <string>
 #include <list>
 #include <dirent.h>
+#include <sys/stat.h>
 
 namespace sio {
 
@@ -26,6 +27,7 @@ bool remove_file(const std::string &path);
 
 int list_file(const std::string &pathname, std::list<std::string> & files, unsigned char filter = DT_REG);
 
+int make_dir(const std::string &pathname, int t_mode = S_IRWXU);
 }
 ;
 

@@ -8,6 +8,8 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <dirent.h>
+#include <errno.h>
+#include <sys/types.h>
 #include "sio.h"
 #include "../sdb_def.h"
 
@@ -41,6 +43,33 @@ int list_file(const std::string &pathname, std::list<std::string> & files,
 		while (ep = readdir(dp)) {
 			if (ep->d_type == filter) {
 				files.push_back(std::string(ep->d_name, ep->d_reclen));
+			}
+		}
+		return sdb::SUCCESS;
+	} else {
+		return sdb::FAILURE;
+	}
+}
+
+int make_dir(const std::string &pathname, int t_mode) {
+	int status = 0;
+	std::string tmp = pathname;
+	int found = 0, pos = 1;
+	if (tmp.find('/') == 0) {
+		while ((found = tmp.find('/', pos)) != std::string::npos) {
+			status = mkdir(tmp.substr(0, found).c_str(), t_mode);
+			pos = found + 1;
+			if (status != 0 && errno == EEXIST) {
+				continue;
+			} else {
+				return sdb::FAILURE;
+			}
+		}
+
+		if (pathname.find_last_of('/') != pathname.length() - 1) {
+			status = mkdir(tmp.c_str(), t_mode);
+			if (status != 0 && errno != EEXIST) {
+				return sdb::FAILURE;
 			}
 		}
 		return sdb::SUCCESS;

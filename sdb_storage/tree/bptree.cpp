@@ -650,7 +650,7 @@ int bptree::assign_page(page &p) {
 		//TODO assign a new seg id
 		unsigned long seg_id = 0x7a7a7a7a7a7a7a7a;
 		index_segment seg(seg_id);
-		if (root_seg->d_file->assgin_segment(seg) == sdb::SUCCESS) {
+		if (root_seg->d_file->assign_segment(seg) == sdb::SUCCESS) {
 			auto it = seg_map.insert(
 					std::pair<unsigned long, index_segment>(seg_id, seg));
 			curr_seg = &(*it.first).second;

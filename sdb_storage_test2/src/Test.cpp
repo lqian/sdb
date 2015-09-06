@@ -11,6 +11,7 @@
 #include "enginee/field_value.h"
 #include "enginee/sys_seg.h"
 #include "enginee/seg_mgr.h"
+#include "enginee/table.h"
 
 using namespace std;
 using namespace common;
@@ -40,7 +41,7 @@ void segment_basic_test() {
 	sdb::storage::data_file df1(2L, path);
 	ASSERT(df1.open() == SUCCESS);
 	seg1.set_length(sdb::storage::M_64);
-	ASSERT(df1.assgin_segment(seg1) == SUCCESS);
+	ASSERT(df1.assign_segment(seg1) == SUCCESS);
 	df1.close();
 
 	data_file df2(2L, path);
@@ -63,7 +64,7 @@ void test_delete_segment() {
 	segment seg(4L);
 	seg.set_offset(1024);
 	seg.set_length(M_64);
-	ASSERT(df.assgin_segment(seg) == SUCCESS);
+	ASSERT(df.assign_segment(seg) == SUCCESS);
 
 	ASSERT(seg.get_offset() == 0);
 	ASSERT((*seg.get_file()) == df);
@@ -83,7 +84,7 @@ void test_update_segment() {
 	segment seg_w(4L);
 	seg_w.set_offset(1024);
 	seg_w.set_length(M_64);
-	ASSERT(df.assgin_segment(seg_w) == SUCCESS);
+	ASSERT(df.assign_segment(seg_w) == SUCCESS);
 	ASSERT(seg_w.get_offset() == 0);
 	ASSERT((*seg_w.get_file()) == df);
 
@@ -92,7 +93,7 @@ void test_update_segment() {
 
 	const char * pc = path.c_str();
 	seg_w.update(0, pc, 0, path.length());
-	df.update_segment(seg_w);
+	df.flush_segment(seg_w);
 	df.close();
 
 	//re-open the data file and read  the segment content
@@ -196,7 +197,7 @@ void test_block_write() {
 	seg.set_block_size(sdb::storage::K_4);
 	segment seg_r(seg);
 
-	df.assgin_segment(seg);
+	df.assign_segment(seg);
 
 	seg.assign_content_buffer();
 	seg.assign_block(b1);
@@ -351,7 +352,6 @@ void test_sys_seg() {
 
 	ASSERT(seg.delete_row(SCHEMA_OBJ, "schema_name", fv1) == 0);
 	seg.flush();
-
 }
 
 void test_seg_mgr() {
@@ -360,21 +360,96 @@ void test_seg_mgr() {
 
 	LOCAL_SEG_MGR.add_datafile_paths("/tmp/dir1,/tmp/dir2");
 	LOCAL_SEG_MGR.add_datafile_paths("/tmp/dir3,/tmp/dir4");
-
+	LOCAL_SEG_MGR.remove_files();
+	LOCAL_SEG_MGR.set_seg_assign_length(M_1);
 	LOCAL_SEG_MGR.load();
 
 	data_file *pdf = nullptr;
-	ASSERT(LOCAL_SEG_MGR.assign_data_file(pdf) == sdb::SUCCESS);
+//	ASSERT(LOCAL_SEG_MGR.assign_data_file(pdf) == sdb::SUCCESS);
 
-	data_file *f = LOCAL_SEG_MGR.find_data_file(0L);
-	std::cout<< f->get_path() <<" " << f <<  std::endl;
+//	data_file *df1 = new data_file;
+//	data_file *df2 = new data_file;
+//	data_file *df3 = new data_file;
+//	ASSERT(LOCAL_SEG_MGR.assign_data_file(df1) == sdb::SUCCESS);
+//	ASSERT(LOCAL_SEG_MGR.assign_data_file(df2) == sdb::SUCCESS);
+//	ASSERT(LOCAL_SEG_MGR.assign_data_file(df3) == sdb::SUCCESS);
 
-	data_file *df1 = new data_file;
-	data_file *df2 = new data_file;
-	data_file *df3 = new data_file;
-	ASSERT(LOCAL_SEG_MGR.assign_data_file(df1) == sdb::SUCCESS);
-	ASSERT(LOCAL_SEG_MGR.assign_data_file(df2) == sdb::SUCCESS);
-	ASSERT(LOCAL_SEG_MGR.assign_data_file(df3) == sdb::SUCCESS);
+	segment * seg1 = new segment;
+	segment * seg2 = new segment;
+	segment * seg3 = new segment;
+	segment * seg4 = new segment;
+	ASSERT(LOCAL_SEG_MGR.assign_segment(seg1) == sdb::SUCCESS);
+	ASSERT(LOCAL_SEG_MGR.assign_segment(seg2) == sdb::SUCCESS);
+	ASSERT(LOCAL_SEG_MGR.assign_segment(seg3) == sdb::SUCCESS);
+	ASSERT(LOCAL_SEG_MGR.assign_segment(seg4) == sdb::SUCCESS);
+
+	data_file *f = LOCAL_SEG_MGR.find_data_file(1L);
+	ASSERT(f != nullptr && f->get_id() == 1L);
+
+	LOCAL_SEG_MGR.close();
+	LOCAL_SEG_MGR.clean();
+}
+
+void test_table() {
+	using namespace sdb::enginee;
+	using namespace std;
+
+	LOCAL_SEG_MGR.add_datafile_paths("/tmp/dir1,/tmp/dir2");
+	LOCAL_SEG_MGR.add_datafile_paths("/tmp/dir3,/tmp/dir4");
+	LOCAL_SEG_MGR.set_seg_assign_length(M_1);
+	LOCAL_SEG_MGR.load();
+
+	table_desc td("demo_table", "db1", "comment for tab1");
+	field_desc fd1("col1", int_type, "comment for field desc 1", false), fd2(
+			"col2", varchar_type, 64, "comment for field desc 2", false), fd3(
+			"col3", long_type, "comment for field desc 3", false);
+
+	td.add_field_desc(fd1);
+	td.add_field_desc(fd2);
+	td.add_field_desc(fd3);
+
+	field_value fv1, fv2, fv3;
+	fv1.set_int(20150618);
+	fv2.set_string(fd2.get_comment());
+	fv3.set_long(1651L);
+
+	row_store rs(&td);
+	rs.set_field_value(fd1, fv1);
+	rs.set_field_value(fd2, fv2);
+	rs.set_field_value(fd3, fv3);
+
+	char_buffer row_buff(128);
+	rs.write_to(row_buff);
+	segment *seg = LOCAL_SEG_MGR.find_segment(1L);
+	table demo_table(seg, seg, &td);
+	demo_table.set_seg_mgr(&LOCAL_SEG_MGR);
+	demo_table.open();
+
+	int total_rows = 100000;
+	for (int i = 0; i < total_rows; i++) {
+		demo_table.add_row(rs);
+	}
+	demo_table.flush();
+
+	demo_table.head();
+	int j = 0;
+	while (demo_table.has_next_row()) {
+		row_buff.reset();
+		demo_table.next_row(row_buff);
+		j++;
+	}
+	ASSERT(j == total_rows);
+
+	demo_table.tail();
+	while (demo_table.has_pre_row()) {
+		row_buff.reset();
+		demo_table.pre_row(row_buff);
+		j--;
+	}
+	ASSERT(j == 0);
+
+	LOCAL_SEG_MGR.close();
+
 }
 
 void runSuite() {
@@ -393,6 +468,7 @@ void runSuite() {
 	s.push_back(CUTE(row_store_test));
 	s.push_back(CUTE(test_sys_seg));
 	s.push_back(CUTE(test_seg_mgr));
+	s.push_back(CUTE(test_table));
 
 	cute::ide_listener lis;
 	cute::makeRunner(lis)(s, "storage test suite");

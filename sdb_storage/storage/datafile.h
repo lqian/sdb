@@ -39,6 +39,12 @@ const char segment_deleted = 0xff;
 const char segment_alive = 0x01;
 const short block_space_reversed_for_update = 20;
 
+const int M_1 = 1048576;
+const int M_2 = 2097152;
+const int M_4 = 4194304;
+const int M_8 = 8388608;
+const int M_16 = 16777216;
+const int M_32 = 33554432;
 const int M_64 = 67108864;
 const int M_128 = 134217728;
 const int M_256 = 268435456;
@@ -115,7 +121,7 @@ private:
 	std::fstream fs;
 	bool opened = false;
 	bool closed = false;
-	unsigned int length;
+	unsigned int length = 0; // content length of data file, excludes data file head length
 	unsigned int last_seg_offset = 0;
 
 public:
@@ -153,9 +159,9 @@ public:
 	/**
 	 * assign disk space for a new segment, especially, the segment is empty
 	 */
-	int assgin_segment(segment & seg);
+	int assign_segment(segment & seg);
 
-	int assgin_segment(segment * seg);
+	int assign_segment(segment * seg);
 
 	/**
 	 * write a in-memory segment to disk, both segment head and segment content
@@ -170,14 +176,16 @@ public:
 	/**
 	 * update a segment head information and entire content buffer to current data file.
 	 */
-	int update_segment(segment & seg);
+	int flush_segment(segment & seg);
+
+	int flush_segment(segment * seg);
 
 	int seek_segment(const segment &seg);
 
 	/**
 	 * update a segment head information and apart content buffer to current data file.
 	 */
-	int update_segment(segment & seg, int offset, int length);
+	int flush_segment(segment & seg, int offset, int length);
 
 	int write_block(segment & seg, data_block &blk,
 			bool update_seg_head = true);
@@ -197,12 +205,20 @@ public:
 	 */
 	void skip_segment(segment & seg);
 
-	/**
-	 * read a segment content from current position of the data file
+	/*
+	 * read a segment content from the data file, which segment with specified offset
 	 */
 	int fetch_segment(segment & seg);
 
+	/*
+	 * read a segment content from the data file, which segment with specified offset
+	 */
 	int fetch_segment(segment * seg);
+
+	/*
+	 * from current position, read segment content;
+	 */
+	int next_segment(segment *seg);
 
 	int fetch_segment_head(segment & seg);
 
@@ -242,14 +258,14 @@ class segment {
 protected:
 	int magic = segment_magic;
 	unsigned long id; /* unique id for a segment */
-	unsigned offset; /* offset position in a data file behind head */
+	unsigned int offset; /* offset position in a data file behind head, includes segment head */
 	short status = segment_alive;
-	int length; /* total length of the segment, include header size*/
+	int length = M_64; /* total length of the segment, include header size*/
 	short seg_type = data_segment_type;
 
-	time_t create_time;
-	time_t assign_time;
-	time_t update_time;
+	time_t create_time = 0;
+	time_t assign_time = 0;
+	time_t update_time = 0;
 
 	data_file * d_file = nullptr;
 
@@ -376,16 +392,40 @@ public:
 	}
 
 	inline bool has_pre_seg() {
-		return pre_seg_offset > 0
+		return pre_seg_offset > 0 || pre_seg_id
 				|| ((span_dfile_flag >> PRE_SEG_SPAN_DFILE_BIT) & 1) == 1;
 	}
 
 	inline bool has_nex_seg() {
-		return next_seg_offset > 0
+		return next_seg_offset > 0 || next_seg_id
 				|| ((span_dfile_flag >> NEXT_SEG_SPAN_DFILE_BIT) & 1) == 1;
 	}
 
-	int next_seg(segment & seg) {
+	inline void set_next_seg(segment * seg) {
+		next_seg_id = seg->id;
+		next_seg_offset = seg->offset;
+		seg->pre_seg_id = id;
+		seg->pre_seg_offset = offset;
+
+		if (d_file->id != seg->d_file->id) {
+			span_dfile_flag |= (1 << NEXT_SEG_SPAN_DFILE_BIT);
+			seg->span_dfile_flag |= (1 << PRE_SEG_SPAN_DFILE_BIT);
+		}
+	}
+
+	inline void set_pre_seg(segment * seg) {
+		pre_seg_id = seg->id;
+		pre_seg_offset = seg->offset;
+		seg->next_seg_id = id;
+		seg->next_seg_offset = offset;
+
+		if (d_file->id != seg->d_file->id) {
+			span_dfile_flag |= (1 << PRE_SEG_SPAN_DFILE_BIT);
+			seg->span_dfile_flag |= (1 << NEXT_SEG_SPAN_DFILE_BIT);
+		}
+	}
+
+	inline int next_seg(segment & seg) {
 		if (this->d_file == nullptr) {
 			//ignore this case
 		} else if (d_file->id != pre_seg_dfile_id) {
@@ -404,7 +444,7 @@ public:
 		return sdb::FAILURE;
 	}
 
-	int next_seg(segment * seg) {
+	inline int next_seg(segment * seg) {
 		if (this->d_file == nullptr) {
 			//ignore this case
 		} else if (d_file->id != pre_seg_dfile_id) {
@@ -538,6 +578,10 @@ public:
 
 	inline bool has_buffer() const {
 		return content_buffer != nullptr;
+	}
+
+	inline bool has_assigned() const {
+		return assign_time > 0 && content_buffer != nullptr;
 	}
 
 	inline time_t get_update_time() const {
@@ -751,6 +795,9 @@ struct mem_data_block: data_block {
 	vector<unsigned short> off_tbl;
 	short free_perct = 100;
 
+	/*
+	 * maybe the offset table contains deleted row
+	 */
 	const int row_count() {
 		return off_tbl.size();
 	}

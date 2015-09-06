@@ -258,7 +258,7 @@ int sys_seg::initialize() {
 		sys_df.open();
 
 		//assign the first page for system table desc
-		sys_df.assgin_segment(*this);
+		sys_df.assign_segment(*this);
 
 		mem_data_block fst_blk;
 		assign_block(fst_blk);
