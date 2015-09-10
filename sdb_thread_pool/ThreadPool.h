@@ -17,6 +17,8 @@
 #include <atomic>
 #include <condition_variable>
 
+#define DEFAULT_QUEUE 1024;
+
 namespace sdb {
 namespace common {
 
@@ -46,7 +48,7 @@ private:
 	void stopping();
 
 public:
-	TaskQueue(int s):max_task_num(s), stopping_waiting(false) {
+	TaskQueue(int s=DEFAULT_QUEUE):max_task_num(s), stopping_waiting(false) {
 	}
 
 	// insert a function to the first of deque until success or throw exception
@@ -96,14 +98,15 @@ private:
 	bool terminated;
 	long lockTimeout;
 
-	void init_thread_workers();
 
 	void execute();
 
 public:
+	ThreadPool(){}
 	ThreadPool(int __coreSize, int __maxTask);
 	ThreadPool(int __coreSize, int __maxTask, long __timeout);
 	~ThreadPool();
+	void init_thread_workers();
 	void push_back(Runnable & r);
 	bool push_back(Runnable & r, const long milliseconds);
 	void insert(Runnable & r);

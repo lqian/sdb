@@ -482,7 +482,6 @@ segment::segment() {
 	time(&create_time);
 	update_time = create_time;
 	block_size = K_4 * kilo_byte;
-	length = M_64;
 }
 segment::segment(unsigned long int _id) :
 		id(_id) {

@@ -260,7 +260,7 @@ protected:
 	unsigned long id; /* unique id for a segment */
 	unsigned int offset; /* offset position in a data file behind head, includes segment head */
 	short status = segment_alive;
-	int length = M_64; /* total length of the segment, include header size*/
+	int length = 0; /* total length of the segment, include header size*/
 	short seg_type = data_segment_type;
 
 	time_t create_time = 0;
@@ -361,6 +361,10 @@ public:
 			delete[] content_buffer;
 			content_buffer = nullptr;
 		}
+	}
+
+	inline bool no_length() {
+		return length == 0;
 	}
 
 	inline unsigned int last_block_off() {

@@ -361,7 +361,7 @@ void test_seg_mgr() {
 	LOCAL_SEG_MGR.add_datafile_paths("/tmp/dir1,/tmp/dir2");
 	LOCAL_SEG_MGR.add_datafile_paths("/tmp/dir3,/tmp/dir4");
 	LOCAL_SEG_MGR.remove_files();
-	LOCAL_SEG_MGR.set_seg_assign_length(M_1);
+	LOCAL_SEG_MGR.set_seg_default_length(M_1);
 	LOCAL_SEG_MGR.load();
 
 	data_file *pdf = nullptr;
@@ -396,7 +396,7 @@ void test_table() {
 
 	LOCAL_SEG_MGR.add_datafile_paths("/tmp/dir1,/tmp/dir2");
 	LOCAL_SEG_MGR.add_datafile_paths("/tmp/dir3,/tmp/dir4");
-	LOCAL_SEG_MGR.set_seg_assign_length(M_1);
+	LOCAL_SEG_MGR.set_seg_default_length(M_1);
 	LOCAL_SEG_MGR.load();
 
 	table_desc td("demo_table", "db1", "comment for tab1");
