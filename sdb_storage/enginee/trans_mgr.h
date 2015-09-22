@@ -75,7 +75,7 @@ struct data_item_ref {
 };
 
 struct action {
-	short seq; // maybe
+	unsigned short seq; // maybe
 	action_op op;
 	data_item_ref * di;  // data item
 	// writing data and length

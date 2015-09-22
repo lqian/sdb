@@ -380,7 +380,7 @@ void data_file::remove() {
 	sio::remove_file(full_path);
 }
 
-void data_file::fill_head_to_buff(common::char_buffer & buff) {
+void data_file::fill_head_to_buff(char_buffer & buff) {
 	// THE ORDER MUST NOT CHANGE
 	buff << data_file_magic << id << length << create_time << attach_time
 			<< update_time << version << free_perct;
