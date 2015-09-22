@@ -75,6 +75,20 @@ segment * seg_mgr::find_segment(ulong id) {
 	return it != seg_map.end() ? it->second : nullptr;
 }
 
+int seg_mgr::get_row(ulong seg_id, uint blk_off, int idx, char_buffer & buff) {
+	int r = sdb::FAILURE;
+	segment * seg = find_segment(seg_id);
+	if (seg != nullptr) {
+		mem_data_block blk;
+		blk.offset = blk_off;
+		int r = seg->read_block(blk);
+		if (r) {
+			r = blk.get_row_by_idx(idx, buff);
+		}
+	}
+	return r;
+}
+
 int seg_mgr::do_load(const string & pathname) {
 	list<string> files;
 	string fullname;

@@ -58,6 +58,8 @@ public:
 
 	segment * find_segment(ulong id);
 
+	int get_row(ulong seg_id, uint blk_off, int idx, char_buffer & buff);
+
 	inline void set_swap_police(swap_policy & sp) {
 		this->sp = sp;
 	}
