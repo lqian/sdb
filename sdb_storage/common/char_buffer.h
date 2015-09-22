@@ -8,14 +8,14 @@
 #ifndef CHAR_BUFFER_H
 #define CHAR_BUFFER_H
 
-#include <string.h>
-#include <time.h>
-//#include <iostream>
+#include <cstring>
+#include <ctime>
 #include "encoding.h"
 
 /**
  * a dynamic char buffer that push/pop bool, int, long, float, double, string, char array
  */
+namespace sdb {
 namespace common {
 
 using namespace std;
@@ -546,6 +546,7 @@ protected:
 	}
 }
 ;
+}
 }
 
 #endif

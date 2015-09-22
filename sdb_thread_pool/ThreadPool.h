@@ -17,7 +17,7 @@
 #include <atomic>
 #include <condition_variable>
 
-#define DEFAULT_QUEUE 1024;
+#define DEFAULT_QUEUE 1024
 
 namespace sdb {
 namespace common {

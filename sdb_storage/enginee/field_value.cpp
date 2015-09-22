@@ -96,12 +96,12 @@ void field_value::set_string(const string & val) {
 	memcpy(value, val.c_str(), len);
 }
 
-bool field_value::read_buffer(common::char_buffer * buff) {
+bool field_value::read_buffer(char_buffer * buff) {
 	value = buff->pop_chars(len);
 	return len > 0;
 }
 
-void field_value::fill_buffer(common::char_buffer * buff) {
+void field_value::fill_buffer(char_buffer * buff) {
 	buff->push_back(value, len);
 }
 

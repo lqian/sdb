@@ -16,10 +16,14 @@
 #include <set>
 
 #include "../sdb_def.h"
+#include "../common/char_buffer.h"
 #include "ThreadPool.h"
 
 namespace sdb {
 namespace enginee {
+
+using namespace common;
+using namespace sdb::common;
 
 class trans_task;
 class trans_mgr;
@@ -31,6 +35,9 @@ typedef unsigned int uint;
 typedef unsigned short ushort;
 typedef unsigned long int timestamp;
 typedef transaction * p_trans;
+
+
+
 
 /*
  * CAUTION: currently only support read_committed
@@ -68,9 +75,15 @@ struct data_item_ref {
 };
 
 struct action {
+	short seq; // maybe
 	action_op op;
-	data_item_ref * pdi;
+	data_item_ref * di;  // data item
+	// writing data and length
+	char * wd = nullptr;
+	int wl = 0;
 };
+
+
 
 class transaction {
 	friend class trans_mgr;
@@ -84,18 +97,17 @@ private:
 	bool auto_commit;
 	trans_mgr * tm = nullptr;
 
+	/*
+	 * restore data item modification by the transaction
+	 */
 	int restore();
-
-	int restart();
-
 	int read(data_item_ref * pdi);
 	int write(data_item_ref * pdi);
 	int write_log(data_item_ref *pdi);
 public:
 	void execute();
-	int commit();
-	int abort();
-	int rollback();
+	void commit();
+	void rollback();
 
 	void add_action(action_op op, data_item_ref * di);
 	void add_action(const action & a);
@@ -163,7 +175,7 @@ public:
 		t->execute();
 	}
 
-	virtual trans_task(p_trans _t) :
+	trans_task(p_trans _t) :
 			t(_t) {
 	}
 	virtual ~trans_task() {

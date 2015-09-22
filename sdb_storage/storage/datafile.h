@@ -22,7 +22,7 @@ namespace sdb {
 namespace storage {
 
 using namespace std;
-using namespace common;
+using namespace sdb::common;
 
 const unsigned int valid_data_file_id = 0;
 const unsigned int data_file_magic = 0x7A9E401C;

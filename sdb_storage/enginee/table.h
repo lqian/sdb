@@ -13,7 +13,7 @@
 
 namespace sdb {
 namespace enginee {
-using namespace common;
+using namespace sdb::common;
 
 /*
  * a table in DB term was create, SDB append table and column meta to system segment, and assign a new data segment

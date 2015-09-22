@@ -12,9 +12,10 @@
 #include "enginee/sys_seg.h"
 #include "enginee/seg_mgr.h"
 #include "enginee/table.h"
+#include "common/char_buffer.h"
 
 using namespace std;
-using namespace common;
+using namespace sdb::common;
 using namespace sdb::tree;
 using namespace sdb::storage;
 using namespace sdb::enginee;
@@ -173,7 +174,7 @@ void mem_block_test() {
 
 	// test write offset tbl
 	mdb.write_off_tbl();
-	common::char_buffer head_buff(mdb.buffer, 3 * sdb::storage::offset_bytes);
+	char_buffer head_buff(mdb.buffer, 3 * sdb::storage::offset_bytes);
 
 	unsigned short off0, off1, off2;
 	head_buff >> off0 >> off1 >> off2;

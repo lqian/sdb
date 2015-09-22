@@ -15,6 +15,7 @@
 
 namespace sdb {
 namespace enginee {
+using namespace sdb::common;
 
 const int ASSIGN_DATA_FILE_FAILURE = -0x400;
 const int ASSIGN_SEGMENT_FAILURE = -0x401;

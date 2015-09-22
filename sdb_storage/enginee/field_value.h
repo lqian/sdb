@@ -17,6 +17,7 @@ namespace sdb {
 namespace enginee {
 using namespace std;
 using namespace sdb::enginee;
+using namespace sdb::common;
 
 class row_store;
 

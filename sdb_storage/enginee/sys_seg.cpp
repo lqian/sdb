@@ -125,7 +125,7 @@ int sys_seg::update_row(const object_type & ot, const string & col_name,
 		}
 
 		// update row
-		common::char_buffer buff(1024);
+		char_buffer buff(1024);
 		rs.write_to(buff);
 		char *p = buff.data();
 		int rl = buff.size();
