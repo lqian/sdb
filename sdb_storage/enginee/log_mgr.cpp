@@ -231,23 +231,37 @@ int log_file::append(timestamp ts, action &a) {
 }
 
 int log_file::append(const char* buff, int len) {
-	flush_last_block();
 	log_stream.write(buff, len);
 	if (_log_mgr->sync == log_sync::immeidate) {
 		log_stream.flush();
 	}
 	if (log_stream.good()) {
-		renewal_last_block();
 		return sdb::SUCCESS;
 	} else {
 		return sdb::FAILURE;
 	}
-
 }
 
 int log_file::renewal_last_block() {
-	int r = sdb::FAILURE;
-	return r;
+	last_blk._header.writing_entry_off = 0;
+	last_blk._header.remain_space = last_blk.length;
+	log_stream.seekp(ios_base::end);
+	long p = log_stream.tellp();
+	int d = (p - LOG_FILE_HEADER_LENGTH) % _header.block_size;
+	if (d != 0) {
+		log_stream.seekp(0 - d, ios_base::cur);
+	}
+	log_stream.write(block_buffer, _header.block_size);
+	return log_stream.good() ? sdb::SUCCESS : sdb::FAILURE;
+}
+
+int log_file::flush_last_block() {
+	log_stream.seekp(ios_base::end);
+	long p = log_stream.tellp();
+	int d = (p - LOG_FILE_HEADER_LENGTH) % _header.block_size;
+	log_stream.seekp(0 - d - _header.block_size, ios_base::cur);
+	log_stream.write(block_buffer, _header.block_size);
+	return log_stream.good() ? sdb::SUCCESS : sdb::FAILURE;
 }
 
 int log_file::init_file_header() {

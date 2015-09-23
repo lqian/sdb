@@ -33,7 +33,6 @@ const int DIRCTORY_ENTRY_LENGTH = 18;
 const int LOG_BLK_SPACE_NOT_ENOUGH = -0X500;
 const int OUTOF_ENTRY_INDEX = -0X501;
 
-
 class log_file;
 
 enum log_status {
@@ -85,7 +84,6 @@ public:
 	virtual ~log_mgr();
 };
 
-
 class log_block {
 	friend class log_file;
 	struct header {
@@ -120,7 +118,7 @@ public:
 	log_block(char *buff, int block_size = 4096);
 	log_block(const log_block & another);
 	log_block & operator=(const log_block & antoher);
-	bool operator==(const log_block & another)=delete;
+	bool operator==(const log_block & another) = delete;
 	~log_block();
 	int add_action(timestamp ts, action & a);
 	void head();
@@ -157,7 +155,6 @@ private:
 	log_block last_blk;  // the last log block for append log entry
 	char * block_buffer;
 	log_mgr * _log_mgr = nullptr;
-
 
 	int init_file_header();
 	int renewal_last_block();
