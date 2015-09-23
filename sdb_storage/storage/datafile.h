@@ -8,6 +8,7 @@
 #ifndef STORAGE_DATAFILE_H_
 #define STORAGE_DATAFILE_H_
 
+#include <cstring>
 #include <ctime>
 #include <string>
 #include <fstream>

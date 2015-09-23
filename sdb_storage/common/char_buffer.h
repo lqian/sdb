@@ -8,6 +8,7 @@
 #ifndef CHAR_BUFFER_H
 #define CHAR_BUFFER_H
 
+#include <string>
 #include <cstring>
 #include <ctime>
 #include "encoding.h"

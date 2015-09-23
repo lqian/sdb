@@ -30,10 +30,10 @@ class trans_mgr;
 class transaction;
 class comparator;
 
-typedef unsigned long int ulong;
+typedef unsigned long  ulong;
 typedef unsigned int uint;
 typedef unsigned short ushort;
-typedef unsigned long int timestamp;
+typedef unsigned long  timestamp;
 typedef transaction * p_trans;
 
 
@@ -77,7 +77,7 @@ struct data_item_ref {
 struct action {
 	unsigned short seq; // maybe
 	action_op op;
-	data_item_ref * di;  // data item
+	data_item_ref * di;  // data item ref
 	// writing data and length
 	char * wd = nullptr;
 	int wl = 0;

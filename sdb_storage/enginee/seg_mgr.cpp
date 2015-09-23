@@ -310,7 +310,7 @@ void seg_mgr::set_datafile_paths(const string & paths) {
 	add_datafile_paths(paths);
 }
 
-inline void seg_mgr::add_datafile_paths(const string & paths) {
+void seg_mgr::add_datafile_paths(const string & paths) {
 	std::size_t found = 0, pos = 0;
 	while ((found = paths.find(',', pos)) != std::string::npos) {
 		if (pos != found) {
