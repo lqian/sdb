@@ -13,6 +13,7 @@
 #include <map>
 #include "trans_mgr.h"
 #include "../common/char_buffer.h"
+#include "../common/sio.h"
 
 namespace sdb {
 namespace enginee {
@@ -22,12 +23,18 @@ using namespace sdb::common;
 const string CHECKPOINT_FILE_SUFFIX = ".chk";
 const string LOG_FILE_SUFFIX = ".log";
 
+const int LOG_FILE_MAGIC = 0x7FA9C83D;
+const int LOG_BLOCK_MAGIC = 0xF79A8CD3;
+
 const int LOG_FILE_HEADER_LENGTH = 1024;
-const int BLOCK_HEADER_LENGTH = 24;
+const int LOG_BLOCK_HEADER_LENGTH = 24;
 const int DIRCTORY_ENTRY_LENGTH = 18;
 
 const int LOG_BLK_SPACE_NOT_ENOUGH = -0X500;
 const int OUTOF_ENTRY_INDEX = -0X501;
+
+
+class log_file;
 
 enum log_status {
 	initialized = 0, active, opened, closed
@@ -48,6 +55,7 @@ public:
 };
 
 class log_mgr {
+	friend class log_file;
 private:
 	log_sync sync = log_sync::immeidate;
 	string path;  // log directory that contains log file
@@ -76,6 +84,8 @@ public:
 	log_mgr();
 	virtual ~log_mgr();
 };
+
+
 class log_block {
 	friend class log_file;
 	struct header {
@@ -91,10 +101,10 @@ class log_block {
 	};
 
 	struct dir_entry {
-		timestamp ts; // 0 -7
-		unsigned short seq; // 8-9
-		unsigned int offset; // a -b c d
-		unsigned int length; // e f 10 11
+		timestamp ts;
+		unsigned short seq;
+		unsigned int offset;
+		unsigned int length;
 
 		void write_to(char_buffer & buff);
 		void read_from(char_buffer & buff);
@@ -121,36 +131,55 @@ public:
 	void next_entry(char_buffer & buff);
 	int get_entry(int idx, char_buffer & buff);
 	int count_entry();
+
+	void set_block_size(const int block_size);
+	void assign_block_buffer();
+	void ref_buffer(char * buff, int len);
+	void write_to(char * buff);
 };
 
 class log_file {
 	struct header {
-		unsigned int magic = 0x7FA9C83D;
+		unsigned int magic = LOG_FILE_MAGIC;
+		int block_size = 4096;
+		bool active;
+
+		void write_to(char_buffer & buff);
+		void read_from(char_buffer & buff);
+		bool is_valid();
 	};
 private:
-	bool active;
 	bool initialized = false;
 	string pathname;
 	fstream log_stream;
 	header _header;
-	int block_size = 4096;
 	int checked_offset = 0;
-	int initialize();
+	log_block last_blk;  // the last log block for append log entry
+	char * block_buffer;
+	log_mgr * _log_mgr = nullptr;
+
+
+	int init_file_header();
+	int renewal_last_block();
+	int flush_last_block();
+
+	/*
+	 * append buffer that contains several log blocks. must flush the last log block
+	 * before append those blocks
+	 */
+	int append(const char * buff, int len);
 public:
-	log_file();
+	log_file(const string& fn);
 	log_file(const log_file & another) = delete;
 	log_file(const log_file && another) = delete;
 	~log_file();
 
+	void set_log_mgr(log_mgr * lm);
 	int open();
-	int flush();
+
 	int close();
 
 	int append(timestamp ts, action& a);
-	int append(char *buff, int len);
-
-	int assign_log_block(log_block & blk);
-	int write();
 
 	bool has_next_block();
 	int next_block(char_buffer & buff);

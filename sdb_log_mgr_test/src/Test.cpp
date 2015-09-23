@@ -9,6 +9,7 @@ using namespace sdb::common;
 
 void log_block_test() {
 	log_block lb;
+	lb.assign_block_buffer();
 	timestamp ts = 100L;
 	action a;
 	a.wl = 35;

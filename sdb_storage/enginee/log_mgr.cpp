@@ -10,8 +10,7 @@
 namespace sdb {
 namespace enginee {
 log_block::log_block(int block_size) {
-	this->length = block_size - BLOCK_HEADER_LENGTH;
-	this->buffer = new char[length];
+	this->length = block_size - LOG_BLOCK_HEADER_LENGTH;
 	this->_header.remain_space = length;
 }
 
@@ -150,6 +149,124 @@ int log_block::add_action(timestamp ts, action & a) {
 
 int log_block::count_entry() {
 	return _header.writing_entry_off / DIRCTORY_ENTRY_LENGTH;
+}
+
+void log_block::assign_block_buffer() {
+	buffer = new char[length];
+}
+
+void log_block::set_block_size(int bs) {
+	this->length = bs - LOG_BLOCK_HEADER_LENGTH;
+}
+
+void log_block::ref_buffer(char *buff, int len) {
+	ref_flag = true;
+	char_buffer head(buff, LOG_BLOCK_HEADER_LENGTH, true);
+	_header.read_from(head);
+	buffer = buff + LOG_BLOCK_HEADER_LENGTH;
+	length = len - LOG_BLOCK_HEADER_LENGTH;
+}
+
+log_file::log_file(const string & fn) :
+		pathname(fn), active(false), initialized(false) {
+	block_buffer = new char[_header.block_size];
+}
+log_file::~log_file() {
+	delete[] block_buffer;
+}
+
+int log_file::open() {
+	int r = sdb::FAILURE;
+	bool existed = sio::exist_file(pathname);
+	log_stream.open(pathname.c_str(),
+			ios_base::in | ios_base::out | ios_base::binary);
+	if (log_stream.is_open() && log_stream.good()) {
+		if (!existed) {
+			r = init_file_header();
+			_header.active = true;
+			last_blk.ref_buffer(block_buffer, _header.block_size);
+			last_blk._header.magic = LOG_BLOCK_MAGIC;
+		} else {
+			// file existed, must check it has the correct magic,
+			log_stream.seekg(ios_base::beg);
+			char_buffer buff(LOG_FILE_HEADER_LENGTH);
+			log_stream.read(buff.data(), LOG_FILE_HEADER_LENGTH);
+			buff.rewind();
+			_header.read_from(buff);
+
+			//read the last block from file if the stream is good and log file is active
+			if (_header.is_valid() && _header.active) {
+				log_stream.seekg(ios_base::end);
+				log_stream.seekg(0 - _header.block_size, ios_base::cur);
+				log_stream.read(block_buffer, _header.block_size);
+
+				if (log_stream.good()) {
+					last_blk.ref_buffer(block_buffer, _header.block_size);
+					initialized = true;
+				}
+			}
+		}
+		if (log_stream.good()) {
+			active = true;
+			r = sdb::SUCCESS;
+		}
+	}
+	return r;
+}
+
+// do not support span blocks
+int log_file::append(timestamp ts, action &a) {
+	int r = last_blk.add_action(ts, a);
+	if (r != LOG_BLK_SPACE_NOT_ENOUGH) {
+		if (_log_mgr->sync == log_sync::immeidate) {
+			flush_last_block();
+		}
+	} else if (_header.block_size - DIRCTORY_ENTRY_LENGTH
+			- LOG_BLOCK_HEADER_LENGTH > a.wl) {
+		// the data content less than empty block buffer size
+		flush_last_block();
+		renewal_last_block();
+		return last_blk.add_action(ts, a);
+	}
+}
+
+int log_file::append(const char* buff, int len) {
+	flush_last_block();
+	log_stream.write(buff, len);
+	if (_log_mgr->sync == log_sync::immeidate) {
+		log_stream.flush();
+	}
+	if (log_stream.good()) {
+		renewal_last_block();
+		return sdb::SUCCESS;
+	} else {
+		return sdb::FAILURE;
+	}
+
+}
+
+int log_file::renewal_last_block() {
+	int r = sdb::FAILURE;
+	return r;
+}
+
+int log_file::init_file_header() {
+	char_buffer buff(LOG_FILE_HEADER_LENGTH);
+	this->_header.write_to(buff);
+	buff.rewind();
+	log_stream.write(buff.data(), LOG_FILE_HEADER_LENGTH);
+	log_stream.flush();
+	return log_stream.good() ? sdb::SUCCESS : sdb::FAILURE;
+}
+
+bool log_file::header::is_valid() {
+	return magic == LOG_FILE_MAGIC;
+}
+void log_file::header::write_to(char_buffer & buff) {
+	buff << magic << block_size << active;
+}
+void log_file::header::read_from(char_buffer & buff) {
+	buff >> magic >> block_size >> active;
 }
 
 log_mgr::log_mgr() {
