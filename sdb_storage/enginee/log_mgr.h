@@ -85,6 +85,9 @@ class log_block {
 		unsigned int next_blk_off = 0;
 		unsigned int writing_entry_off = 0;
 		int remain_space = 0;
+
+		void write_to(char_buffer & buff);
+		void read_from(char_buffer & buff);
 	};
 
 	struct dir_entry {

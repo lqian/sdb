@@ -97,6 +97,16 @@ log_block::~log_block() {
 	}
 }
 
+void log_block::header::write_to(char_buffer & buff) {
+	buff << magic << offset << pre_blk_off << next_blk_off << writing_entry_off
+			<< remain_space;
+}
+
+void log_block::header::read_from(char_buffer & buff) {
+	buff >> magic >> offset >> pre_blk_off >> next_blk_off >> writing_entry_off
+			>> remain_space;
+}
+
 void log_block::dir_entry::write_to(char_buffer & buff) {
 	buff << ts << seq << offset << length;
 }
