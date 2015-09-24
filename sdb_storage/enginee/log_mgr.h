@@ -183,12 +183,14 @@ class log_file {
 
 private:
 	bool initialized = false;
+	bool opened = false;
 	string pathname;
 	std::fstream log_stream;
 	header _header;
 	int checked_offset = 0;
+	int read_blk_offset = LOG_FILE_HEADER_LENGTH;  //includes the log file header length
 	log_block last_blk;  // the last log block for append log entry
-	char * block_buffer;
+	char * write_buffer;
 	log_mgr * _log_mgr = nullptr;
 
 	int init_log_file();
@@ -209,20 +211,21 @@ public:
 
 	void set_log_mgr(log_mgr * lm);
 	int open();
-	int close();
+	bool is_open();
 
 	int append(timestamp ts, action& a);
 	int append_commit(timestamp ts);
 	int append_rollback(timestamp ts);
 
-	bool has_next_block();
-	int next_block(char_buffer & buff);
-
+	int next_block(char * buff);
 	int tail();
-	bool has_pre_block();
-	int pre_block(char_buffer & buff);
+	int pre_block(char * buff);
 
 	bool is_active();
+
+	int inactive();
+
+	void set_block_size(int bs);
 };
 
 class log_check_file {
