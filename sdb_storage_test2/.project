@@ -4,6 +4,7 @@
 	<comment></comment>
 	<projects>
 		<project>sdb_storage</project>
+		<project>sdb_thread_pool</project>
 	</projects>
 	<buildSpec>
 		<buildCommand>

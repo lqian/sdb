@@ -22,6 +22,7 @@
 							<tool id="cdt.managedbuild.tool.gnu.archiver.base.767035523" name="GCC Archiver" superClass="cdt.managedbuild.tool.gnu.archiver.base"/>
 							<tool id="cdt.managedbuild.tool.gnu.cpp.compiler.base.96486074" name="GCC C++ Compiler" superClass="cdt.managedbuild.tool.gnu.cpp.compiler.base">
 								<option id="gnu.cpp.compiler.option.include.paths.287287659" name="Include paths (-I)" superClass="gnu.cpp.compiler.option.include.paths" valueType="includePath">
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/sdb_thread_pool}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/cute}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/sdb_storage}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/sdb_storage/common}&quot;"/>
@@ -33,11 +34,12 @@
 								<option id="gnu.cpp.compiler.option.debugging.level.1867724815" name="Debug Level" superClass="gnu.cpp.compiler.option.debugging.level" value="gnu.cpp.compiler.debugging.level.max" valueType="enumerated"/>
 								<option id="gnu.cpp.compiler.option.dialect.std.1142764921" name="Language standard" superClass="gnu.cpp.compiler.option.dialect.std" value="gnu.cpp.compiler.dialect.default" valueType="enumerated"/>
 								<option id="gnu.cpp.compiler.option.dialect.flags.596690951" name="Other dialect flags" superClass="gnu.cpp.compiler.option.dialect.flags" value="-std=c++11" valueType="string"/>
-								<option id="gnu.cpp.compiler.option.other.other.1090583791" superClass="gnu.cpp.compiler.option.other.other" value="-pthread -c -fmessage-length=0" valueType="string"/>
+								<option id="gnu.cpp.compiler.option.other.other.1090583791" name="Other flags" superClass="gnu.cpp.compiler.option.other.other" value="-pthread -c -fmessage-length=0" valueType="string"/>
 								<inputType id="cdt.managedbuild.tool.gnu.cpp.compiler.input.1607153263" superClass="cdt.managedbuild.tool.gnu.cpp.compiler.input"/>
 							</tool>
 							<tool id="cdt.managedbuild.tool.gnu.c.compiler.base.1146879388" name="GCC C Compiler" superClass="cdt.managedbuild.tool.gnu.c.compiler.base">
 								<option id="gnu.c.compiler.option.include.paths.948351384" name="Include paths (-I)" superClass="gnu.c.compiler.option.include.paths" valueType="includePath">
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/sdb_thread_pool}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/cute}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/sdb_storage}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/sdb_storage/common}&quot;"/>
@@ -47,19 +49,20 @@
 								</option>
 								<option defaultValue="gnu.c.optimization.level.none" id="gnu.c.compiler.option.optimization.level.2061754469" name="Optimization Level" superClass="gnu.c.compiler.option.optimization.level" valueType="enumerated"/>
 								<option id="gnu.c.compiler.option.debugging.level.1286695678" name="Debug Level" superClass="gnu.c.compiler.option.debugging.level" value="gnu.c.debugging.level.max" valueType="enumerated"/>
+								<option id="gnu.c.compiler.option.dialect.std.987406531" superClass="gnu.c.compiler.option.dialect.std" value="gnu.c.compiler.dialect.default" valueType="enumerated"/>
 								<inputType id="cdt.managedbuild.tool.gnu.c.compiler.input.2099429834" superClass="cdt.managedbuild.tool.gnu.c.compiler.input"/>
 							</tool>
 							<tool id="cdt.managedbuild.tool.gnu.c.linker.base.466847579" name="GCC C Linker" superClass="cdt.managedbuild.tool.gnu.c.linker.base"/>
 							<tool id="cdt.managedbuild.tool.gnu.cpp.linker.base.1005873163" name="GCC C++ Linker" superClass="cdt.managedbuild.tool.gnu.cpp.linker.base">
 								<option id="gnu.cpp.link.option.libs.534722565" name="Libraries (-l)" superClass="gnu.cpp.link.option.libs" valueType="libs">
+									<listOptionValue builtIn="false" srcPrefixMapping="" srcRootPath="" value="sdb_thread_pool"/>
 									<listOptionValue builtIn="false" value="sdb_storage"/>
-									<listOptionValue builtIn="false" value="sdb_thread_pool"/>
 								</option>
 								<option id="gnu.cpp.link.option.paths.1916352252" name="Library search path (-L)" superClass="gnu.cpp.link.option.paths" valueType="libPaths">
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/sdb_storage/Debug}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/sdb_thread_pool/Debug}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/sdb_storage/Debug}&quot;"/>
 								</option>
-								<option id="gnu.cpp.link.option.flags.971403507" superClass="gnu.cpp.link.option.flags" value="-pthread" valueType="string"/>
+								<option id="gnu.cpp.link.option.flags.971403507" name="Linker flags" superClass="gnu.cpp.link.option.flags" value="-pthread" valueType="string"/>
 								<inputType id="cdt.managedbuild.tool.gnu.cpp.linker.input.1356764023" superClass="cdt.managedbuild.tool.gnu.cpp.linker.input">
 									<additionalInput kind="additionalinputdependency" paths="$(USER_OBJS)"/>
 									<additionalInput kind="additionalinput" paths="$(LIBS)"/>
@@ -67,6 +70,7 @@
 							</tool>
 							<tool id="cdt.managedbuild.tool.gnu.assembler.base.715694771" name="GCC Assembler" superClass="cdt.managedbuild.tool.gnu.assembler.base">
 								<option id="gnu.both.asm.option.include.paths.1668896204" name="Include paths (-I)" superClass="gnu.both.asm.option.include.paths" valueType="includePath">
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/sdb_thread_pool}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/cute}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/sdb_storage}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/sdb_storage/common}&quot;"/>
@@ -86,6 +90,13 @@
 						<entry flags="VALUE_WORKSPACE_PATH" kind="includePath" name="/sdb_storage"/>
 						<entry flags="VALUE_WORKSPACE_PATH" kind="libraryPath" name="/sdb_storage/Debug"/>
 						<entry flags="RESOLVED" kind="libraryFile" name="sdb_storage" srcPrefixMapping="" srcRootPath=""/>
+					</externalSetting>
+				</externalSettings>
+				<externalSettings containerId="sdb_thread_pool;" factoryId="org.eclipse.cdt.core.cfg.export.settings.sipplier">
+					<externalSetting>
+						<entry flags="VALUE_WORKSPACE_PATH" kind="includePath" name="/sdb_thread_pool"/>
+						<entry flags="VALUE_WORKSPACE_PATH" kind="libraryPath" name="/sdb_thread_pool/Debug"/>
+						<entry flags="RESOLVED" kind="libraryFile" name="sdb_thread_pool" srcPrefixMapping="" srcRootPath=""/>
 					</externalSetting>
 				</externalSettings>
 			</storageModule>
@@ -185,21 +196,6 @@
 	<storageModule moduleId="cdtBuildSystem" version="4.0.0">
 		<project id="sdb_storage_test2.cdt.managedbuild.target.macosx.exe.1688664270" name="Executable" projectType="cdt.managedbuild.target.macosx.exe"/>
 	</storageModule>
-	<storageModule moduleId="scannerConfiguration">
-		<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId=""/>
-		<scannerConfigBuildInfo instanceId="cdt.managedbuild.config.gnu.macosx.exe.debug.533569388;cdt.managedbuild.config.gnu.macosx.exe.debug.533569388.;cdt.managedbuild.tool.gnu.c.compiler.macosx.exe.debug.351785562;cdt.managedbuild.tool.gnu.c.compiler.input.1278098093">
-			<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId=""/>
-		</scannerConfigBuildInfo>
-		<scannerConfigBuildInfo instanceId="cdt.managedbuild.config.macosx.exe.release.204364685;cdt.managedbuild.config.macosx.exe.release.204364685.;cdt.managedbuild.tool.gnu.c.compiler.macosx.exe.release.1073721594;cdt.managedbuild.tool.gnu.c.compiler.input.1658160395">
-			<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId=""/>
-		</scannerConfigBuildInfo>
-		<scannerConfigBuildInfo instanceId="cdt.managedbuild.config.gnu.macosx.exe.debug.533569388;cdt.managedbuild.config.gnu.macosx.exe.debug.533569388.;cdt.managedbuild.tool.gnu.cpp.compiler.macosx.exe.debug.1500141600;cdt.managedbuild.tool.gnu.cpp.compiler.input.629435267">
-			<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId=""/>
-		</scannerConfigBuildInfo>
-		<scannerConfigBuildInfo instanceId="cdt.managedbuild.config.macosx.exe.release.204364685;cdt.managedbuild.config.macosx.exe.release.204364685.;cdt.managedbuild.tool.gnu.cpp.compiler.macosx.exe.release.842190151;cdt.managedbuild.tool.gnu.cpp.compiler.input.1372357568">
-			<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId=""/>
-		</scannerConfigBuildInfo>
-	</storageModule>
 	<storageModule moduleId="org.eclipse.cdt.core.LanguageSettingsProviders"/>
 	<storageModule moduleId="refreshScope" versionNumber="2">
 		<configuration configurationName="Debug">
@@ -208,5 +204,26 @@
 		<configuration configurationName="Release">
 			<resource resourceType="PROJECT" workspacePath="/sdb_storage_test2"/>
 		</configuration>
+	</storageModule>
+	<storageModule moduleId="scannerConfiguration">
+		<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId=""/>
+		<scannerConfigBuildInfo instanceId="cdt.managedbuild.config.gnu.macosx.exe.debug.533569388;cdt.managedbuild.config.gnu.macosx.exe.debug.533569388.;cdt.managedbuild.tool.gnu.c.compiler.macosx.exe.debug.351785562;cdt.managedbuild.tool.gnu.c.compiler.input.1278098093">
+			<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId=""/>
+		</scannerConfigBuildInfo>
+		<scannerConfigBuildInfo instanceId="cdt.managedbuild.config.macosx.exe.release.204364685;cdt.managedbuild.config.macosx.exe.release.204364685.;cdt.managedbuild.tool.gnu.c.compiler.macosx.exe.release.1073721594;cdt.managedbuild.tool.gnu.c.compiler.input.1658160395">
+			<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId=""/>
+		</scannerConfigBuildInfo>
+		<scannerConfigBuildInfo instanceId="cdt.managedbuild.config.gnu.macosx.exe.debug.533569388;cdt.managedbuild.config.gnu.macosx.exe.debug.533569388.;cdt.managedbuild.tool.gnu.cpp.compiler.base.96486074;cdt.managedbuild.tool.gnu.cpp.compiler.input.1607153263">
+			<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId=""/>
+		</scannerConfigBuildInfo>
+		<scannerConfigBuildInfo instanceId="cdt.managedbuild.config.gnu.macosx.exe.debug.533569388;cdt.managedbuild.config.gnu.macosx.exe.debug.533569388.;cdt.managedbuild.tool.gnu.cpp.compiler.macosx.exe.debug.1500141600;cdt.managedbuild.tool.gnu.cpp.compiler.input.629435267">
+			<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId=""/>
+		</scannerConfigBuildInfo>
+		<scannerConfigBuildInfo instanceId="cdt.managedbuild.config.macosx.exe.release.204364685;cdt.managedbuild.config.macosx.exe.release.204364685.;cdt.managedbuild.tool.gnu.cpp.compiler.macosx.exe.release.842190151;cdt.managedbuild.tool.gnu.cpp.compiler.input.1372357568">
+			<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId=""/>
+		</scannerConfigBuildInfo>
+		<scannerConfigBuildInfo instanceId="cdt.managedbuild.config.gnu.macosx.exe.debug.533569388;cdt.managedbuild.config.gnu.macosx.exe.debug.533569388.;cdt.managedbuild.tool.gnu.c.compiler.base.1146879388;cdt.managedbuild.tool.gnu.c.compiler.input.2099429834">
+			<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId=""/>
+		</scannerConfigBuildInfo>
 	</storageModule>
 </cproject>

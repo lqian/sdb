@@ -22,7 +22,7 @@ void log_block_test() {
 	ASSERT(lb.add_action(ts, b) == DIRCTORY_ENTRY_LENGTH * 1);
 	ASSERT(lb.add_commit(ts) == DIRCTORY_ENTRY_LENGTH * 2);
 
-	timestamp rts=1002L;
+	timestamp rts = 1002L;
 	ASSERT(lb.add_rollback(rts) == DIRCTORY_ENTRY_LENGTH * 3);
 
 	ASSERT(lb.count_entry() == 4);
@@ -49,12 +49,34 @@ void log_block_test() {
 	log_block::dir_entry e2 = lb.get_entry(2);
 	ASSERT(e2.get_type() == dir_entry_type::commit_item);
 	log_block::dir_entry e3 = lb.get_entry(3);
-	ASSERT(e3.get_type()== dir_entry_type::rollback_item);
+	ASSERT(e3.get_type() == dir_entry_type::rollback_item);
+}
+
+void log_file_test() {
+
+	log_mgr lmgr;
+
+	log_file lf("/tmp/a000001.log");
+	lf.set_log_mgr(&lmgr);
+	ASSERT(lf.open() == sdb::SUCCESS);
+
+	timestamp ts = 100L;
+	action a;
+	a.wl = 35;
+	a.wd = new char[35];
+	for (int i=0; i<34;i++) {
+		a.wd[i] = 0xff - i;
+	}
+	a.seq = 1;
+
+	lf.append(ts, a);
+
 }
 
 void runSuite() {
 	cute::suite s;
 	s.push_back(CUTE(log_block_test));
+	s.push_back(CUTE(log_file_test));
 	cute::ide_listener lis;
 	cute::makeRunner(lis)(s, "The Log Mgr Test Suite");
 }

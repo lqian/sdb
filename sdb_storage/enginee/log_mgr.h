@@ -8,6 +8,7 @@
 #ifndef LOG_MGR_H_
 #define LOG_MGR_H_
 
+#include <iostream>
 #include <cstring>
 #include <fstream>
 #include <map>
@@ -110,6 +111,7 @@ class log_block {
 
 		void write_to(char_buffer & buff);
 		void read_from(char_buffer & buff);
+
 	};
 
 private:
@@ -158,6 +160,7 @@ public:
 
 	int count_entry();
 	int remain();
+	void reset();
 
 	void set_block_size(const int block_size);
 	void assign_block_buffer();
@@ -179,14 +182,14 @@ class log_file {
 private:
 	bool initialized = false;
 	string pathname;
-	fstream log_stream;
+	std::fstream log_stream;
 	header _header;
 	int checked_offset = 0;
 	log_block last_blk;  // the last log block for append log entry
 	char * block_buffer;
 	log_mgr * _log_mgr = nullptr;
 
-	int init_file_header();
+	int init_log_file();
 	int renewal_last_block();
 	int flush_last_block();
 
