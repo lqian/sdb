@@ -20,21 +20,36 @@ void log_block_test() {
 	b.seq = 2;
 	ASSERT(lb.add_action(ts, a) == DIRCTORY_ENTRY_LENGTH * 0);
 	ASSERT(lb.add_action(ts, b) == DIRCTORY_ENTRY_LENGTH * 1);
+	ASSERT(lb.add_commit(ts) == DIRCTORY_ENTRY_LENGTH * 2);
 
-	ASSERT(lb.count_entry() == 2);
+	timestamp rts=1002L;
+	ASSERT(lb.add_rollback(rts) == DIRCTORY_ENTRY_LENGTH * 3);
 
-	char_buffer buff(1024);
+	ASSERT(lb.count_entry() == 4);
+
+	log_block::dir_entry e;
+	int size;
 	while (lb.has_next()) {
-		lb.next_entry(buff);
+		lb.next_entry(e);
+		if (e.get_type() == dir_entry_type::data_item) {
+			size += e.length;
+		}
 	}
-	ASSERT(buff.size() == 70);
+	ASSERT(size == 70);
 
 	lb.tail();
 	while (lb.has_pre()) {
-		lb.pre_entry(buff);
+		lb.pre_entry(e);
+		if (e.get_type() == dir_entry_type::data_item) {
+			size += e.length;
+		}
 	}
-	ASSERT(buff.size() == 140);
+	ASSERT(size == 140);
 
+	log_block::dir_entry e2 = lb.get_entry(2);
+	ASSERT(e2.get_type() == dir_entry_type::commit_item);
+	log_block::dir_entry e3 = lb.get_entry(3);
+	ASSERT(e3.get_type()== dir_entry_type::rollback_item);
 }
 
 void runSuite() {

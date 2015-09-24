@@ -23,6 +23,9 @@ using namespace sdb::common;
 const string CHECKPOINT_FILE_SUFFIX = ".chk";
 const string LOG_FILE_SUFFIX = ".log";
 
+const int COMMIT_DEFINE = 0xffffffff;
+const int ROLLBACK_DEFINE = 0xfffffffe;
+
 const int LOG_FILE_MAGIC = 0x7FA9C83D;
 const int LOG_BLOCK_MAGIC = 0xF79A8CD3;
 
@@ -32,6 +35,7 @@ const int DIRCTORY_ENTRY_LENGTH = 18;
 
 const int LOG_BLK_SPACE_NOT_ENOUGH = -0X500;
 const int OUTOF_ENTRY_INDEX = -0X501;
+const int DATA_LENGTH_TOO_LARGE = -0X502;
 
 class log_file;
 
@@ -43,9 +47,15 @@ enum log_sync {
 	immeidate, buffered, async
 };
 
+enum dir_entry_type {
+	unknown = -1, data_item, commit_item, rollback_item
+};
+
 class undo_buffer {
+
 private:
 	int capacity;
+
 public:
 	int log_action(timestamp ts, action & a);
 	int log_commit(timestamp ts);
@@ -55,6 +65,7 @@ public:
 
 class log_mgr {
 	friend class log_file;
+
 private:
 	log_sync sync = log_sync::immeidate;
 	string path;  // log directory that contains log file
@@ -62,6 +73,7 @@ private:
 	char * log_buffer;
 	int lb_cap = 1048576; // log buffer capacity
 	int log_file_max_size = 67108864;
+
 public:
 	int log_action(timestamp ts, action & a);
 	int log_commit(timestamp ts);
@@ -85,50 +97,67 @@ public:
 };
 
 class log_block {
+
 	friend class log_file;
+
 	struct header {
 		unsigned int magic = 0xF79A8CD3;
 		unsigned int offset = 0;
 		unsigned int pre_blk_off = 0;
 		unsigned int next_blk_off = 0;
 		unsigned int writing_entry_off = 0;
-		int remain_space = 0;
+		unsigned int writing_data_off = 0;
 
 		void write_to(char_buffer & buff);
 		void read_from(char_buffer & buff);
 	};
 
-	struct dir_entry {
-		timestamp ts;
-		unsigned short seq;
-		unsigned int offset;
-		unsigned int length;
-
-		void write_to(char_buffer & buff);
-		void read_from(char_buffer & buff);
-	};
 private:
 	bool ref_flag;
 	header _header;
 	char *buffer;
 	int length;
 	int read_entry_off = 0;
+
 public:
+
+	struct dir_entry {
+		timestamp ts;
+		unsigned short seq;
+		int offset;
+		unsigned int length = 0;
+
+		void write_to(char_buffer & buff);
+		void read_from(char_buffer & buff);
+
+		dir_entry_type get_type();
+		void as_commit();
+		void as_rollback();
+	};
+
 	log_block(int block_size = 4096);
 	log_block(char *buff, int block_size = 4096);
 	log_block(const log_block & another);
 	log_block & operator=(const log_block & antoher);
 	bool operator==(const log_block & another) = delete;
 	~log_block();
+
 	int add_action(timestamp ts, action & a);
+	int add_commit(timestamp ts);
+	int add_rollback(timestamp ts);
 	void head();
 	void tail();
 	bool has_next();
 	bool has_pre();
-	void pre_entry(char_buffer & buff);
-	void next_entry(char_buffer & buff);
-	int get_entry(int idx, char_buffer & buff);
+	void pre_entry(dir_entry & e);
+	void next_entry(dir_entry & e);
+	dir_entry get_entry(int idx);
+
+	int copy_data(int idx, char_buffer & buff);
+	void copy_data(const dir_entry & e, char_buffer & buff);
+
 	int count_entry();
+	int remain();
 
 	void set_block_size(const int block_size);
 	void assign_block_buffer();
@@ -146,6 +175,7 @@ class log_file {
 		void read_from(char_buffer & buff);
 		bool is_valid();
 	};
+
 private:
 	bool initialized = false;
 	string pathname;
@@ -165,6 +195,7 @@ private:
 	 * before append those blocks
 	 */
 	int append(const char * buff, int len);
+
 public:
 	log_file(const string& fn);
 	log_file(const log_file & another) = delete;
@@ -177,9 +208,16 @@ public:
 	int close();
 
 	int append(timestamp ts, action& a);
+	int append_commit(timestamp ts);
+	int append_rollback(timestamp ts);
 
 	bool has_next_block();
 	int next_block(char_buffer & buff);
+
+	int tail();
+	bool has_pre_block();
+	int pre_block(char_buffer & buff);
+
 	bool is_active();
 };
 

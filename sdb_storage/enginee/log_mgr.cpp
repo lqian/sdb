@@ -11,14 +11,14 @@ namespace sdb {
 namespace enginee {
 log_block::log_block(int block_size) {
 	this->length = block_size - LOG_BLOCK_HEADER_LENGTH;
-	this->_header.remain_space = length;
+	this->_header.writing_data_off = length;
 }
 
 log_block::log_block(char *buff, int length) {
 	this->length = length;
 	this->buffer = buff;
 	this->ref_flag = true;
-	this->_header.remain_space = length;
+	this->_header.writing_data_off = length;
 }
 
 log_block::log_block(const log_block & another) {
@@ -64,23 +64,27 @@ bool log_block::has_pre() {
 	return read_entry_off > 0;
 }
 
-void log_block::next_entry(char_buffer & buff) {
+void log_block::next_entry(dir_entry & e) {
 	char_buffer dir(buffer + read_entry_off, DIRCTORY_ENTRY_LENGTH, true);
-	dir_entry e;
 	e.read_from(dir);
-	buff.push_back(buffer + e.offset, e.length, false);
 	read_entry_off += DIRCTORY_ENTRY_LENGTH;
 }
 
-void log_block::pre_entry(char_buffer & buff) {
-	read_entry_off -= DIRCTORY_ENTRY_LENGTH;
-	char_buffer dir(buffer + read_entry_off, DIRCTORY_ENTRY_LENGTH, true);
+log_block::dir_entry log_block::get_entry(int idx) {
 	dir_entry e;
-	e.read_from(dir);
-	buff.push_back(buffer + e.offset, e.length, false);
+	int off = idx * DIRCTORY_ENTRY_LENGTH;
+	char_buffer buff(buffer + off, DIRCTORY_ENTRY_LENGTH, true);
+	e.read_from(buff);
+	return e;
 }
 
-int log_block::get_entry(int idx, char_buffer & buff) {
+void log_block::pre_entry(dir_entry & e) {
+	read_entry_off -= DIRCTORY_ENTRY_LENGTH;
+	char_buffer dir(buffer + read_entry_off, DIRCTORY_ENTRY_LENGTH, true);
+	e.read_from(dir);
+}
+
+int log_block::copy_data(int idx, char_buffer & buff) {
 	int ent_off = idx * DIRCTORY_ENTRY_LENGTH;
 	if (ent_off >= _header.writing_entry_off) {
 		return OUTOF_ENTRY_INDEX;
@@ -98,12 +102,12 @@ log_block::~log_block() {
 
 void log_block::header::write_to(char_buffer & buff) {
 	buff << magic << offset << pre_blk_off << next_blk_off << writing_entry_off
-			<< remain_space;
+			<< writing_data_off;
 }
 
 void log_block::header::read_from(char_buffer & buff) {
 	buff >> magic >> offset >> pre_blk_off >> next_blk_off >> writing_entry_off
-			>> remain_space;
+			>> writing_data_off;
 }
 
 void log_block::dir_entry::write_to(char_buffer & buff) {
@@ -114,25 +118,40 @@ void log_block::dir_entry::read_from(char_buffer & buff) {
 	buff >> ts >> seq >> offset >> length;
 }
 
+dir_entry_type log_block::dir_entry::get_type() {
+	if (length == 0) {
+		if (offset == COMMIT_DEFINE) {
+			return dir_entry_type::commit_item;
+		} else if (offset == ROLLBACK_DEFINE) {
+			return dir_entry_type::rollback_item;
+		} else {
+			return dir_entry_type::unknown;
+		}
+	} else {
+		return dir_entry_type::data_item;
+	}
+}
+
+void log_block::dir_entry::as_commit() {
+	length = 0;
+	offset = COMMIT_DEFINE;
+}
+
+void log_block::dir_entry::as_rollback() {
+	length = 0;
+	offset = ROLLBACK_DEFINE;
+}
+
 int log_block::add_action(timestamp ts, action & a) {
-	if (_header.remain_space >= a.wl + DIRCTORY_ENTRY_LENGTH) {
-		char_buffer buff(DIRCTORY_ENTRY_LENGTH);
+	if (remain() >= a.wl + DIRCTORY_ENTRY_LENGTH) {
 		int weo = _header.writing_entry_off;
 		dir_entry e;
 		e.ts = ts;
 		e.seq = a.seq;
 		e.length = a.wl;
-		if (weo == 0) {
-			e.offset = length - a.wl;
-		} else {
-			int leo = weo - DIRCTORY_ENTRY_LENGTH;
-			buff.push_back(buffer + leo, DIRCTORY_ENTRY_LENGTH, false);
-			dir_entry le;
-			buff.rewind();
-			le.read_from(buff);
-			e.offset = le.offset - a.wl;
-		}
-		buff.reset();
+		e.offset = _header.writing_data_off - a.wl;
+
+		char_buffer buff(DIRCTORY_ENTRY_LENGTH);
 		e.write_to(buff);
 
 		memcpy(buffer + weo, buff.data(), DIRCTORY_ENTRY_LENGTH);
@@ -140,15 +159,50 @@ int log_block::add_action(timestamp ts, action & a) {
 		memcpy(write_buffer, a.wd, a.wl);
 
 		_header.writing_entry_off += DIRCTORY_ENTRY_LENGTH;
-		_header.remain_space -= (a.wl + DIRCTORY_ENTRY_LENGTH);
+		_header.writing_data_off -= a.wl;
 		return weo;
 	} else {
 		return LOG_BLK_SPACE_NOT_ENOUGH;
 	}
 }
 
+int log_block::add_commit(timestamp ts) {
+	if (remain() >= DIRCTORY_ENTRY_LENGTH) {
+		dir_entry e;
+		e.ts = ts;
+		e.as_commit();
+		char_buffer buff(DIRCTORY_ENTRY_LENGTH);
+		e.write_to(buff);
+		int weo = _header.writing_entry_off;
+		memcpy(buffer + weo, buff.data(), DIRCTORY_ENTRY_LENGTH);
+		_header.writing_entry_off += DIRCTORY_ENTRY_LENGTH;
+		return weo;
+	} else {
+		return LOG_BLK_SPACE_NOT_ENOUGH;
+	}
+}
+
+int log_block::add_rollback(timestamp ts) {
+	if (remain() >= DIRCTORY_ENTRY_LENGTH) {
+		dir_entry e;
+		e.ts = ts;
+		e.as_rollback();
+		char_buffer buff(DIRCTORY_ENTRY_LENGTH);
+		e.write_to(buff);
+		int weo = _header.writing_entry_off;
+		memcpy(buffer + weo, buff.data(), DIRCTORY_ENTRY_LENGTH);
+		_header.writing_entry_off += DIRCTORY_ENTRY_LENGTH;
+		return weo;
+	} else {
+		return LOG_BLK_SPACE_NOT_ENOUGH;
+	}
+}
 int log_block::count_entry() {
 	return _header.writing_entry_off / DIRCTORY_ENTRY_LENGTH;
+}
+
+int log_block::remain() {
+	return _header.writing_data_off - _header.writing_entry_off;
 }
 
 void log_block::assign_block_buffer() {
@@ -168,7 +222,7 @@ void log_block::ref_buffer(char *buff, int len) {
 }
 
 log_file::log_file(const string & fn) :
-		pathname(fn), active(false), initialized(false) {
+		pathname(fn), initialized(false) {
 	block_buffer = new char[_header.block_size];
 }
 log_file::~log_file() {
@@ -207,14 +261,14 @@ int log_file::open() {
 			}
 		}
 		if (log_stream.good()) {
-			active = true;
+			_header.active = true;
 			r = sdb::SUCCESS;
 		}
 	}
 	return r;
 }
 
-// do not support span blocks
+// do not support span blocks currently
 int log_file::append(timestamp ts, action &a) {
 	int r = last_blk.add_action(ts, a);
 	if (r != LOG_BLK_SPACE_NOT_ENOUGH) {
@@ -226,11 +280,13 @@ int log_file::append(timestamp ts, action &a) {
 		// the data content less than empty block buffer size
 		flush_last_block();
 		renewal_last_block();
-		return last_blk.add_action(ts, a);
+		return append(ts, a);
+	} else {
+		return DATA_LENGTH_TOO_LARGE;
 	}
 }
-
 int log_file::append(const char* buff, int len) {
+	flush_last_block();
 	log_stream.write(buff, len);
 	if (_log_mgr->sync == log_sync::immeidate) {
 		log_stream.flush();
@@ -244,7 +300,9 @@ int log_file::append(const char* buff, int len) {
 
 int log_file::renewal_last_block() {
 	last_blk._header.writing_entry_off = 0;
-	last_blk._header.remain_space = last_blk.length;
+	last_blk._header.writing_data_off = last_blk.length;
+
+	//assign the empty block to the log file
 	log_stream.seekp(ios_base::end);
 	long p = log_stream.tellp();
 	int d = (p - LOG_FILE_HEADER_LENGTH) % _header.block_size;
@@ -260,6 +318,9 @@ int log_file::flush_last_block() {
 	long p = log_stream.tellp();
 	int d = (p - LOG_FILE_HEADER_LENGTH) % _header.block_size;
 	log_stream.seekp(0 - d - _header.block_size, ios_base::cur);
+
+	char_buffer buff(block_buffer,_header.block_size,true);
+	last_blk._header.write_to(buff);
 	log_stream.write(block_buffer, _header.block_size);
 	return log_stream.good() ? sdb::SUCCESS : sdb::FAILURE;
 }

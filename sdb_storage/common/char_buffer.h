@@ -35,7 +35,8 @@ private:
 
 public:
 
-	char_buffer() {}
+	char_buffer() {
+	}
 
 	char_buffer(const char * buff, int size) {
 		cap = size;
@@ -149,11 +150,11 @@ public:
 	}
 
 	char_buffer * reset() {
-			push_pos = 0;
-			pop_pos = 0;
-			b_size = 0;
-			return this;
-		}
+		push_pos = 0;
+		pop_pos = 0;
+		b_size = 0;
+		return this;
+	}
 
 	/**
 	 * skip off size of chars from current pop position
@@ -164,7 +165,9 @@ public:
 	}
 
 	char_buffer * push_back(const char & val) {
-		ensure_capacity(CHAR_LEN);
+		if (!ref) {
+			ensure_capacity(CHAR_LEN);
+		}
 		push_chars(&val, CHAR_LEN);
 		return this;
 	}
@@ -175,55 +178,73 @@ public:
 	}
 
 	char_buffer * push_back(const short & val) {
-		ensure_capacity(SHORT_CHARS);
+		if (!ref) {
+			ensure_capacity(SHORT_CHARS);
+		}
 		push_chars(to_chars(val), SHORT_CHARS);
 		return this;
 	}
 
 	char_buffer * push_back(const unsigned short & val) {
-		ensure_capacity(SHORT_CHARS);
+		if (!ref) {
+			ensure_capacity(SHORT_CHARS);
+		}
 		push_chars(to_chars(val), SHORT_CHARS);
 		return this;
 	}
 	char_buffer * push_back(const int & val) {
-		ensure_capacity(INT_CHARS);
+		if (!ref) {
+			ensure_capacity(INT_CHARS);
+		}
 		push_chars(to_chars(val), INT_CHARS);
 		return this;
 	}
 
 	char_buffer * push_back(const unsigned int & val) {
-		ensure_capacity(INT_CHARS);
+		if (!ref) {
+			ensure_capacity(INT_CHARS);
+		}
 		push_chars(to_chars(val), INT_CHARS);
 		return this;
 	}
 
 	char_buffer * push_back(const long & val) {
-		ensure_capacity(LONG_CHARS);
+		if (!ref) {
+			ensure_capacity(LONG_CHARS);
+		}
 		push_chars(to_chars(val), LONG_CHARS);
 		return this;
 	}
 
 	char_buffer * push_back(const unsigned long & val) {
-		ensure_capacity(UNSIGNED_LONG_CHARS);
+		if (!ref) {
+			ensure_capacity(UNSIGNED_LONG_CHARS);
+		}
 		push_chars(to_chars(val), UNSIGNED_LONG_CHARS);
 		return this;
 	}
 
 	char_buffer * push_back(const bool &val) {
-		ensure_capacity(BOOL_CHARS);
+		if (!ref) {
+			ensure_capacity(BOOL_CHARS);
+		}
 		buffer[push_pos++] = val ? 1 : 0;
 		++b_size;
 		return this;
 	}
 
 	char_buffer * push_back(const float& val) {
-		ensure_capacity(FLOAT_CHARS);
+		if (!ref) {
+			ensure_capacity(FLOAT_CHARS);
+		}
 		push_chars(to_chars(val), FLOAT_CHARS);
 		return this;
 	}
 
 	char_buffer * push_back(const double& val) {
-		ensure_capacity(DOUBLE_CHARS);
+		if (!ref) {
+			ensure_capacity(DOUBLE_CHARS);
+		}
 		push_chars(to_chars(val), DOUBLE_CHARS);
 		return this;
 	}
@@ -236,17 +257,23 @@ public:
 
 	char_buffer * push_back(const char * chars, int len, bool with_len = true) {
 		if (with_len) {
-			ensure_capacity(len + INT_CHARS);
+			if (!ref) {
+				ensure_capacity(len + INT_CHARS);
+			}
 			push_chars(to_chars(len), INT_CHARS);
 		} else {
-			ensure_capacity(len);
+			if (!ref) {
+				ensure_capacity(len);
+			}
 		}
 		push_chars(chars, len);
 		return this;
 	}
 
 	char_buffer * push_back(const char_buffer & other) {
-		ensure_capacity(other.b_size + INT_CHARS);
+		if (!ref) {
+			ensure_capacity(other.b_size + INT_CHARS);
+		}
 		push_chars(to_chars(other.b_size), INT_CHARS);
 		push_chars(other.buffer, other.b_size);
 		return this;
