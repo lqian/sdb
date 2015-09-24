@@ -239,36 +239,36 @@ log_file::~log_file() {
 int log_file::open() {
 	int r = sdb::FAILURE;
 	bool existed = sio::exist_file(pathname);
-	if (!existed && init_log_file()) {
-		_header.active = true;
+	if (!existed) {
+		r = init_log_file();
+		if (r == sdb::FAILURE) {
+			return INIT_LOG_FILE_FAILURE;
+		}
 	}
 
 	log_stream.open(pathname.c_str(),
 			ios_base::binary | ios_base::in | ios_base::out);
 	if (log_stream.is_open()) {
-		{
-			// file existed, must check it has the correct magic,
-			log_stream.seekg(ios_base::beg);
-			char_buffer buff(LOG_FILE_HEADER_LENGTH);
-			log_stream.read(buff.data(), LOG_FILE_HEADER_LENGTH);
-			buff.rewind();
-			_header.read_from(buff);
+		// file existed, must check it has the correct magic,
+		log_stream.seekg(ios_base::beg);
+		char_buffer buff(LOG_FILE_HEADER_LENGTH);
+		log_stream.read(buff.data(), LOG_FILE_HEADER_LENGTH);
+		buff.rewind();
+		_header.read_from(buff);
 
-			//read the last block from file if the stream is good and log file is active
-			if (_header.is_valid() && _header.active) {
-				log_stream.seekg(0, ios_base::end);
-				log_stream.seekg(0 - _header.block_size, ios_base::cur);
-				log_stream.read(block_buffer, _header.block_size);
+		//read the last block from file if the stream is good and log file is active
+		if (_header.is_valid() && _header.active) {
+			log_stream.seekg(0, ios_base::end);
+			log_stream.seekg(0 - _header.block_size, ios_base::cur);
+			log_stream.read(block_buffer, _header.block_size);
 
-				if (log_stream.good()) {
-					last_blk.ref_buffer(block_buffer, _header.block_size);
-					initialized = true;
-				}
+			if (log_stream.good()) {
+				last_blk.ref_buffer(block_buffer, _header.block_size);
+				initialized = true;
 			}
 		}
-		if (log_stream.good()) {
-			r = sdb::SUCCESS;
-		}
+
+		r = log_stream.good() ? sdb::SUCCESS : LOG_STREAM_ERROR;
 	}
 	return r;
 }
@@ -287,6 +287,7 @@ int log_file::append(timestamp ts, action &a) {
 		renewal_last_block();
 		return append(ts, a);
 	} else {
+		flush_last_block(); // make sure flush last block
 		return DATA_LENGTH_TOO_LARGE;
 	}
 }
@@ -300,6 +301,32 @@ int log_file::append(const char* buff, int len) {
 		return sdb::SUCCESS;
 	} else {
 		return sdb::FAILURE;
+	}
+}
+
+int log_file::append_commit(timestamp ts) {
+	int r = last_blk.add_commit(ts);
+	if (r != LOG_BLK_SPACE_NOT_ENOUGH) {
+		if (_log_mgr->sync == log_sync::immeidate) {
+			flush_last_block();
+		}
+	} else {
+		flush_last_block();
+		renewal_last_block();
+		return append_commit(ts);
+	}
+}
+
+int log_file::append_rollback(timestamp ts) {
+	int r = last_blk.add_rollback(ts);
+	if (r != LOG_BLK_SPACE_NOT_ENOUGH) {
+		if (_log_mgr->sync == log_sync::immeidate) {
+			flush_last_block();
+		}
+	} else {
+		flush_last_block();
+		renewal_last_block();
+		return append_commit(ts);
 	}
 }
 
@@ -324,8 +351,6 @@ int log_file::flush_last_block() {
 	long p = log_stream.tellg();
 	int d = (p - LOG_FILE_HEADER_LENGTH) % _header.block_size;
 	log_stream.seekg(0 - d - _header.block_size, ios_base::cur);
-	p = log_stream.tellg();
-	p = log_stream.tellp();
 	char_buffer buff(block_buffer, _header.block_size, true);
 	last_blk._header.write_to(buff);
 	log_stream.write(block_buffer, _header.block_size);
@@ -337,7 +362,8 @@ int log_file::init_log_file() {
 	out.open(pathname.c_str(), ios_base::binary | ios_base::app);
 	if (out.is_open()) {
 		char_buffer buff(LOG_FILE_HEADER_LENGTH);
-		this->_header.write_to(buff);
+		_header.active = true;
+		_header.write_to(buff);
 		buff.rewind();
 
 		last_blk.ref_buffer(block_buffer, _header.block_size);

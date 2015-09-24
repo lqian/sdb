@@ -37,6 +37,8 @@ const int DIRCTORY_ENTRY_LENGTH = 18;
 const int LOG_BLK_SPACE_NOT_ENOUGH = -0X500;
 const int OUTOF_ENTRY_INDEX = -0X501;
 const int DATA_LENGTH_TOO_LARGE = -0X502;
+const int INIT_LOG_FILE_FAILURE = -0x503;
+const int LOG_STREAM_ERROR = 0X504;
 
 class log_file;
 
@@ -207,7 +209,6 @@ public:
 
 	void set_log_mgr(log_mgr * lm);
 	int open();
-
 	int close();
 
 	int append(timestamp ts, action& a);
