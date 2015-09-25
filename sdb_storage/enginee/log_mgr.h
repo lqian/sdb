@@ -78,20 +78,21 @@ private:
 	int log_file_max_size = 67108864;
 
 public:
+	int open();
 	int log_action(timestamp ts, action & a);
 	int log_commit(timestamp ts);
 	int log_rollback(timestamp ts);
 	int log_abort(timestamp *ts);
 
-	int find_log(timestamp ts, char_buffer & buff);
-	int redo_log();
-	int undo_log();
+	int find(timestamp ts, char_buffer & buff);
+	int redo();
+	int undo();
+	int check();
 
 	/*
 	 * scan from the end of log, seek old data item for a transaction specified with timestamp
 	 */
-	int undo_log(timestamp ts);
-	int check();
+	int undo_log(timestamp ts, char_buffer & buff);
 
 	void set_log_file_max_size(int size = 67108864);
 
@@ -171,6 +172,8 @@ public:
 };
 
 class log_file {
+	friend class log_mgr;
+
 	struct header {
 		unsigned int magic = LOG_FILE_MAGIC;
 		int block_size = 4096;
