@@ -227,6 +227,15 @@ void log_block::ref_buffer(char *buff, int len) {
 	length = len - LOG_BLOCK_HEADER_LENGTH;
 }
 
+void log_block::write_to(char *buff) {
+	char_buffer tmp(LOG_BLOCK_HEADER_LENGTH);
+	_header.write_to(tmp);
+	int len = tmp.size();
+	memcpy(buff, tmp.data(), len);  // copy header and content
+	memcpy(buff + len, buffer, length);
+
+}
+
 log_file::log_file(const string & fn) :
 		pathname(fn), initialized(false) {
 
@@ -277,6 +286,13 @@ int log_file::open() {
 		r = log_stream.good() ? sdb::SUCCESS : LOG_STREAM_ERROR;
 	}
 	return r;
+}
+
+int log_file::re_open() {
+	log_stream.close();
+	log_stream.open(pathname.c_str(),
+			ios_base::binary | ios_base::in | ios_base::out);
+	return log_stream.is_open() ? sdb::SUCCESS : LOG_STREAM_ERROR;
 }
 
 // do not support span blocks currently
@@ -337,17 +353,16 @@ int log_file::append_rollback(timestamp ts) {
 }
 
 int log_file::renewal_last_block() {
-	last_blk.ref_buffer(write_buffer, _header.block_size);
-	last_blk._header.magic = LOG_BLOCK_MAGIC;
-	last_blk._header.writing_entry_off = 0;
+	last_blk.reset();
 
 	//assign the empty block to the log file
-	log_stream.seekp(ios_base::end);
+	log_stream.seekp(0, ios_base::end);
 	long p = log_stream.tellp();
 	int d = (p - LOG_FILE_HEADER_LENGTH) % _header.block_size;
 	if (d != 0) {
-		log_stream.seekp(0 - d, ios_base::cur);
+		log_stream.seekp(-d, ios_base::cur);
 	}
+	last_blk._header.offset = p - d;
 	log_stream.write(write_buffer, _header.block_size);
 	return log_stream.good() ? sdb::SUCCESS : sdb::FAILURE;
 }
@@ -397,31 +412,67 @@ bool log_file::is_active() {
 
 int log_file::next_block(char * buff) {
 	int bs = _header.block_size;
-	long p = log_stream.tellg();
-	read_blk_offset += bs;
-	log_stream.seekg(read_blk_offset - p, ios_base::cur);
-	log_stream.read(buff, bs);
-	return log_stream.good() ? sdb::SUCCESS : LOG_STREAM_ERROR;
+	if (read_blk_offset > last_blk._header.offset) {
+		return sdb::FAILURE;
+	}
+	if (read_blk_offset == last_blk._header.offset) {
+		last_blk.write_to(buff);
+	} else {
+		long p = log_stream.tellg();
+		log_stream.seekg(read_blk_offset - p, ios_base::cur);
+		log_stream.read(buff, bs);
+	}
+	if (log_stream.good()) {
+		read_blk_offset += bs;
+		return sdb::SUCCESS;
+	} else {
+		return LOG_STREAM_ERROR;
+	}
 }
 
 int log_file::pre_block(char *buff) {
-	int bs = _header.block_size;
-	long p = log_stream.tellg();
-	if (p <= LOG_FILE_HEADER_LENGTH) {
+	if (read_blk_offset <= LOG_FILE_HEADER_LENGTH) {
 		return sdb::FAILURE;
 	}
 
-	read_blk_offset -= bs;
-	log_stream.seekg(read_blk_offset - p, ios_base::cur);
-	log_stream.read(buff, bs);
+	int bs = _header.block_size;
+	long p = log_stream.tellg();
+	if (read_blk_offset == last_blk._header.offset + _header.block_size) {
+		last_blk.write_to(buff);
+	} else {
+		log_stream.seekg(read_blk_offset - bs - p, ios_base::cur);
+		log_stream.read(buff, bs);
+	}
+	if (log_stream.good()) {
+		read_blk_offset -= bs;
+		return sdb::SUCCESS;
+	} else {
+		return LOG_STREAM_ERROR;
+	}
+
+}
+
+int log_file::head() {
+	if (log_stream.eof() || log_stream.bad()) {
+		re_open();
+	}
+	log_stream.seekg(LOG_FILE_HEADER_LENGTH, ios_base::beg);
+	read_blk_offset = LOG_FILE_HEADER_LENGTH;
 	return log_stream.good() ? sdb::SUCCESS : LOG_STREAM_ERROR;
 }
 
 int log_file::tail() {
+	int r = sdb::SUCCESS;
+	if (log_stream.eof() || log_stream.bad()) {
+		r = re_open();
+		if (r != sdb::SUCCESS)
+			return r;
+	}
+
 	log_stream.seekg(0, ios_base::end);
 	read_blk_offset = (int) log_stream.tellg();
-	int d = read_blk_offset % _header.block_size;
-	read_blk_offset -= d;
+	return log_stream.good() ? sdb::SUCCESS : LOG_STREAM_ERROR;
+
 }
 
 int log_file::inactive() {
@@ -431,11 +482,14 @@ int log_file::inactive() {
 	log_stream.seekg(0, ios_base::beg);
 	log_stream.write(buff.data(), buff.capacity());
 	log_stream.flush();
-	return log_stream.good()?sdb::SUCCESS:LOG_STREAM_ERROR;
+	return log_stream.good() ? sdb::SUCCESS : LOG_STREAM_ERROR;
 }
 
 void log_file::set_block_size(int bs) {
 	_header.block_size = bs;
+}
+int log_file::get_block_size() {
+	return _header.block_size;
 }
 
 bool log_file::header::is_valid() {

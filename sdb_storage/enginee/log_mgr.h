@@ -202,6 +202,7 @@ private:
 	 * before append those blocks
 	 */
 	int append(const char * buff, int len);
+	int re_open();
 
 public:
 	log_file(const string& fn);
@@ -217,6 +218,7 @@ public:
 	int append_commit(timestamp ts);
 	int append_rollback(timestamp ts);
 
+	int head();
 	int next_block(char * buff);
 	int tail();
 	int pre_block(char * buff);
@@ -226,6 +228,7 @@ public:
 	int inactive();
 
 	void set_block_size(int bs);
+	int get_block_size();
 };
 
 class log_check_file {

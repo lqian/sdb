@@ -54,23 +54,45 @@ void log_block_test() {
 
 void log_file_test() {
 
+	string fn = "/tmp/000001.log";
+	sio::remove_file(fn);
 	log_mgr lmgr;
-
-	log_file lf("/tmp/a000001.log");
+	log_file lf(fn);
 	lf.set_log_mgr(&lmgr);
 	ASSERT(lf.open() == sdb::SUCCESS);
 
 	timestamp ts = 100L;
 	action a;
-	a.wl = 35;
-	a.wd = new char[35];
-	for (int i=0; i<34;i++) {
-		a.wd[i] = 0xff - i;
-	}
+	a.wl = 100;
+	a.wd = new char[100];
+	a.wd[0] = 0xFF;
+	a.wd[99] = 0xEE;
 	a.seq = 1;
-
 	lf.append(ts, a);
 
+	for (int i = 0; i < 60; i++) {
+		a.seq = 2 + i;
+		lf.append(ts, a);
+	}
+
+	log_block lb;
+	// scan forward
+	ASSERT(lf.head());
+	int bs = lf.get_block_size();
+	char *buff = new char[bs];
+	while (lf.next_block(buff) == sdb::SUCCESS) {
+		lb.ref_buffer(buff, bs);
+		ASSERT(lb.count_entry() >= 0);
+		cout << "scan forward log entry count:" << lb.count_entry() << endl;
+	}
+
+	// scan backward
+	ASSERT(lf.tail()==sdb::SUCCESS);
+	while (lf.pre_block(buff) == sdb::SUCCESS) {
+		lb.ref_buffer(buff, bs);
+		ASSERT(lb.count_entry() >= 0);
+		cout << "scan backward log entry count:" << lb.count_entry() << endl;
+	}
 }
 
 void runSuite() {
