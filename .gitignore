@@ -1,0 +1,6 @@
+.metadata/
+
+*/Debug/
+*/.settins/
+*/Release/
+*/Debug Gcov/
