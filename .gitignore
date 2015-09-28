@@ -1,6 +1,11 @@
 .metadata/
 
 */Debug/
-*/.settins/
+*/.settings/
 */Release/
 */Debug Gcov/
+*/.cproject
+*/.project
+*/.gitignore
+*/boost/
+*/cute/
