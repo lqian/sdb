@@ -15,6 +15,8 @@
 
 namespace sio {
 
+using namespace std;
+
 bool exist_file(const char * path, int mode);
 
 bool exist_file(const std::string & path, int mode);
@@ -26,6 +28,8 @@ bool exist_file(const std::string & path);
 bool remove_file(const std::string &path);
 
 int list_file(const std::string &pathname, std::list<std::string> & files, unsigned char filter = DT_REG);
+
+list<string> list_file(const string &path, const string & suffix, unsigned char filter=DT_REG);
 
 int make_dir(const std::string &pathname, int t_mode = S_IRWXU);
 }

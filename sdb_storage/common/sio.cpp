@@ -51,6 +51,25 @@ int list_file(const std::string &pathname, std::list<std::string> & files,
 	}
 }
 
+list<string> list_file(const string & pathname, const string & suffix,
+		unsigned char filter) {
+	list<string> files;
+	DIR* dp;
+	struct dirent* ep;
+	dp = opendir(pathname.data());
+	int sl = suffix.length();
+	if (dp != NULL) {
+		if (ep->d_type == filter) {
+			string fn(ep->d_name, ep->d_reclen);
+			int fl = fn.length();
+			if (fl >= sl && fn.rfind(suffix) == fn.size() - sl) {
+				files.push_back(fn);
+			}
+		}
+	}
+	return files;
+}
+
 int make_dir(const std::string &pathname, int t_mode) {
 	int status = 0;
 	std::string tmp = pathname;
