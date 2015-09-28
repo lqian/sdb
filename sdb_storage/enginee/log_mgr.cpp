@@ -122,7 +122,7 @@ dir_entry_type log_block::dir_entry::get_type() {
 	if (length == 0) {
 		if (offset == COMMIT_DEFINE) {
 			return dir_entry_type::commit_item;
-		} else if (offset == ROLLBACK_DEFINE) {
+		} else if (offset == ABORT_DEFINE) {
 			return dir_entry_type::rollback_item;
 		} else {
 			return dir_entry_type::unknown;
@@ -137,9 +137,9 @@ void log_block::dir_entry::as_commit() {
 	offset = COMMIT_DEFINE;
 }
 
-void log_block::dir_entry::as_rollback() {
+void log_block::dir_entry::as_abort() {
 	length = 0;
-	offset = ROLLBACK_DEFINE;
+	offset = ABORT_DEFINE;
 }
 
 int log_block::add_action(timestamp ts, action & a) {
@@ -186,7 +186,7 @@ int log_block::add_rollback(timestamp ts) {
 	if (remain() >= DIRCTORY_ENTRY_LENGTH) {
 		dir_entry e;
 		e.ts = ts;
-		e.as_rollback();
+		e.as_abort();
 		char_buffer buff(DIRCTORY_ENTRY_LENGTH);
 		e.write_to(buff);
 		int weo = _header.writing_entry_off;

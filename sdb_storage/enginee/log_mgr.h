@@ -29,7 +29,7 @@ const string CHECKPOINT_FILE_SUFFIX = ".chk";
 const string LOG_FILE_SUFFIX = ".log";
 
 const int COMMIT_DEFINE = 0xffffffff;
-const int ROLLBACK_DEFINE = 0xfffffffe;
+const int ABORT_DEFINE = 0xfffffffe;
 
 const int LOG_FILE_MAGIC = 0x7FA9C83D;
 const int LOG_BLOCK_MAGIC = 0xF79A8CD3;
@@ -164,7 +164,7 @@ public:
 
 		dir_entry_type get_type();
 		void as_commit();
-		void as_rollback();
+		void as_abort();
 	};
 
 	log_block(int block_size = 4096);
@@ -233,6 +233,8 @@ private:
 	 */
 	int append(const char * buff, int len);
 	int re_open();
+
+	int check();
 
 public:
 	log_file();
