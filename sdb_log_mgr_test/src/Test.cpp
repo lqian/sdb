@@ -28,7 +28,7 @@ void log_block_test() {
 	ASSERT(lb.count_entry() == 4);
 
 	log_block::dir_entry e;
-	int size;
+	int size = 0;
 	while (lb.has_next()) {
 		lb.next_entry(e);
 		if (e.get_type() == dir_entry_type::data_item) {
