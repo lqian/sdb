@@ -61,10 +61,14 @@ list<string> list_file(const string & pathname, const string & suffix,
 	if (dp != NULL) {
 		if (ep->d_type == filter) {
 			string fn(ep->d_name, ep->d_reclen);
-			int fl = fn.length();
-			if (fl >= sl && fn.rfind(suffix) == fn.size() - sl) {
-				files.push_back(fn);
+			size_t found = fn.rfind(suffix);
+			if (found != string::npos) {
+				int fl = fn.length();
+				if (fl >= sl && found == fl - sl) {
+					files.push_back(fn);
+				}
 			}
+
 		}
 	}
 	return files;
