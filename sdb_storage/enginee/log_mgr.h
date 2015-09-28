@@ -8,10 +8,14 @@
 #ifndef LOG_MGR_H_
 #define LOG_MGR_H_
 
-#include <iostream>
 #include <cstring>
+#include <cstdlib>
+
+#include <iostream>
 #include <fstream>
 #include <map>
+#include <list>
+#include <string>
 #include "trans_mgr.h"
 #include "../common/char_buffer.h"
 #include "../common/sio.h"
@@ -46,7 +50,7 @@ enum log_status {
 	initialized = 0, active, opened, closed
 };
 
-enum log_sync {
+enum log_sync_police {
 	immeidate, buffered, async
 };
 
@@ -66,19 +70,37 @@ public:
 	int log_abort(timestamp *ts);
 };
 
+class check_thread {
+
+};
+
 class log_mgr {
 	friend class log_file;
 
 private:
-	log_sync sync = log_sync::immeidate;
-	string path;  // log directory that contains log file
+	log_sync_police sync_police = log_sync_police::immeidate;
+	string path;  // log directory that contains log files
 	undo_buffer ub;
 	char * log_buffer;
 	int lb_cap = 1048576; // log buffer capacity
 	int log_file_max_size = 67108864;
 
+	log_file curr_log_file;
+
+	long check_interval; // check interval in milliseconds
+
+	ulong log_file_seq = 0;
+
+	int in_lock();
+	int out_lock();
+
 public:
-	int open();
+	int load();
+	int load(const string & path);
+	bool is_open();
+	int close();
+	int flush();
+
 	int log_action(timestamp ts, action & a);
 	int log_commit(timestamp ts);
 	int log_rollback(timestamp ts);
@@ -95,8 +117,13 @@ public:
 	int undo_log(timestamp ts, char_buffer & buff);
 
 	void set_log_file_max_size(int size = 67108864);
+	void set_sync_police(const enum log_sync_police & sp);
+	const log_sync_police & get_sync_police() const;
 
 	log_mgr();
+	log_mgr(const string & path);
+	log_mgr(const log_mgr & antoher)=delete;
+	log_mgr(const log_mgr && another)=delete;
 	virtual ~log_mgr();
 };
 
@@ -208,6 +235,7 @@ private:
 	int re_open();
 
 public:
+	log_file();
 	log_file(const string& fn);
 	log_file(const log_file & another) = delete;
 	log_file(const log_file && another) = delete;
@@ -215,6 +243,7 @@ public:
 
 	void set_log_mgr(log_mgr * lm);
 	int open();
+	int open(const string &pathname);
 	bool is_open();
 
 	int append(timestamp ts, action& a);

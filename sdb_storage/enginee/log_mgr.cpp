@@ -236,6 +236,7 @@ void log_block::write_to(char *buff) {
 
 }
 
+log_file::log_file() {}
 log_file::log_file(const string & fn) :
 		pathname(fn), initialized(false) {
 
@@ -248,44 +249,48 @@ log_file::~log_file() {
 }
 
 int log_file::open() {
+	return open(pathname);
+}
+
+int log_file::open(const string & pathname) {
 	int r = sdb::FAILURE;
-	bool existed = sio::exist_file(pathname);
-	if (!existed) {
-		r = init_log_file();
-		if (r == sdb::FAILURE) {
-			return INIT_LOG_FILE_FAILURE;
-		}
-	}
-
-	log_stream.open(pathname.c_str(),
-			ios_base::binary | ios_base::in | ios_base::out);
-	if (log_stream.is_open()) {
-		opened = true;
-		write_buffer = new char[_header.block_size];
-
-		// file existed, must check it has the correct magic,
-		log_stream.seekg(ios_base::beg);
-		char_buffer buff(LOG_FILE_HEADER_LENGTH);
-		log_stream.read(buff.data(), LOG_FILE_HEADER_LENGTH);
-		_header.read_from(buff);
-
-		//read the last block from file if the stream is good and log file is active
-		if (_header.is_valid() && _header.active) {
-			log_stream.seekg(0, ios_base::end);
-			log_stream.seekg(0 - _header.block_size, ios_base::cur);
-
-			log_stream.read(write_buffer, _header.block_size);
-
-			if (log_stream.good()) {
-				last_blk.ref_buffer(write_buffer, _header.block_size);
-
-				initialized = true;
+		bool existed = sio::exist_file(pathname);
+		if (!existed) {
+			r = init_log_file();
+			if (r == sdb::FAILURE) {
+				return INIT_LOG_FILE_FAILURE;
 			}
 		}
 
-		r = log_stream.good() ? sdb::SUCCESS : LOG_STREAM_ERROR;
-	}
-	return r;
+		log_stream.open(pathname.c_str(),
+				ios_base::binary | ios_base::in | ios_base::out);
+		if (log_stream.is_open()) {
+			opened = true;
+			write_buffer = new char[_header.block_size];
+
+			// file existed, must check it has the correct magic,
+			log_stream.seekg(ios_base::beg);
+			char_buffer buff(LOG_FILE_HEADER_LENGTH);
+			log_stream.read(buff.data(), LOG_FILE_HEADER_LENGTH);
+			_header.read_from(buff);
+
+			//read the last block from file if the stream is good and log file is active
+			if (_header.is_valid() && _header.active) {
+				log_stream.seekg(0, ios_base::end);
+				log_stream.seekg(0 - _header.block_size, ios_base::cur);
+
+				log_stream.read(write_buffer, _header.block_size);
+
+				if (log_stream.good()) {
+					last_blk.ref_buffer(write_buffer, _header.block_size);
+
+					initialized = true;
+				}
+			}
+
+			r = log_stream.good() ? sdb::SUCCESS : LOG_STREAM_ERROR;
+		}
+		return r;
 }
 
 int log_file::re_open() {
@@ -299,7 +304,7 @@ int log_file::re_open() {
 int log_file::append(timestamp ts, action &a) {
 	int r = last_blk.add_action(ts, a);
 	if (r != LOG_BLK_SPACE_NOT_ENOUGH) {
-		if (_log_mgr->sync == log_sync::immeidate) {
+		if (_log_mgr->sync_police == log_sync_police::immeidate) {
 			flush_last_block();
 		}
 	} else if (_header.block_size - DIRCTORY_ENTRY_LENGTH
@@ -316,7 +321,7 @@ int log_file::append(timestamp ts, action &a) {
 int log_file::append(const char* buff, int len) {
 	flush_last_block();
 	log_stream.write(buff, len);
-	if (_log_mgr->sync == log_sync::immeidate) {
+	if (_log_mgr->sync_police == log_sync_police::immeidate) {
 		log_stream.flush();
 	}
 	if (log_stream.good()) {
@@ -329,7 +334,7 @@ int log_file::append(const char* buff, int len) {
 int log_file::append_commit(timestamp ts) {
 	int r = last_blk.add_commit(ts);
 	if (r != LOG_BLK_SPACE_NOT_ENOUGH) {
-		if (_log_mgr->sync == log_sync::immeidate) {
+		if (_log_mgr->sync_police == log_sync_police::immeidate) {
 			flush_last_block();
 		}
 	} else {
@@ -342,7 +347,7 @@ int log_file::append_commit(timestamp ts) {
 int log_file::append_rollback(timestamp ts) {
 	int r = last_blk.add_rollback(ts);
 	if (r != LOG_BLK_SPACE_NOT_ENOUGH) {
-		if (_log_mgr->sync == log_sync::immeidate) {
+		if (_log_mgr->sync_police == log_sync_police::immeidate) {
 			flush_last_block();
 		}
 	} else {
@@ -506,12 +511,62 @@ void log_file::set_log_mgr(log_mgr * lm) {
 	this->_log_mgr = lm;
 }
 
+void log_mgr::set_sync_police(const enum log_sync_police & sp) {
+	sync_police = sp;
+}
+
+const log_sync_police & log_mgr::get_sync_police() const {
+	return sync_police;
+}
+
+int log_mgr::load(const string &path) {
+	this->path = path;
+	int r = sdb::FAILURE;
+	list<string> files;
+
+	if ((r = sio::list_file(path, files))) {  //TODO need pattern scan files
+		for (auto & f: files) {
+			ulong id = strtoul(f.data(), nullptr, 16);
+			if (id > log_file_seq) {
+				log_file_seq = id;
+			}
+		}
+
+		char *alphas = new char[16];
+		ultoa(log_file_seq, alphas);
+		string pathname = this->path + "/" + alphas + LOG_FILE_SUFFIX;
+		delete[] alphas;
+
+		if ((r = curr_log_file.open(pathname))) {
+
+		}
+		r = in_lock();
+	}
+	return r;
+}
+
+int log_mgr::close() {
+	int r = sdb::FAILURE;
+	return r;
+}
+
+int log_mgr::flush() {
+	int r = sdb::FAILURE;
+	return r;
+}
+
 log_mgr::log_mgr() {
 
 }
 
-log_mgr::~log_mgr() {
+log_mgr::log_mgr(const string &path) {
+	this->path = path;
+}
 
+log_mgr::~log_mgr() {
+	flush();
+	close();
+	out_lock();
 }
 
 } /* namespace enginee */

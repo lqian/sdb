@@ -167,9 +167,7 @@ int seg_mgr::assign_data_file(data_file * pdf) {
 		pathname = *data_file_paths.begin();
 	} else {
 		for (int i = 0; i < path_round; i++, it++) {
-
 		}
-
 		pathname = it->first;
 	}
 
@@ -178,6 +176,7 @@ int seg_mgr::assign_data_file(data_file * pdf) {
 	}
 	pdf->set_id(nid);
 	pdf->set_path(pathname + "/" + fn);
+	delete[]fn;
 
 	auto mit = df_map.insert(std::make_pair(nid, pdf));
 	if (mit.second) {
