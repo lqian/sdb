@@ -207,6 +207,8 @@ private:
 	int append(const char * buff, int len);
 	int re_open();
 
+	int check();
+
 public:
 	log_file(const string& fn);
 	log_file(const log_file & another) = delete;
