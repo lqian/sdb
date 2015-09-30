@@ -551,7 +551,6 @@ int log_mgr::load(const string &path) {
 			//open last checkpoint file match the last log file
 			chk_file_seq = log_file_seq;
 		} else {  // scan the last checkpoint file name
-			ulong id = 0;
 			list<string> chk_files = sio::list_file(path,
 					CHECKPOINT_FILE_SUFFIX);
 			for (auto & cf : chk_files) {
@@ -579,7 +578,7 @@ int log_mgr::in_lock() {
 	fstream fs;
 	fs.open(lock_pathname.c_str(), ios_base::binary | ios_base::app);
 	fs.close();
-	return fs.good()? sdb::SUCCESS : LOCK_STREAM_ERROR;
+	return fs.good() ? sdb::SUCCESS : LOCK_STREAM_ERROR;
 }
 
 int log_mgr::out_lock() {
@@ -623,6 +622,10 @@ int checkpoint_file::open(const string & pathname) {
 
 int checkpoint_file::create(const string & pathname) {
 	int r = sdb::FAILURE;
+	fstream fs;
+	fs.open(pathname.c_str(), ios_base::binary | ios_base::app);
+	fs.close();
+	r = fs.good();
 	return r;
 }
 
