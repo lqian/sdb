@@ -68,7 +68,6 @@ list<string> list_file(const string & pathname, const string & suffix,
 					files.push_back(fn);
 				}
 			}
-
 		}
 	}
 	return files;

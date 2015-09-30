@@ -27,6 +27,7 @@ using namespace sdb::common;
 
 const string CHECKPOINT_FILE_SUFFIX = ".chk";
 const string LOG_FILE_SUFFIX = ".log";
+const string LOG_MGR_LOCK_FILENAME ="in_lock";
 
 const int COMMIT_DEFINE = 0xffffffff;
 const int ABORT_DEFINE = 0xfffffffe;
@@ -43,8 +44,11 @@ const int OUTOF_ENTRY_INDEX = -0X501;
 const int DATA_LENGTH_TOO_LARGE = -0X502;
 const int INIT_LOG_FILE_FAILURE = -0x503;
 const int LOG_STREAM_ERROR = 0X504;
+const int LOCKED_LOG_MGR_PATH = -0X505;
+const int LOCK_STREAM_ERROR = -0X506;
+const int OUT_LOCK_LOGMGR_FAILURE = -0X507;
 
-class log_file;
+class log_mgr;
 
 enum log_status {
 	initialized = 0, active, opened, closed
@@ -74,58 +78,6 @@ class check_thread {
 
 };
 
-class log_mgr {
-	friend class log_file;
-
-private:
-	log_sync_police sync_police = log_sync_police::immeidate;
-	string path;  // log directory that contains log files
-	undo_buffer ub;
-	char * log_buffer;
-	int lb_cap = 1048576; // log buffer capacity
-	int log_file_max_size = 67108864;
-
-	log_file curr_log_file;
-
-	long check_interval; // check interval in milliseconds
-
-	ulong log_file_seq = 0;
-
-	int in_lock();
-	int out_lock();
-
-public:
-	int load();
-	int load(const string & path);
-	bool is_open();
-	int close();
-	int flush();
-
-	int log_action(timestamp ts, action & a);
-	int log_commit(timestamp ts);
-	int log_rollback(timestamp ts);
-	int log_abort(timestamp *ts);
-
-	int find(timestamp ts, char_buffer & buff);
-	int redo();
-	int undo();
-	int check();
-
-	/*
-	 * scan from the end of log, seek old data item for a transaction specified with timestamp
-	 */
-	int undo_log(timestamp ts, char_buffer & buff);
-
-	void set_log_file_max_size(int size = 67108864);
-	void set_sync_police(const enum log_sync_police & sp);
-	const log_sync_police & get_sync_police() const;
-
-	log_mgr();
-	log_mgr(const string & path);
-	log_mgr(const log_mgr & antoher)=delete;
-	log_mgr(const log_mgr && another)=delete;
-	virtual ~log_mgr();
-};
 
 class log_block {
 
@@ -265,8 +217,71 @@ public:
 	int get_block_size();
 };
 
-class log_check_file {
+class checkpoint_file {
+	friend class log_mgr;
 
+private:
+	int open(const string & pathname);
+	int create(const string &pathname);
+
+};
+
+class log_mgr {
+	friend class log_file;
+	friend class checkpoint_file;
+
+private:
+	log_sync_police sync_police = log_sync_police::immeidate;
+	string path;  // log directory that contains log files
+	string lock_pathname;
+	undo_buffer ub;
+	char * log_buffer;
+	int lb_cap = 1048576; // log buffer capacity
+	int log_file_max_size = 67108864;
+
+	log_file f;
+	log_file curr_log_file;
+	checkpoint_file cur_chk_file;
+
+	long check_interval; // check interval in milliseconds
+
+	ulong log_file_seq = 0;
+	ulong chk_file_seq = 0;
+
+	int in_lock();
+	int out_lock();
+
+public:
+	int load();
+	int load(const string & path);
+	bool is_open();
+	int close();
+	int flush();
+
+	int log_action(timestamp ts, action & a);
+	int log_commit(timestamp ts);
+	int log_rollback(timestamp ts);
+	int log_abort(timestamp *ts);
+
+	int find(timestamp ts, char_buffer & buff);
+	int redo();
+	int undo();
+	int check();
+
+	/*
+	 * scan from the end of log, seek old data item for a transaction specified with timestamp
+	 */
+	int undo_log(timestamp ts, char_buffer & buff);
+
+	void set_log_file_max_size(int size = 67108864);
+	void set_sync_police(const enum log_sync_police & sp);
+	const log_sync_police & get_sync_police() const;
+
+	log_mgr();
+	log_mgr(const string & path);
+	log_mgr(const log_mgr & antoher)=delete;
+	log_mgr(const log_mgr && another)=delete;
+	virtual ~log_mgr();
 };
 
 } /* namespace enginee */

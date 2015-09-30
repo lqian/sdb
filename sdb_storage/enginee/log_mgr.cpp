@@ -236,7 +236,8 @@ void log_block::write_to(char *buff) {
 
 }
 
-log_file::log_file() {}
+log_file::log_file() {
+}
 log_file::log_file(const string & fn) :
 		pathname(fn), initialized(false) {
 
@@ -254,43 +255,43 @@ int log_file::open() {
 
 int log_file::open(const string & pathname) {
 	int r = sdb::FAILURE;
-		bool existed = sio::exist_file(pathname);
-		if (!existed) {
-			r = init_log_file();
-			if (r == sdb::FAILURE) {
-				return INIT_LOG_FILE_FAILURE;
+	bool existed = sio::exist_file(pathname);
+	if (!existed) {
+		r = init_log_file();
+		if (r == sdb::FAILURE) {
+			return INIT_LOG_FILE_FAILURE;
+		}
+	}
+
+	log_stream.open(pathname.c_str(),
+			ios_base::binary | ios_base::in | ios_base::out);
+	if (log_stream.is_open()) {
+		opened = true;
+		write_buffer = new char[_header.block_size];
+
+		// file existed, must check it has the correct magic,
+		log_stream.seekg(ios_base::beg);
+		char_buffer buff(LOG_FILE_HEADER_LENGTH);
+		log_stream.read(buff.data(), LOG_FILE_HEADER_LENGTH);
+		_header.read_from(buff);
+
+		//read the last block from file if the stream is good and log file is active
+		if (_header.is_valid() && _header.active) {
+			log_stream.seekg(0, ios_base::end);
+			log_stream.seekg(0 - _header.block_size, ios_base::cur);
+
+			log_stream.read(write_buffer, _header.block_size);
+
+			if (log_stream.good()) {
+				last_blk.ref_buffer(write_buffer, _header.block_size);
+
+				initialized = true;
 			}
 		}
 
-		log_stream.open(pathname.c_str(),
-				ios_base::binary | ios_base::in | ios_base::out);
-		if (log_stream.is_open()) {
-			opened = true;
-			write_buffer = new char[_header.block_size];
-
-			// file existed, must check it has the correct magic,
-			log_stream.seekg(ios_base::beg);
-			char_buffer buff(LOG_FILE_HEADER_LENGTH);
-			log_stream.read(buff.data(), LOG_FILE_HEADER_LENGTH);
-			_header.read_from(buff);
-
-			//read the last block from file if the stream is good and log file is active
-			if (_header.is_valid() && _header.active) {
-				log_stream.seekg(0, ios_base::end);
-				log_stream.seekg(0 - _header.block_size, ios_base::cur);
-
-				log_stream.read(write_buffer, _header.block_size);
-
-				if (log_stream.good()) {
-					last_blk.ref_buffer(write_buffer, _header.block_size);
-
-					initialized = true;
-				}
-			}
-
-			r = log_stream.good() ? sdb::SUCCESS : LOG_STREAM_ERROR;
-		}
-		return r;
+		r = log_stream.good() ? sdb::SUCCESS : LOG_STREAM_ERROR;
+	}
+	return r;
 }
 
 int log_file::re_open() {
@@ -519,34 +520,80 @@ const log_sync_police & log_mgr::get_sync_police() const {
 	return sync_police;
 }
 
+int log_mgr::load() {
+	return load(path);
+}
 int log_mgr::load(const string &path) {
 	this->path = path;
+	lock_pathname = path + "/" + LOG_MGR_LOCK_FILENAME;
 	int r = sdb::FAILURE;
-	list<string> files;
+	r = in_lock();
+	if (r == LOCKED_LOG_MGR_PATH) {
+		return r;
+	}
 
-	if ((r = sio::list_file(path, files))) {  //TODO need pattern scan files
-		for (auto & f: files) {
-			ulong id = strtoul(f.data(), nullptr, 16);
-			if (id > log_file_seq) {
-				log_file_seq = id;
+	list<string> log_files = sio::list_file(path, LOG_FILE_SUFFIX);
+	for (auto & lf : log_files) {
+		ulong id = strtoul(lf.data(), nullptr, 16);
+		if (id > log_file_seq) {
+			log_file_seq = id;
+		}
+	}
+
+	char *alphas = new char[16];
+	ultoa(log_file_seq, alphas);
+	string pathname = this->path + "/" + alphas + LOG_FILE_SUFFIX;
+	string chkpath = this->path + "/" + alphas + CHECKPOINT_FILE_SUFFIX;
+
+	r = curr_log_file.open(pathname);
+	if (r) {
+		if (sio::exist_file(chkpath)) {
+			//open last checkpoint file match the last log file
+			chk_file_seq = log_file_seq;
+		} else {  // scan the last checkpoint file name
+			ulong id = 0;
+			list<string> chk_files = sio::list_file(path,
+					CHECKPOINT_FILE_SUFFIX);
+			for (auto & cf : chk_files) {
+				ulong id = strtoul(cf.data(), nullptr, 16);
+				if (id > chk_file_seq) {
+					chk_file_seq = id;
+				}
 			}
 		}
 
-		char *alphas = new char[16];
-		ultoa(log_file_seq, alphas);
-		string pathname = this->path + "/" + alphas + LOG_FILE_SUFFIX;
-		delete[] alphas;
-
-		if ((r = curr_log_file.open(pathname))) {
-
-		}
-		r = in_lock();
+		ultoa(chk_file_seq, alphas);
+		chkpath = this->path + "/" + alphas + CHECKPOINT_FILE_SUFFIX;
+		r = this->cur_chk_file.open(chkpath);
 	}
+
+	delete[] alphas;
 	return r;
+}
+
+int log_mgr::in_lock() {
+	int r = sdb::FAILURE;
+	if (sio::exist_file(lock_pathname)) {
+		return LOCKED_LOG_MGR_PATH;
+	}
+
+	fstream fs;
+	fs.open(lock_pathname.c_str(), ios_base::binary | ios_base::app);
+	fs.close();
+	return fs.good()? sdb::SUCCESS : LOCK_STREAM_ERROR;
+}
+
+int log_mgr::out_lock() {
+	int r = sdb::FAILURE;
+	if (sio::exist_file(lock_pathname.c_str())) {
+		r = sio::remove_file(lock_pathname);
+	}
+	return r ? sdb::SUCCESS : OUT_LOCK_LOGMGR_FAILURE;
 }
 
 int log_mgr::close() {
 	int r = sdb::FAILURE;
+	r = out_lock();
 	return r;
 }
 
@@ -561,12 +608,23 @@ log_mgr::log_mgr() {
 
 log_mgr::log_mgr(const string &path) {
 	this->path = path;
+	lock_pathname = path + "/" + LOG_MGR_LOCK_FILENAME;
 }
 
 log_mgr::~log_mgr() {
 	flush();
 	close();
 	out_lock();
+}
+
+int checkpoint_file::open(const string & pathname) {
+	int r = sdb::FAILURE;
+	return r;
+}
+
+int checkpoint_file::create(const string & pathname) {
+	int r = sdb::FAILURE;
+	return r;
 }
 
 } /* namespace enginee */
