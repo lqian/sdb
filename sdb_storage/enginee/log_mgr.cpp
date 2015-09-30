@@ -572,7 +572,6 @@ int log_mgr::load(const string &path) {
 }
 
 int log_mgr::in_lock() {
-	int r = sdb::FAILURE;
 	if (sio::exist_file(lock_pathname)) {
 		return LOCKED_LOG_MGR_PATH;
 	}
