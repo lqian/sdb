@@ -524,9 +524,14 @@ int log_mgr::load() {
 	return load(path);
 }
 int log_mgr::load(const string &path) {
-	this->path = path;
-	lock_pathname = path + "/" + LOG_MGR_LOCK_FILENAME;
 	int r = sdb::FAILURE;
+	this->path = path;
+	r = sio::make_dir(path);
+	if (!r) {
+		return MAKE_LOG_DIR_ERROR;
+	}
+	lock_pathname = path + "/" + LOG_MGR_LOCK_FILENAME;
+
 	r = in_lock();
 	if (r == LOCKED_LOG_MGR_PATH) {
 		return r;

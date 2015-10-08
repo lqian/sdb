@@ -47,6 +47,7 @@ const int LOG_STREAM_ERROR = 0X504;
 const int LOCKED_LOG_MGR_PATH = -0X505;
 const int LOCK_STREAM_ERROR = -0X506;
 const int OUT_LOCK_LOGMGR_FAILURE = -0X507;
+const int MAKE_LOG_DIR_ERROR = -0X508;
 
 class log_mgr;
 

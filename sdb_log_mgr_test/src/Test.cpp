@@ -87,18 +87,26 @@ void log_file_test() {
 	}
 
 	// scan backward
-	ASSERT(lf.tail()==sdb::SUCCESS);
+	ASSERT(lf.tail() == sdb::SUCCESS);
 	while (lf.pre_block(buff) == sdb::SUCCESS) {
 		lb.ref_buffer(buff, bs);
 		ASSERT(lb.count_entry() >= 0);
 		cout << "scan backward log entry count:" << lb.count_entry() << endl;
 	}
+
+
+}
+
+void log_mgr_test(){
+	log_mgr mgr("/tmp/logs");
+	ASSERT(mgr.load() == sdb::SUCCESS);
 }
 
 void runSuite() {
 	cute::suite s;
 	s.push_back(CUTE(log_block_test));
 	s.push_back(CUTE(log_file_test));
+	s.push_back(CUTE(log_mgr_test));
 	cute::ide_listener lis;
 	cute::makeRunner(lis)(s, "The Log Mgr Test Suite");
 }
