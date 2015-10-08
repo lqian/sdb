@@ -27,10 +27,11 @@ using namespace sdb::common;
 
 const string CHECKPOINT_FILE_SUFFIX = ".chk";
 const string LOG_FILE_SUFFIX = ".log";
-const string LOG_MGR_LOCK_FILENAME ="in_lock";
+const string LOG_MGR_LOCK_FILENAME = "in_lock";
 
 const int COMMIT_DEFINE = 0xffffffff;
 const int ABORT_DEFINE = 0xfffffffe;
+const int START_DEFINE = 0xfffffffd;
 
 const int LOG_FILE_MAGIC = 0x7FA9C83D;
 const int LOG_BLOCK_MAGIC = 0xF79A8CD3;
@@ -47,6 +48,7 @@ const int LOG_STREAM_ERROR = 0X504;
 const int LOCKED_LOG_MGR_PATH = -0X505;
 const int LOCK_STREAM_ERROR = -0X506;
 const int OUT_LOCK_LOGMGR_FAILURE = -0X507;
+const int LOG_FILE_IS_ACTIVE = -0X508;
 
 class log_mgr;
 
@@ -59,7 +61,7 @@ enum log_sync_police {
 };
 
 enum dir_entry_type {
-	unknown = -1, data_item, commit_item, rollback_item
+	unknown = -1, start_item, data_item, commit_item, abort_item
 };
 
 class undo_buffer {
@@ -77,7 +79,6 @@ public:
 class check_thread {
 
 };
-
 
 class log_block {
 
@@ -97,7 +98,8 @@ class log_block {
 	};
 
 private:
-	bool ref_flag;
+	bool ref_flag = false;
+	bool ass_flag = false; //assign buffer flag
 	header _header;
 	char *buffer;
 	int length;
@@ -115,6 +117,7 @@ public:
 		void read_from(char_buffer & buff);
 
 		dir_entry_type get_type();
+		void as_start();
 		void as_commit();
 		void as_abort();
 	};
@@ -126,11 +129,14 @@ public:
 	bool operator==(const log_block & another) = delete;
 	~log_block();
 
+	int add_start(timestamp ts);
 	int add_action(timestamp ts, action & a);
 	int add_commit(timestamp ts);
-	int add_rollback(timestamp ts);
+	int add_abort(timestamp ts);
+
 	void head();
 	void tail();
+	void seek(int dir_ent_idx);
 	bool has_next();
 	bool has_pre();
 	void pre_entry(dir_entry & e);
@@ -170,9 +176,9 @@ private:
 	std::fstream log_stream;
 	header _header;
 	int checked_offset = 0;
-	int read_blk_offset = LOG_FILE_HEADER_LENGTH;  //includes the log file header length
+	int read_blk_offset = LOG_FILE_HEADER_LENGTH; //includes the log file header length
 	log_block last_blk;  // the last log block for append log entry
-	char * write_buffer;
+	char * write_buffer = nullptr;
 	log_mgr * _log_mgr = nullptr;
 
 	int init_log_file();
@@ -186,8 +192,6 @@ private:
 	int append(const char * buff, int len);
 	int re_open();
 
-	int check();
-
 public:
 	log_file();
 	log_file(const string& fn);
@@ -198,20 +202,24 @@ public:
 	void set_log_mgr(log_mgr * lm);
 	int open();
 	int open(const string &pathname);
+	int close();
 	bool is_open();
 
+	int append_start(timestamp ts);
 	int append(timestamp ts, action& a);
 	int append_commit(timestamp ts);
-	int append_rollback(timestamp ts);
+	int append_abort(timestamp ts);
 
 	int head();
+	int seek(int blk_off);
 	int next_block(char * buff);
 	int tail();
 	int pre_block(char * buff);
 
 	bool is_active();
-
 	int inactive();
+
+	int check(int blk_off = LOG_FILE_HEADER_LENGTH, int dir_ent_idx=0);
 
 	void set_block_size(int bs);
 	int get_block_size();
@@ -231,6 +239,7 @@ class log_mgr {
 	friend class checkpoint_file;
 
 private:
+	bool opened = false;
 	log_sync_police sync_police = log_sync_police::immeidate;
 	string path;  // log directory that contains log files
 	string lock_pathname;
@@ -264,6 +273,7 @@ public:
 	int log_abort(timestamp *ts);
 
 	int find(timestamp ts, char_buffer & buff);
+
 	int redo();
 	int undo();
 	int check();
@@ -279,8 +289,8 @@ public:
 
 	log_mgr();
 	log_mgr(const string & path);
-	log_mgr(const log_mgr & antoher)=delete;
-	log_mgr(const log_mgr && another)=delete;
+	log_mgr(const log_mgr & antoher) = delete;
+	log_mgr(const log_mgr && another) = delete;
 	virtual ~log_mgr();
 };
 

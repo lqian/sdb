@@ -56,6 +56,10 @@ void log_block::tail() {
 	read_entry_off = _header.writing_entry_off;
 }
 
+void log_block::seek(int dir_ent_idx) {
+	read_entry_off = dir_ent_idx * DIRCTORY_ENTRY_LENGTH;
+}
+
 bool log_block::has_next() {
 	return read_entry_off < _header.writing_entry_off;
 }
@@ -95,7 +99,7 @@ int log_block::copy_data(int idx, char_buffer & buff) {
 }
 
 log_block::~log_block() {
-	if (!ref_flag) {
+	if (!ref_flag && ass_flag) {
 		delete[] buffer;
 	}
 }
@@ -123,7 +127,9 @@ dir_entry_type log_block::dir_entry::get_type() {
 		if (offset == COMMIT_DEFINE) {
 			return dir_entry_type::commit_item;
 		} else if (offset == ABORT_DEFINE) {
-			return dir_entry_type::rollback_item;
+			return dir_entry_type::abort_item;
+		} else if (offset == START_DEFINE) {
+			return dir_entry_type::start_item;
 		} else {
 			return dir_entry_type::unknown;
 		}
@@ -135,6 +141,11 @@ dir_entry_type log_block::dir_entry::get_type() {
 void log_block::dir_entry::as_commit() {
 	length = 0;
 	offset = COMMIT_DEFINE;
+}
+
+void log_block::dir_entry::as_start() {
+	length = 0;
+	offset = START_DEFINE;
 }
 
 void log_block::dir_entry::as_abort() {
@@ -182,7 +193,23 @@ int log_block::add_commit(timestamp ts) {
 	}
 }
 
-int log_block::add_rollback(timestamp ts) {
+int log_block::add_start(timestamp ts) {
+	if (remain() >= DIRCTORY_ENTRY_LENGTH) {
+		dir_entry e;
+		e.ts = ts;
+		e.as_start();
+		char_buffer buff(DIRCTORY_ENTRY_LENGTH);
+		e.write_to(buff);
+		int weo = _header.writing_entry_off;
+		memcpy(buffer + weo, buff.data(), DIRCTORY_ENTRY_LENGTH);
+		_header.writing_entry_off += DIRCTORY_ENTRY_LENGTH;
+		return weo;
+	} else {
+		return LOG_BLK_SPACE_NOT_ENOUGH;
+	}
+}
+
+int log_block::add_abort(timestamp ts) {
 	if (remain() >= DIRCTORY_ENTRY_LENGTH) {
 		dir_entry e;
 		e.ts = ts;
@@ -197,6 +224,7 @@ int log_block::add_rollback(timestamp ts) {
 		return LOG_BLK_SPACE_NOT_ENOUGH;
 	}
 }
+
 int log_block::count_entry() {
 	return _header.writing_entry_off / DIRCTORY_ENTRY_LENGTH;
 }
@@ -213,6 +241,7 @@ void log_block::reset() {
 
 void log_block::assign_block_buffer() {
 	buffer = new char[length];
+	ass_flag = true;
 }
 
 void log_block::set_block_size(int bs) {
@@ -243,10 +272,7 @@ log_file::log_file(const string & fn) :
 
 }
 log_file::~log_file() {
-	if (opened) {
-		delete[] write_buffer;
-	}
-	log_stream.close();
+	close();
 }
 
 int log_file::open() {
@@ -255,6 +281,7 @@ int log_file::open() {
 
 int log_file::open(const string & pathname) {
 	int r = sdb::FAILURE;
+	this->pathname = pathname;
 	bool existed = sio::exist_file(pathname);
 	if (!existed) {
 		r = init_log_file();
@@ -284,7 +311,6 @@ int log_file::open(const string & pathname) {
 
 			if (log_stream.good()) {
 				last_blk.ref_buffer(write_buffer, _header.block_size);
-
 				initialized = true;
 			}
 		}
@@ -345,8 +371,8 @@ int log_file::append_commit(timestamp ts) {
 	}
 }
 
-int log_file::append_rollback(timestamp ts) {
-	int r = last_blk.add_rollback(ts);
+int log_file::append_abort(timestamp ts) {
+	int r = last_blk.add_abort(ts);
 	if (r != LOG_BLK_SPACE_NOT_ENOUGH) {
 		if (_log_mgr->sync_police == log_sync_police::immeidate) {
 			flush_last_block();
@@ -354,7 +380,20 @@ int log_file::append_rollback(timestamp ts) {
 	} else {
 		flush_last_block();
 		renewal_last_block();
-		return append_commit(ts);
+		return append_abort(ts);
+	}
+}
+
+int log_file::append_start(timestamp ts) {
+	int r = last_blk.add_start(ts);
+	if (r != LOG_BLK_SPACE_NOT_ENOUGH) {
+		if (_log_mgr->sync_police == log_sync_police::immeidate) {
+			flush_last_block();
+		}
+	} else {
+		flush_last_block();
+		renewal_last_block();
+		return append_start(ts);
 	}
 }
 
@@ -402,6 +441,7 @@ int log_file::init_log_file() {
 
 		out.write(write_buffer, _header.block_size);
 		out.flush();
+		delete[] write_buffer;
 		return out.good() ? sdb::SUCCESS : sdb::FAILURE;
 	} else {
 		return sdb::FAILURE;
@@ -410,6 +450,14 @@ int log_file::init_log_file() {
 
 bool log_file::is_open() {
 	return opened;
+}
+
+int log_file::close() {
+	if (opened) {
+		delete[] write_buffer;
+		log_stream.close();
+	}
+	opened = false;
 }
 
 bool log_file::is_active() {
@@ -455,16 +503,32 @@ int log_file::pre_block(char *buff) {
 	} else {
 		return LOG_STREAM_ERROR;
 	}
-
 }
 
 int log_file::head() {
+	int r = sdb::FAILURE;
 	if (log_stream.eof() || log_stream.bad()) {
-		re_open();
+		r = re_open();
 	}
-	log_stream.seekg(LOG_FILE_HEADER_LENGTH, ios_base::beg);
-	read_blk_offset = LOG_FILE_HEADER_LENGTH;
-	return log_stream.good() ? sdb::SUCCESS : LOG_STREAM_ERROR;
+	if (r) {
+		log_stream.seekg(LOG_FILE_HEADER_LENGTH, ios_base::beg);
+		read_blk_offset = LOG_FILE_HEADER_LENGTH;
+		return log_stream.good() ? sdb::SUCCESS : LOG_STREAM_ERROR;
+	}
+	return r;
+}
+
+int log_file::seek(int blk_off) {
+	int r = sdb::FAILURE;
+	if (log_stream.eof() || log_stream.bad()) {
+		r = re_open();
+	}
+	if (r) {
+		int p = log_stream.tellg();
+		log_stream.seekg(blk_off - p, ios_base::cur);
+		return log_stream.good() ? sdb::SUCCESS : LOG_STREAM_ERROR;
+	}
+	return r;
 }
 
 int log_file::tail() {
@@ -489,6 +553,47 @@ int log_file::inactive() {
 	log_stream.write(buff.data(), buff.capacity());
 	log_stream.flush();
 	return log_stream.good() ? sdb::SUCCESS : LOG_STREAM_ERROR;
+}
+
+int log_file::check(int blk_off, int dir_ent_idx) {
+
+	if (_header.active) {
+		return LOG_FILE_IS_ACTIVE;
+	}
+
+	int r = sdb::FAILURE;
+	int check_offset = -1;
+	r = seek(blk_off);
+	if (r) {
+		char * buff = new char[_header.block_size];
+		log_block lb;
+		log_block::dir_entry de;
+		if (next_block(buff)) { // do check the first block
+			lb.ref_buffer(buff, _header.block_size);
+			lb.seek(dir_ent_idx);
+			while (lb.has_next()) {
+				lb.next_entry(de);
+				dir_entry_type t = de.get_type();
+				if (t == dir_entry_type::start_item) {
+
+				} else if (t == dir_entry_type::abort_item
+						|| t == dir_entry_type::commit_item) {
+
+				}
+			}
+		}
+
+		// others whole block
+		while (next_block(buff)) {
+			lb.ref_buffer(buff, _header.block_size);
+
+		}
+
+		delete[] buff;
+	}
+
+// write to chk file
+	return r;
 }
 
 void log_file::set_block_size(int bs) {
@@ -527,6 +632,11 @@ int log_mgr::load(const string &path) {
 	this->path = path;
 	lock_pathname = path + "/" + LOG_MGR_LOCK_FILENAME;
 	int r = sdb::FAILURE;
+
+	if (!sio::exist_file(path)) {
+		r = sio::make_dir(path);
+	}
+
 	r = in_lock();
 	if (r == LOCKED_LOG_MGR_PATH) {
 		return r;
@@ -547,10 +657,12 @@ int log_mgr::load(const string &path) {
 
 	r = curr_log_file.open(pathname);
 	if (r) {
-		if (sio::exist_file(chkpath)) {
-			//open last checkpoint file match the last log file
-			chk_file_seq = log_file_seq;
-		} else {  // scan the last checkpoint file name
+		//if (sio::exist_file(chkpath)) {
+		//open last checkpoint file match the last log file
+		//	chk_file_seq = log_file_seq;
+		//} else
+
+		{  // scan the last checkpoint file name
 			list<string> chk_files = sio::list_file(path,
 					CHECKPOINT_FILE_SUFFIX);
 			for (auto & cf : chk_files) {
@@ -566,7 +678,9 @@ int log_mgr::load(const string &path) {
 		r = this->cur_chk_file.open(chkpath);
 	}
 
+	curr_log_file.set_log_mgr(this);
 	delete[] alphas;
+	opened = true;
 	return r;
 }
 
@@ -597,7 +711,18 @@ int log_mgr::close() {
 
 int log_mgr::flush() {
 	int r = sdb::FAILURE;
+	if (sync_police == log_sync_police::buffered) {
+
+	} else if (sync_police == log_sync_police::immeidate) {
+		r = sdb::SUCCESS;
+	} else if (sync_police == log_sync_police::async) {
+
+	}
 	return r;
+}
+
+bool log_mgr::is_open() {
+	return opened;
 }
 
 log_mgr::log_mgr() {
@@ -610,13 +735,34 @@ log_mgr::log_mgr(const string &path) {
 }
 
 log_mgr::~log_mgr() {
-	flush();
-	close();
-	out_lock();
+	if (opened) {
+		flush();
+		close();
+		out_lock();
+	}
+}
+
+int log_mgr::log_action(timestamp ts, action & a) {
+	return curr_log_file.append(ts, a);
+}
+
+int log_mgr::log_commit(timestamp ts) {
+	return curr_log_file.append_commit(ts);
+}
+
+int log_mgr::log_rollback(timestamp ts) {
+	return curr_log_file.append_abort(ts);
 }
 
 int checkpoint_file::open(const string & pathname) {
 	int r = sdb::FAILURE;
+	r = sio::exist_file(pathname);
+	if (!r) {
+		fstream fs;
+		fs.open(pathname.c_str(), ios_base::binary | ios_base::app);
+		r = fs.is_open();
+		fs.close();
+	}
 	return r;
 }
 

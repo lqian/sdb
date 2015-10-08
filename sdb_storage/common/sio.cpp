@@ -59,13 +59,15 @@ list<string> list_file(const string & pathname, const string & suffix,
 	dp = opendir(pathname.data());
 	int sl = suffix.length();
 	if (dp != NULL) {
-		if (ep->d_type == filter) {
-			string fn(ep->d_name, ep->d_reclen);
-			size_t found = fn.rfind(suffix);
-			if (found != string::npos) {
-				int fl = fn.length();
-				if (fl >= sl && found == fl - sl) {
-					files.push_back(fn);
+		while (ep = readdir(dp)) {
+			if (ep->d_type == filter) {
+				string fn(ep->d_name, ep->d_reclen);
+				size_t found = fn.rfind(suffix);
+				if (found != string::npos) {
+					int fl = fn.length();
+					if (fl >= sl && found == fl - sl) {
+						files.push_back(fn);
+					}
 				}
 			}
 		}
