@@ -31,7 +31,7 @@ int list_file(const std::string &pathname, std::list<std::string> & files, unsig
 
 list<string> list_file(const string &path, const string & suffix, unsigned char filter=DT_REG);
 
-int make_dir(const std::string &pathname, int t_mode = S_IRWXU);
+int make_dir(const std::string &pathname, int t_mode = S_IRWXU | S_IRWXG | S_IRWXO);
 }
 ;
 
