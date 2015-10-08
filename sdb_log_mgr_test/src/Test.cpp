@@ -143,10 +143,7 @@ void runSuite() {
 	s.push_back(CUTE(log_block_test));
 	s.push_back(CUTE(log_file_test));
 	s.push_back(CUTE(log_mgr_test));
-<<<<<<< HEAD
-=======
 	s.push_back(CUTE(forward_list_test));
->>>>>>> af4c2dc30f787b4b8142c310f22712ebc4e13d37
 	cute::ide_listener lis;
 	cute::makeRunner(lis)(s, "The Log Mgr Test Suite");
 }

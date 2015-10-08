@@ -57,7 +57,7 @@ void log_block::tail() {
 }
 
 void log_block::seek(int dir_ent_idx) {
-	read_entry_off = dir_ent_idx * DIRCTORY_ENTRY_LENGTH;
+	read_entry_off = dir_ent_idx;
 }
 
 bool log_block::has_next() {
@@ -526,6 +526,7 @@ int log_file::seek(int blk_off) {
 	if (r) {
 		int p = log_stream.tellg();
 		log_stream.seekg(blk_off - p, ios_base::cur);
+		read_blk_offset = blk_off;
 		return log_stream.good() ? sdb::SUCCESS : LOG_STREAM_ERROR;
 	}
 	return r;
@@ -555,6 +556,30 @@ int log_file::inactive() {
 	return log_stream.good() ? sdb::SUCCESS : LOG_STREAM_ERROR;
 }
 
+void log_file::check_log_block(log_block & lb) {
+	log_block::dir_entry de;
+	while (lb.has_next()) {
+		lb.next_entry(de);
+		dir_entry_type t = de.get_type();
+		if (t == dir_entry_type::start_item) {
+			check_point cp;
+			cp.ts = de.ts;
+			cp.blk_off = read_blk_offset;
+			cp.ent_off = lb.read_entry_off;
+			check_list.insert_after(check_list.end(), cp);
+		} else if (t == dir_entry_type::abort_item
+				|| t == dir_entry_type::commit_item) {
+			check_point cp;
+			cp.ts = de.ts;
+			cp.blk_off = read_blk_offset;
+			cp.ent_off = lb.read_entry_off;
+			check_list.remove(cp);
+		}
+		else if (t == dir_entry_type::data_item) {
+			// gather segment to be flush
+		}
+	}
+}
 int log_file::check(int blk_off, int dir_ent_idx) {
 
 	if (_header.active) {
@@ -565,28 +590,19 @@ int log_file::check(int blk_off, int dir_ent_idx) {
 	int check_offset = -1;
 	r = seek(blk_off);
 	if (r) {
+
 		char * buff = new char[_header.block_size];
 		log_block lb;
-		log_block::dir_entry de;
-		if (next_block(buff)) { // do check the first block
+		if (next_block(buff)) { // do check the non-completed log block
 			lb.ref_buffer(buff, _header.block_size);
 			lb.seek(dir_ent_idx);
-			while (lb.has_next()) {
-				lb.next_entry(de);
-				dir_entry_type t = de.get_type();
-				if (t == dir_entry_type::start_item) {
-
-				} else if (t == dir_entry_type::abort_item
-						|| t == dir_entry_type::commit_item) {
-
-				}
-			}
+			check_log_block(lb);
 		}
 
 		// others whole block
 		while (next_block(buff)) {
 			lb.ref_buffer(buff, _header.block_size);
-
+			check_log_block(lb);
 		}
 
 		delete[] buff;
@@ -611,6 +627,10 @@ void log_file::header::write_to(char_buffer & buff) {
 }
 void log_file::header::read_from(char_buffer & buff) {
 	buff >> magic >> block_size >> active;
+}
+
+bool log_file::check_point::operator ==(const log_file::check_point & an) {
+	return ts == an.ts && blk_off == an.blk_off && ent_off == an.ent_off;
 }
 
 void log_file::set_log_mgr(log_mgr * lm) {

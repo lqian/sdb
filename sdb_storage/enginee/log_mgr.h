@@ -10,7 +10,7 @@
 
 #include <cstring>
 #include <cstdlib>
-
+#include <forward_list>
 #include <iostream>
 #include <fstream>
 #include <map>
@@ -136,7 +136,7 @@ public:
 
 	void head();
 	void tail();
-	void seek(int dir_ent_idx);
+	void seek(int dir_ent_off);
 	bool has_next();
 	bool has_pre();
 	void pre_entry(dir_entry & e);
@@ -158,6 +158,14 @@ public:
 
 class log_file {
 	friend class log_mgr;
+
+	struct check_point {
+		timestamp ts;
+		int blk_off; // block offset
+		int ent_off; // directory entry offset
+
+		bool operator==(const check_point & an);
+	};
 
 	struct header {
 		unsigned int magic = LOG_FILE_MAGIC;
@@ -181,6 +189,8 @@ private:
 	char * write_buffer = nullptr;
 	log_mgr * _log_mgr = nullptr;
 
+	forward_list<check_point> check_list;
+
 	int init_log_file();
 	int renewal_last_block();
 	int flush_last_block();
@@ -191,6 +201,7 @@ private:
 	 */
 	int append(const char * buff, int len);
 	int re_open();
+	void check_log_block(log_block & lb);
 
 public:
 	log_file();
