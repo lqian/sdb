@@ -98,6 +98,7 @@ void log_file_test() {
 		cout << "scan backward log entry count:" << lb.count_entry() << endl;
 	}
 
+
 	lf.inactive();
 	lf.close();
 
@@ -133,6 +134,7 @@ void forward_list_test() {
 	for (int& x : mylist)
 		std::cout << ' ' << x;
 	std::cout << '\n';
+
 }
 
 void runSuite() {

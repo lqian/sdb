@@ -1,7 +1,7 @@
 .metadata/
 
 */Debug/
-*/.settings/
+*/.settings/*
 */Release/
 */Debug Gcov/
 */.cproject
@@ -9,3 +9,4 @@
 */.gitignore
 */boost/
 */cute/
+*/.suppressed
