@@ -11,6 +11,7 @@
 #include <cstring>
 #include <cstdlib>
 #include <forward_list>
+#include <set>
 #include <iostream>
 #include <fstream>
 #include <map>
@@ -145,6 +146,7 @@ public:
 
 	int copy_data(int idx, char_buffer & buff);
 	void copy_data(const dir_entry & e, char_buffer & buff);
+	ulong get_seg_id(const dir_entry & e);
 
 	int count_entry();
 	int remain();
@@ -190,6 +192,7 @@ private:
 	log_mgr * _log_mgr = nullptr;
 
 	forward_list<check_point> check_list;
+	set<ulong> check_seg;
 
 	int init_log_file();
 	int renewal_last_block();

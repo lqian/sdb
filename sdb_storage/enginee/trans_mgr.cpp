@@ -10,6 +10,43 @@
 namespace sdb {
 namespace enginee {
 
+bool data_item_ref::operator ==(const data_item_ref & an) {
+	return an.seg_id == seg_id && an.blk_off == blk_off && an.row_idx == row_idx;
+}
+
+void action::create(char * buff, int len) {
+	wl = ACTION_HEADER_LENGTH + INT_CHARS + len;
+	wd = new char[wl];
+	char_buffer tmp(wd, wl, true);
+	char flag = 0;
+	flag |= (1 << NEW_VALUE_BIT);
+	tmp << di->seg_id << di->blk_off << di->row_idx << flag;
+	tmp.push_back(buff, len, true);
+}
+
+void action::update(char * n_buff, int n_len, char * o_buff, int o_len) {
+	wl = ACTION_HEADER_LENGTH + INT_CHARS + n_len;
+	wl += INT_CHARS + o_len;
+	wd = new char[wl];
+	char_buffer tmp(wd, wl, true);
+	char flag = 0;
+	flag |= (1 << NEW_VALUE_BIT);
+	flag |= (1 << OLD_VALUE_BIT);
+	tmp << di->seg_id << di->blk_off << di->row_idx << flag;
+	tmp.push_back(n_buff, n_len, true);
+	tmp.push_back(o_buff, o_len, true);
+}
+
+void action::remove(char * o_buff, int o_len) {
+	wl = ACTION_HEADER_LENGTH + INT_CHARS + o_len;
+	wd = new char[wl];
+	char_buffer tmp(wd, wl, true);
+	char flag = 0;
+	flag |= (1 << OLD_VALUE_BIT);
+	tmp << di->seg_id << di->blk_off << di->row_idx << flag;
+	tmp.push_back(o_buff, o_len, true);
+}
+
 void transaction::execute() {
 	tst = ACTIVE;
 	for (auto & a : actions) {

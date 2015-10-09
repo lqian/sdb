@@ -30,14 +30,16 @@ class trans_mgr;
 class transaction;
 class comparator;
 
-typedef unsigned long  ulong;
+typedef unsigned long ulong;
 typedef unsigned int uint;
 typedef unsigned short ushort;
-typedef unsigned long  timestamp;
+typedef unsigned long timestamp;
 typedef transaction * p_trans;
 
+const short NEW_VALUE_BIT = 7;
+const short OLD_VALUE_BIT = 6;
 
-
+const int ACTION_HEADER_LENGTH = 17;
 
 /*
  * CAUTION: currently only support read_committed
@@ -72,18 +74,42 @@ struct data_item_ref {
 	ushort row_idx;
 	timestamp wts = 0; // write timestamp
 	timestamp rts = 0; // read timestamp
+
+	bool operator==(const data_item_ref & an);
 };
 
 struct action {
 	unsigned short seq; // maybe
 	action_op op;
 	data_item_ref * di;  // data item ref
-	// writing data and length
+
+	/*
+	 * writing data and length, include old data
+	 * and new data if the action has.
+	 *
+	 * serialized byte sequence
+	 *
+	 * | seg_id | blk_off | row_idx | flag | {new_value} | {old_value} |
+	 *
+	 * wl: total writting length, 4 bytes, include header, flag, new value and old value,
+	 * 		8 + 4 + 4 + 1 +  {4 + new_value_len} + {4 + old_value_len}
+	 * flag: 7th bit, has new value;
+	 *       6th bit, has old value;
+	 *
+	 */
 	char * wd = nullptr;
 	int wl = 0;
+
+	/*
+	 * op is write, but the action doesn't have old data, the new data specified
+	 * with two parameters, the method assume that data_item_ref has been assigned
+	 */
+	void create(char * n_buff, int n_len);
+
+	void update(char * n_buff, int n_len, char * o_buff, int o_len);
+
+	void remove(char * o_buff, int o_len);
 };
-
-
 
 class transaction {
 	friend class trans_mgr;
@@ -119,8 +145,6 @@ public:
 	}
 	~transaction() {
 	}
-
-
 
 	inline void set_trans_mgr(trans_mgr * tm) {
 		this->tm = tm;

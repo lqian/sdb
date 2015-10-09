@@ -95,7 +95,16 @@ int log_block::copy_data(int idx, char_buffer & buff) {
 	}
 	dir_entry * e = (dir_entry *) (buffer + ent_off);
 	buff.push_back(buffer + e->offset, e->length, false);
-	return sdb::SUCCESS;;
+	return sdb::SUCCESS;
+}
+
+void log_block::copy_data(const dir_entry &e, char_buffer & buff) {
+	buff.push_back(buffer + e.offset, e.length, false);
+}
+
+ulong log_block::get_seg_id(const dir_entry & e) {
+	ulong * p = (ulong *) buffer + e.offset;
+	return p[0];
 }
 
 log_block::~log_block() {
@@ -577,10 +586,11 @@ void log_file::check_log_block(log_block & lb) {
 		}
 		else if (t == dir_entry_type::data_item) {
 			// gather segment to be flush
-
+			check_seg.insert(lb.get_seg_id(de));
 		}
 	}
 }
+
 int log_file::check(int blk_off, int dir_ent_idx) {
 
 	if (_header.active) {

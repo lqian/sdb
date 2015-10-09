@@ -901,10 +901,102 @@ struct mem_data_block: data_block {
 		return r;
 	}
 
-	int update_row_data_by_index(int idx, const char *rb, const int rl) {
-		unsigned short off = off_tbl[idx];
-		return update_row_data(off, rb, rl);
+	/*
+	 * assign a space for row with specified length, if assign success,
+	 * return row offset index, else return UNKNOWN_OFFSET
+	 */
+	int assign_row(const int & rl) {
+		int r = UNKNOWN_OFFSET;
+		int s = off_tbl.size();
+		if (s == 0) {
+			// there isn't any ROW DATA in the data block
+			if (rl <= length - offset_bytes) {
+				unsigned short l_off = length - rl;
+				off_tbl.push_back(l_off);
+				r = s;
+			}
+		} else if (enough_reserved_space(rl)) {
+			// make sure that reserve 20% free space in the data block
+			unsigned short l_off = off_tbl[s - 1];
+			l_off -= rl;
+			off_tbl.push_back(l_off);
+			r = s;
+		}
+		return r;
 	}
+
+	/**
+	 * update a existed row with a new given row and the row's existed index, return new index
+	 * if update successfully, else DELETE_OFFSET or UNKOWN_OFFSET.
+	 *
+	 * 1) if the index denote the last row, and there are enough un-utilization remainder space,
+	 * update the offset to point the existed offset, save row data. whereas are not enough un-utilization
+	 * space. delete the exist index, return DELETE_OFFSET
+	 *
+	 * 2) if the offset denoted the non-last row. if exists row length is great than new row.
+	 * overwrite the new row data from existed offset. return existed index, else delete the
+	 * existed offset,if there are enough un-utilization space, assign a new offset for the row,
+	 * write row data to the new offset, return new index, else do not write new row data, return
+	 * DELETE_OFFSET.
+	 *
+	 * 3) update u_off and u_size whenever update offset or write row data
+	 *
+	 * 4) if does not find the offset and others, return UNKOWN_OFFSET
+	 *
+	 */
+	int update_row_data_by_index(int idx, const char *rb, const int rl) {
+		int r = UNKNOWN_OFFSET;
+		if (idx != -1 && idx < off_tbl.size()) {
+			int off = off_tbl[idx];
+			int o_rl = (idx == 0 ? length : off_tbl[idx - 1]) - off;
+			if ((idx + 1) == off_tbl.size()) { // the last row
+				if (enough_space(rl - o_rl)) { // enough space, maybe shrink existed row space
+					int n_off = off + o_rl - rl;
+					off_tbl[idx] = n_off;
+					r = idx;
+					memcpy(buffer + n_off, rb, rl);
+					// change the modification buffer range
+					if (u_off_start > idx * offset_bytes)
+						u_off_start = idx * offset_bytes;
+					if (u_off_end < n_off + rl)
+						u_off_end = n_off + rl;
+				} else if (delete_row_by_idx(idx)) { // not enough space, only delete existed row offset
+					r = DELETE_OFFSET;
+				}
+			} else if (o_rl >= rl) { // not last row, but existed row has enough space
+				memcpy(buffer + off, rb, rl);
+				if (u_off_end < off + rl)
+					u_off_end = off + rl;
+				r = idx;
+			} else if (remainder_space() >= rl) {
+				// not last row, not enough space in existed row,
+				// but the block has enough remainder space
+				// delete original offset first, then assign new space.
+				if (delete_row_by_idx(idx)) {
+					if (enough_space(rl)) {
+						int s = off_tbl.size();
+						unsigned short l_off = off_tbl[s - 1];
+						l_off -= rl;
+						r = off_tbl.size();
+						off_tbl.push_back(l_off);
+						memcpy(buffer + l_off, rb, rl);
+
+						// change the modification buffer range
+						if (u_off_start > idx * offset_bytes)
+							u_off_start = idx * offset_bytes;
+						if (u_off_end < l_off)
+							u_off_end = l_off;
+					} else {
+						r = DELETE_OFFSET;
+					}
+				}
+			}
+			calc_free_perct();
+		}
+
+		return r;
+	}
+
 	/**
 	 * update a existed row with a new given row and the row's existed offset, return new offset
 	 * if update successfully, else UNKNOWN_OFFSET or DELETE_OFFSET.
@@ -922,7 +1014,6 @@ struct mem_data_block: data_block {
 	 * 3) update u_off and u_size whenever update offset or write row data
 	 *
 	 * 4) if does not find the offset and others, return UNKOWN_OFFSET
-	 *
 	 */
 	int update_row_data(const unsigned short off, const char *rb,
 			const int rl) {
@@ -989,7 +1080,6 @@ struct mem_data_block: data_block {
 			unsigned short n = (1 << ROW_DELETED_FLAG_BIT); /* the 15th bit as 1, DELETE flag*/
 			unsigned short off = off_tbl[idx];
 			off_tbl[idx] = off | n;
-
 			if (u_off_start > idx * offset_bytes)
 				u_off_start = idx * offset_bytes;
 			return true;
