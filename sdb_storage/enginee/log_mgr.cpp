@@ -102,6 +102,11 @@ void log_block::copy_data(const dir_entry &e, char_buffer & buff) {
 	buff.push_back(buffer + e.offset, e.length, false);
 }
 
+void log_block::copy_data(const dir_entry &e, action &a) {
+	char_buffer buff(buffer + e.offset, e.length, true);
+	a.read_from(buff);
+}
+
 ulong log_block::get_seg_id(const dir_entry & e) {
 	ulong * p = (ulong *) buffer + e.offset;
 	return p[0];
@@ -302,7 +307,7 @@ int log_file::open(const string & pathname) {
 	log_stream.open(pathname.c_str(),
 			ios_base::binary | ios_base::in | ios_base::out);
 	if (log_stream.is_open()) {
-		opened = true;
+
 		write_buffer = new char[_header.block_size];
 
 		// file existed, must check it has the correct magic,
@@ -323,8 +328,13 @@ int log_file::open(const string & pathname) {
 				initialized = true;
 			}
 		}
-
-		r = log_stream.good() ? sdb::SUCCESS : LOG_STREAM_ERROR;
+		if (log_stream.good()) {
+			r = sdb::SUCCESS;
+			opened = true;
+		} else {
+			r = LOG_STREAM_ERROR;
+			;
+		}
 	}
 	return r;
 }
@@ -583,12 +593,83 @@ void log_file::check_log_block(log_block & lb) {
 			cp.blk_off = read_blk_offset;
 			cp.ent_off = lb.read_entry_off;
 			check_list.remove(cp);
-		}
-		else if (t == dir_entry_type::data_item) {
+		} else if (t == dir_entry_type::data_item) {
 			// gather segment to be flush
 			check_seg.insert(lb.get_seg_id(de));
 		}
 	}
+}
+
+int log_file::rfind(timestamp ts, list<action> & actions) {
+	int r = NOT_FIND_TRANSACTION;
+	log_block lb;
+	log_block::dir_entry de;
+	// if find the <start ts> return
+	r = tail();
+	if (r) {
+		int bs = _header.block_size;
+		char * buff = new char[bs];
+		while (pre_block(buff)) {
+			lb.ref_buffer(buff, bs);
+			lb.tail();
+			while (lb.has_pre()) {
+				lb.pre_entry(de);
+				if (de.ts == ts) {
+					if (de.get_type() == start_item) {
+						return FIND_TRANSACTION_START;
+					} else if (de.get_type() == data_item) {
+						r = CONTINUE_TO_FIND;
+						action a;
+						lb.copy_data(de, a);
+						actions.push_back(a);
+					}
+				}
+			}
+		}
+	}
+	return r;
+}
+
+int log_file::irfind(timestamp ts, list<action> & actions) {
+	int r = sdb::FAILURE;
+	if (!opened) {
+		r = open();
+	}
+	if (!r) {
+		return r;
+	}
+
+	if (active) {
+		return INVALID_OPS_ON_ACTIVE_LOG_FILE;
+	}
+
+	r = tail();
+	if (r) {
+		int bs = _header.block_size;
+		char *buff = new char[bs];
+		log_block lb;
+		log_block::dir_entry de;
+		while (read_blk_offset >= chk_blk_offset && pre_block(buff)) {
+			lb.ref_buffer(buff, bs);
+			lb.tail();
+
+			while (lb.has_pre()) {
+				lb.pre_entry(de);
+				if (de.ts == ts) {
+					if (de.get_type() == start_item) {
+						return FIND_TRANSACTION_START;
+					} else if (de.get_type() == data_item) {
+						r = CONTINUE_TO_FIND;
+						action a;
+						lb.copy_data(de, a);
+						actions.push_back(a);
+					}
+				}
+			}
+		}
+	}
+
+	return r;
 }
 
 int log_file::check(int blk_off, int dir_ent_idx) {
@@ -640,7 +721,7 @@ void log_file::header::read_from(char_buffer & buff) {
 	buff >> magic >> block_size >> active;
 }
 
-bool log_file::check_point::operator ==(const log_file::check_point & an) {
+bool check_point::operator ==(const check_point & an) {
 	return ts == an.ts && blk_off == an.blk_off && ent_off == an.ent_off;
 }
 
@@ -704,7 +785,7 @@ int log_mgr::load(const string &path) {
 
 		ultoa(chk_file_seq, alphas);
 		chkpath = this->path + "/" + alphas + CHECKPOINT_FILE_SUFFIX;
-		r = this->cur_chk_file.open(chkpath);
+		r = this->last_chk_file.open(chkpath);
 	}
 
 	curr_log_file.set_log_mgr(this);
@@ -779,8 +860,21 @@ int log_mgr::log_commit(timestamp ts) {
 	return curr_log_file.append_commit(ts);
 }
 
-int log_mgr::log_rollback(timestamp ts) {
+int log_mgr::log_abort(timestamp ts) {
 	return curr_log_file.append_abort(ts);
+}
+
+int log_mgr::rfind(timestamp ts, list<action> & actions) {
+	int r = sdb::FAILURE;
+	if (sync_police == log_sync_police::immeidate) {
+		r = curr_log_file.rfind(ts, actions);
+
+		if (r != FIND_TRANSACTION_START) {
+			r = last_log_file.irfind(ts, actions);
+		}
+	}
+
+	return r;
 }
 
 int checkpoint_file::open(const string & pathname) {

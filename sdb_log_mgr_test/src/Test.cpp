@@ -17,7 +17,8 @@ void log_block_test() {
 	a.wd = new char[35];
 	a.seq = 1;
 
-	action b = a;
+	action b;
+	b = a;
 	b.seq = 2;
 	int idx = 0;
 	ASSERT(lb.add_start(ts) == DIRCTORY_ENTRY_LENGTH * idx++);
@@ -124,7 +125,7 @@ void log_mgr_test() {
 	lmg.log_commit(ts);
 
 	lmg.log_action(rts, b);
-	lmg.log_rollback(rts);
+	lmg.log_abort(rts);
 }
 
 void forward_list_test() {
@@ -134,6 +135,25 @@ void forward_list_test() {
 	for (int& x : mylist)
 		std::cout << ' ' << x;
 	std::cout << '\n';
+
+	struct P {
+		char *b;
+		int l;
+
+		inline P& operator=(const P & p) {
+			l = p.l;
+			b = new char[l];
+			memcpy(b, p.b, l);
+		}
+	};
+
+
+	P p1;
+	p1.l = 10;
+	p1.b = new char[10];
+	P p2;
+	p2 = p1;
+
 
 }
 

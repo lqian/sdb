@@ -18,9 +18,8 @@ void action::create(char * buff, int len) {
 	wl = ACTION_HEADER_LENGTH + INT_CHARS + len;
 	wd = new char[wl];
 	char_buffer tmp(wd, wl, true);
-	char flag = 0;
 	flag |= (1 << NEW_VALUE_BIT);
-	tmp << di->seg_id << di->blk_off << di->row_idx << flag;
+	tmp << di.seg_id << di.blk_off << di.row_idx << flag;
 	tmp.push_back(buff, len, true);
 }
 
@@ -29,10 +28,9 @@ void action::update(char * n_buff, int n_len, char * o_buff, int o_len) {
 	wl += INT_CHARS + o_len;
 	wd = new char[wl];
 	char_buffer tmp(wd, wl, true);
-	char flag = 0;
 	flag |= (1 << NEW_VALUE_BIT);
 	flag |= (1 << OLD_VALUE_BIT);
-	tmp << di->seg_id << di->blk_off << di->row_idx << flag;
+	tmp << di.seg_id << di.blk_off << di.row_idx << flag;
 	tmp.push_back(n_buff, n_len, true);
 	tmp.push_back(o_buff, o_len, true);
 }
@@ -43,17 +41,54 @@ void action::remove(char * o_buff, int o_len) {
 	char_buffer tmp(wd, wl, true);
 	char flag = 0;
 	flag |= (1 << OLD_VALUE_BIT);
-	tmp << di->seg_id << di->blk_off << di->row_idx << flag;
+	tmp << di.seg_id << di.blk_off << di.row_idx << flag;
 	tmp.push_back(o_buff, o_len, true);
+}
+
+void action::read_from(char_buffer & buff) {
+	buff >> di.seg_id >> di.blk_off >> di.row_idx >> flag;
+	wl = buff.remain();
+	wd = new char[wl];
+	buff.pop_cstr(wd, wl, false);
+}
+
+void action::write_to(char_buffer & buff) {
+	buff << di.seg_id << di.blk_off << di.row_idx << flag;
+	buff.push_back(wd, wl, false);
+}
+
+action::~action() {
+	if (wd) {
+		delete[] wd;
+	}
+}
+
+action & action::operator=(const action & an) {
+	seq = an.seq;
+	op = an.op;
+	di = an.di;
+	wl = an.wl;
+	wd = new char[wl];
+	memcpy(wd, an.wd, wl);
+	return *this;
+}
+
+action::action(const action & an) {
+	seq = an.seq;
+	op = an.op;
+	di = an.di;
+	wl = an.wl;
+	wd = new char[wl];
+	memcpy(wd, an.wd, wl);
 }
 
 void transaction::execute() {
 	tst = ACTIVE;
 	for (auto & a : actions) {
 		if (a.op == action_op::WRITE) {
-			if (ts > a.di->wts) {
-				if (write_log(a.di)) { // write log
-					write(a.di);  // write data
+			if (ts > a.di.wts) {
+				if (write_log(&a.di)) { // write log
+					write(&a.di);  // write data
 				} else {
 					rollback();
 					return;
@@ -62,8 +97,8 @@ void transaction::execute() {
 				// skip current update
 			}
 		} else if (a.op == action_op::READ) {
-			if (ts > a.di->wts) {
-				if (read(a.di) != sdb::SUCCESS) {
+			if (ts > a.di.wts) {
+				if (read(&a.di) != sdb::SUCCESS) {
 					rollback();
 					return;
 				}
@@ -127,7 +162,7 @@ void transaction::add_action(const action & a) {
 void transaction::add_action(action_op op, data_item_ref * di) {
 	action a;
 	a.op = op;
-	a.di = di;
+	a.di = (*di);
 	actions.push_back(a);
 }
 

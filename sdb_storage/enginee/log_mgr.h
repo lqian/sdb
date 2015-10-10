@@ -37,6 +37,10 @@ const int START_DEFINE = 0xfffffffd;
 const int LOG_FILE_MAGIC = 0x7FA9C83D;
 const int LOG_BLOCK_MAGIC = 0xF79A8CD3;
 
+const int NOT_FIND_TRANSACTION = -1;
+const int FIND_TRANSACTION_START = 1;
+const int CONTINUE_TO_FIND = 2;
+
 const int LOG_FILE_HEADER_LENGTH = 1024;
 const int LOG_BLOCK_HEADER_LENGTH = 24;
 const int DIRCTORY_ENTRY_LENGTH = 18;
@@ -50,6 +54,7 @@ const int LOCKED_LOG_MGR_PATH = -0X505;
 const int LOCK_STREAM_ERROR = -0X506;
 const int OUT_LOCK_LOGMGR_FAILURE = -0X507;
 const int LOG_FILE_IS_ACTIVE = -0X508;
+const int INVALID_OPS_ON_ACTIVE_LOG_FILE = -0X509;
 
 class log_mgr;
 
@@ -63,6 +68,14 @@ enum log_sync_police {
 
 enum dir_entry_type {
 	unknown = -1, start_item, data_item, commit_item, abort_item
+};
+
+struct check_point {
+	timestamp ts;
+	int blk_off; // block offset
+	int ent_off; // directory entry offset
+
+	bool operator==(const check_point & an);
 };
 
 class undo_buffer {
@@ -146,6 +159,7 @@ public:
 
 	int copy_data(int idx, char_buffer & buff);
 	void copy_data(const dir_entry & e, char_buffer & buff);
+	void copy_data(const dir_entry &e, action & a);
 	ulong get_seg_id(const dir_entry & e);
 
 	int count_entry();
@@ -160,14 +174,6 @@ public:
 
 class log_file {
 	friend class log_mgr;
-
-	struct check_point {
-		timestamp ts;
-		int blk_off; // block offset
-		int ent_off; // directory entry offset
-
-		bool operator==(const check_point & an);
-	};
 
 	struct header {
 		unsigned int magic = LOG_FILE_MAGIC;
@@ -185,7 +191,7 @@ private:
 	string pathname;
 	std::fstream log_stream;
 	header _header;
-	int checked_offset = 0;
+	int chk_blk_offset = 0;
 	int read_blk_offset = LOG_FILE_HEADER_LENGTH; //includes the log file header length
 	log_block last_blk;  // the last log block for append log entry
 	char * write_buffer = nullptr;
@@ -205,6 +211,9 @@ private:
 	int append(const char * buff, int len);
 	int re_open();
 	void check_log_block(log_block & lb);
+
+	int rfind(timestamp ts, list<action> &actions);
+	int irfind(timestamp ts, list<action>& actinos);
 
 public:
 	log_file();
@@ -233,7 +242,7 @@ public:
 	bool is_active();
 	int inactive();
 
-	int check(int blk_off = LOG_FILE_HEADER_LENGTH, int dir_ent_idx=0);
+	int check(int blk_off = LOG_FILE_HEADER_LENGTH, int dir_ent_idx = 0);
 
 	void set_block_size(int bs);
 	int get_block_size();
@@ -262,9 +271,9 @@ private:
 	int lb_cap = 1048576; // log buffer capacity
 	int log_file_max_size = 67108864;
 
-	log_file f;
 	log_file curr_log_file;
-	checkpoint_file cur_chk_file;
+	log_file last_log_file;
+	checkpoint_file last_chk_file;
 
 	long check_interval; // check interval in milliseconds
 
@@ -283,11 +292,17 @@ public:
 
 	int log_action(timestamp ts, action & a);
 	int log_commit(timestamp ts);
-	int log_rollback(timestamp ts);
-	int log_abort(timestamp *ts);
+	int log_abort(timestamp ts);
 
-	int find(timestamp ts, char_buffer & buff);
+	/*
+	 * find actions for a transaction in reserved order in case an transaction
+	 * need to be roll back
+	 */
+	int rfind(timestamp ts, list<action> & actions);
 
+	/*
+	 * redo and undo action depends seg_mgr is loaded
+	 */
 	int redo();
 	int undo();
 	int check();

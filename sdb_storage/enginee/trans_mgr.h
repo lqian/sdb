@@ -78,10 +78,12 @@ struct data_item_ref {
 	bool operator==(const data_item_ref & an);
 };
 
-struct action {
+class action {
+public:
 	unsigned short seq; // maybe
 	action_op op;
-	data_item_ref * di;  // data item ref
+	data_item_ref  di;  // data item ref
+	char flag=0;
 
 	/*
 	 * writing data and length, include old data
@@ -109,6 +111,15 @@ struct action {
 	void update(char * n_buff, int n_len, char * o_buff, int o_len);
 
 	void remove(char * o_buff, int o_len);
+
+	action& operator=(const action & an);
+
+	void read_from(char_buffer & buff);
+	void write_to(char_buffer & buff);
+
+	action(){}
+	action(const action & an);
+	~action();
 };
 
 class transaction {
