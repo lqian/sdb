@@ -212,7 +212,21 @@ private:
 	int re_open();
 	void check_log_block(log_block & lb);
 
+	/*
+	 * from the active log file end-place, find actions for a transaction
+	 * specified with ts parameter, and fill them to actions parameter,
+	 * if found all actions for the transaction,
+	 * return FIND_TRANSACTION_START, NOT_FIND_TRANSACTION or CONTINUE_TO_FIND
+	 */
 	int rfind(timestamp ts, list<action> &actions);
+
+	/*
+	 * from the inactive log file end-place, find actions for a transaction
+	 * specified with ts parameter, and fill them to actions parameter,
+	 * if found all actions for the transaction,
+	 * return FIND_TRANSACTION_START, NOT_FIND_TRANSACTION or CONTINUE_TO_FIND
+	 * return INVALID_OPS_ON_ACTIVE_LOG_FILE if invoke the method at the active log file
+	 */
 	int irfind(timestamp ts, list<action>& actinos);
 
 public:
@@ -290,6 +304,7 @@ public:
 	int close();
 	int flush();
 
+	int log_start(timestamp ts);
 	int log_action(timestamp ts, action & a);
 	int log_commit(timestamp ts);
 	int log_abort(timestamp ts);

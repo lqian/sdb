@@ -67,6 +67,8 @@ void log_file_test() {
 	ASSERT(lf.open() == sdb::SUCCESS);
 
 	timestamp ts = 100L;
+	lf.append_start(ts);
+
 	action a;
 	a.wl = 100;
 	a.wd = new char[100];
@@ -79,6 +81,7 @@ void log_file_test() {
 		a.seq = 2 + i;
 		lf.append(ts, a);
 	}
+	lf.append_commit(ts);
 
 	log_block lb;
 	// scan forward
@@ -117,15 +120,20 @@ void log_mgr_test() {
 	a.wl = 35;
 	a.wd = new char[35];
 	a.seq = 1;
+	lmg.log_start(ts);
+	lmg.log_action(ts, a);
+	lmg.log_commit(ts);
 
 	action b = a;
 	b.seq = 2;
 	timestamp rts = 1002L;
-	lmg.log_action(ts, a);
-	lmg.log_commit(ts);
-
+	lmg.log_start(rts);
 	lmg.log_action(rts, b);
 	lmg.log_abort(rts);
+
+	// test find
+	list<action> actions;
+	ASSERT(lmg.rfind(ts, actions) == FIND_TRANSACTION_START);
 }
 
 void forward_list_test() {

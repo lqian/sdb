@@ -852,6 +852,10 @@ log_mgr::~log_mgr() {
 	}
 }
 
+int log_mgr::log_start(timestamp ts) {
+	return curr_log_file.append_start(ts);
+}
+
 int log_mgr::log_action(timestamp ts, action & a) {
 	return curr_log_file.append(ts, a);
 }
