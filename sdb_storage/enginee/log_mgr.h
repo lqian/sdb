@@ -44,6 +44,7 @@ const int CONTINUE_TO_FIND = 2;
 const int LOG_FILE_HEADER_LENGTH = 1024;
 const int LOG_BLOCK_HEADER_LENGTH = 24;
 const int DIRCTORY_ENTRY_LENGTH = 18;
+const int CHECK_POINT_LENGTH = 16;
 
 const int LOG_BLK_SPACE_NOT_ENOUGH = -0X500;
 const int OUTOF_ENTRY_INDEX = -0X501;
@@ -55,6 +56,7 @@ const int LOCK_STREAM_ERROR = -0X506;
 const int OUT_LOCK_LOGMGR_FAILURE = -0X507;
 const int LOG_FILE_IS_ACTIVE = -0X508;
 const int INVALID_OPS_ON_ACTIVE_LOG_FILE = -0X509;
+const int MISSING_LAST_CHECK_POINT = -0X50A;
 
 class log_mgr;
 
@@ -72,8 +74,8 @@ enum dir_entry_type {
 
 struct check_point {
 	timestamp ts;
-	int blk_off; // block offset
-	int ent_off; // directory entry offset
+	int log_blk_off; // log block offset
+	int dir_ent_off; // log directory entry offset
 
 	bool operator==(const check_point & an);
 };
@@ -191,14 +193,14 @@ private:
 	string pathname;
 	std::fstream log_stream;
 	header _header;
-	int chk_blk_offset = 0;
+	check_point * cutoff_point = nullptr;
 	int read_blk_offset = LOG_FILE_HEADER_LENGTH; //includes the log file header length
 	log_block last_blk;  // the last log block for append log entry
 	char * write_buffer = nullptr;
 	log_mgr * _log_mgr = nullptr;
 
 	forward_list<check_point> check_list;
-	set<ulong> check_seg;
+	set<ulong> check_segs;
 
 	int init_log_file();
 	int renewal_last_block();
@@ -211,6 +213,8 @@ private:
 	int append(const char * buff, int len);
 	int re_open();
 	void check_log_block(log_block & lb);
+	int check(int blk_off = LOG_FILE_HEADER_LENGTH, int dir_ent_off = 0);
+	int cut_off();
 
 	/*
 	 * from the active log file end-place, find actions for a transaction
@@ -256,21 +260,28 @@ public:
 	bool is_active();
 	int inactive();
 
-	int check(int blk_off = LOG_FILE_HEADER_LENGTH, int dir_ent_idx = 0);
-
 	void set_block_size(int bs);
 	int get_block_size();
 };
 
 class checkpoint_file {
 	friend class log_mgr;
-
 private:
+	string pathname;
+	fstream chk_stream;
+public:
 	int open(const string & pathname);
-	int create(const string &pathname);
-
+	int write_checkpoint(const check_point * cp);
+	int write_checkpoint(const check_point & cp);
+	int write_checkpoint(const timestamp &ts, const int & lbo, const int & deo);
+	int last_checkpoint(check_point &cp);
+	int last_checkpoint(check_point *cp);
+	void close();
 };
 
+/*
+ * current the log management just support sync_immediate policy.
+ */
 class log_mgr {
 	friend class log_file;
 	friend class checkpoint_file;
@@ -287,7 +298,6 @@ private:
 
 	log_file curr_log_file;
 	log_file last_log_file;
-	checkpoint_file last_chk_file;
 
 	long check_interval; // check interval in milliseconds
 
@@ -321,11 +331,6 @@ public:
 	int redo();
 	int undo();
 	int check();
-
-	/*
-	 * scan from the end of log, seek old data item for a transaction specified with timestamp
-	 */
-	int undo_log(timestamp ts, char_buffer & buff);
 
 	void set_log_file_max_size(int size = 67108864);
 	void set_sync_police(const enum log_sync_police & sp);

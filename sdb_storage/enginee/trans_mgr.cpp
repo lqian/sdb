@@ -24,8 +24,7 @@ void action::create(char * buff, int len) {
 }
 
 void action::update(char * n_buff, int n_len, char * o_buff, int o_len) {
-	wl = ACTION_HEADER_LENGTH + INT_CHARS + n_len;
-	wl += INT_CHARS + o_len;
+	wl = ACTION_HEADER_LENGTH + INT_CHARS + INT_CHARS + n_len + o_len;
 	wd = new char[wl];
 	char_buffer tmp(wd, wl, true);
 	flag |= (1 << NEW_VALUE_BIT);
@@ -46,10 +45,17 @@ void action::remove(char * o_buff, int o_len) {
 }
 
 void action::read_from(char_buffer & buff) {
-	buff >> di.seg_id >> di.blk_off >> di.row_idx >> flag;
-	wl = buff.remain();
+	int len;
+	buff >> di.seg_id >> di.blk_off >> di.row_idx >> flag >> len;
+	buff.skip(len);
+	if ((flag >> NEW_VALUE_BIT & 1) && (flag >> OLD_VALUE_BIT & 1)) {
+		buff >> len;
+		buff.skip(len);
+	}
+
+	wl = buff.header();
 	wd = new char[wl];
-	buff.pop_cstr(wd, wl, false);
+	memcpy(wd, buff.data(), wl);
 }
 
 void action::write_to(char_buffer & buff) {
@@ -67,9 +73,11 @@ action & action::operator=(const action & an) {
 	seq = an.seq;
 	op = an.op;
 	di = an.di;
-	wl = an.wl;
-	wd = new char[wl];
-	memcpy(wd, an.wd, wl);
+	if (an.wl > 0) {
+		wl = an.wl;
+		wd = new char[wl];
+		memcpy(wd, an.wd, wl);
+	}
 	return *this;
 }
 
@@ -77,8 +85,11 @@ action::action(const action & an) {
 	seq = an.seq;
 	op = an.op;
 	di = an.di;
-	wl = an.wl;
-	wd = new char[wl];
+	if (an.wl > 0) {
+		wl = an.wl;
+		wd = new char[wl];
+		memcpy(wd, an.wd, wl);
+	}
 	memcpy(wd, an.wd, wl);
 }
 

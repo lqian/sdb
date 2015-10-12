@@ -39,7 +39,7 @@ typedef transaction * p_trans;
 const short NEW_VALUE_BIT = 7;
 const short OLD_VALUE_BIT = 6;
 
-const int ACTION_HEADER_LENGTH = 17;
+const int ACTION_HEADER_LENGTH = 15;
 
 /*
  * CAUTION: currently only support read_committed
@@ -99,8 +99,8 @@ public:
 	 *       6th bit, has old value;
 	 *
 	 */
-	char * wd = nullptr;
-	int wl = 0;
+	char * wd = nullptr;   // action data buffer, includes data_item_ref  and flag
+	int wl = 0; // action data length, include data_item_ref and flag
 
 	/*
 	 * op is write, but the action doesn't have old data, the new data specified

@@ -102,7 +102,6 @@ void log_file_test() {
 		cout << "scan backward log entry count:" << lb.count_entry() << endl;
 	}
 
-
 	lf.inactive();
 	lf.close();
 
@@ -115,11 +114,17 @@ void log_mgr_test() {
 	log_mgr lmg;
 	ASSERT(lmg.load("/tmp/logs") == sdb::SUCCESS);
 
+	data_item_ref di;
+	di.seg_id = 1L;
+	di.blk_off = 1;
+	di.row_idx = 0;
 	timestamp ts = 100L;
+	int len = 35;
+	char * data = new char[len];
 	action a;
-	a.wl = 35;
-	a.wd = new char[35];
+	a.di = di;
 	a.seq = 1;
+	a.create(data, len);
 	lmg.log_start(ts);
 	lmg.log_action(ts, a);
 	lmg.log_commit(ts);
@@ -131,9 +136,14 @@ void log_mgr_test() {
 	lmg.log_action(rts, b);
 	lmg.log_abort(rts);
 
-	// test find
+	// test rfind
 	list<action> actions;
 	ASSERT(lmg.rfind(ts, actions) == FIND_TRANSACTION_START);
+	ASSERT(actions.size() ==1);
+
+	actions.clear();
+	ASSERT(lmg.rfind(rts, actions) == FIND_TRANSACTION_START);
+	ASSERT(actions.size() ==1);
 }
 
 void forward_list_test() {
@@ -155,13 +165,11 @@ void forward_list_test() {
 		}
 	};
 
-
 	P p1;
 	p1.l = 10;
 	p1.b = new char[10];
 	P p2;
 	p2 = p1;
-
 
 }
 

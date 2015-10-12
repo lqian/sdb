@@ -102,15 +102,15 @@ public:
 		}
 	}
 
-	int capacity() {
+	inline int capacity() {
 		return cap;
 	}
 
-	int header() {
+	inline int header() {
 		return pop_pos;
 	}
 
-	int tail() {
+	inline int tail() {
 		return push_pos;
 	}
 
@@ -405,6 +405,12 @@ public:
 		buff.push_back(val);
 		return buff;
 	}
+
+	friend char_buffer& operator<<(char_buffer & buff,
+				const char & val) {
+			buff.push_back(val);
+			return buff;
+		}
 
 	friend char_buffer& operator<<(char_buffer & buff,
 			const unsigned char & val) {
