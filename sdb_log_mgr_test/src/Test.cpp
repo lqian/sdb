@@ -111,8 +111,10 @@ void log_file_test() {
 }
 
 void log_mgr_test() {
-	log_mgr lmg;
-	ASSERT(lmg.load("/tmp/logs") == sdb::SUCCESS);
+	log_mgr lmg("/tmp/logs");
+	lmg.clean();
+	lmg.set_log_file_max_size(65536);
+	ASSERT(lmg.load() == sdb::SUCCESS);
 
 	data_item_ref di;
 	di.seg_id = 1L;
@@ -121,6 +123,8 @@ void log_mgr_test() {
 	timestamp ts = 100L;
 	int len = 35;
 	char * data = new char[len];
+	data[0]=0xFF;
+	data[99]=0xBB;
 	action a;
 	a.di = di;
 	a.seq = 1;
@@ -139,15 +143,28 @@ void log_mgr_test() {
 	// test rfind
 	list<action> actions;
 	ASSERT(lmg.rfind(ts, actions) == FIND_TRANSACTION_START);
-	ASSERT(actions.size() ==1);
+	ASSERT(actions.size() == 1);
 
 	actions.clear();
 	ASSERT(lmg.rfind(rts, actions) == FIND_TRANSACTION_START);
-	ASSERT(actions.size() ==1);
+	ASSERT(actions.size() == 1);
+
+
+	int start = 10000;
+	for (int i = 0; i < 10000; i++) {
+		lmg.log_start(start + i);
+		lmg.log_action(ts, a);
+		lmg.log_commit(start+i);
+	}
+
+	lmg.check();
+
+	lmg.close();
 }
 
 void forward_list_test() {
 	std::forward_list<int> mylist = { 10, 20, 30, 40, 30, 20, 10 };
+	mylist.push_front(50);
 	mylist.remove(20);
 	std::cout << "mylist contains:";
 	for (int& x : mylist)
@@ -176,10 +193,10 @@ void forward_list_test() {
 void runSuite() {
 	cute::suite s;
 
+	s.push_back(CUTE(forward_list_test));
 	s.push_back(CUTE(log_block_test));
 	s.push_back(CUTE(log_file_test));
 	s.push_back(CUTE(log_mgr_test));
-	s.push_back(CUTE(forward_list_test));
 	cute::ide_listener lis;
 	cute::makeRunner(lis)(s, "The Log Mgr Test Suite");
 }

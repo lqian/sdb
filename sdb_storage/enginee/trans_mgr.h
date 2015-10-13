@@ -82,24 +82,10 @@ class action {
 public:
 	unsigned short seq; // maybe
 	action_op op;
-	data_item_ref  di;  // data item ref
-	char flag=0;
+	data_item_ref di;  // data item ref
+	char flag = 0;
 
-	/*
-	 * writing data and length, include old data
-	 * and new data if the action has.
-	 *
-	 * serialized byte sequence
-	 *
-	 * | seg_id | blk_off | row_idx | flag | {new_value} | {old_value} |
-	 *
-	 * wl: total writting length, 4 bytes, include header, flag, new value and old value,
-	 * 		8 + 4 + 4 + 1 +  {4 + new_value_len} + {4 + old_value_len}
-	 * flag: 7th bit, has new value;
-	 *       6th bit, has old value;
-	 *
-	 */
-	char * wd = nullptr;   // action data buffer, includes data_item_ref  and flag
+	char * wd = nullptr; // action data buffer, includes data_item_ref  and flag
 	int wl = 0; // action data length, include data_item_ref and flag
 
 	/*
@@ -116,8 +102,11 @@ public:
 
 	void read_from(char_buffer & buff);
 	void write_to(char_buffer & buff);
+	int copy_nitem(char * buff);
+	int copy_oitem(char * buff);
 
-	action(){}
+	action() {
+	}
 	action(const action & an);
 	~action();
 };

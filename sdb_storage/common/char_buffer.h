@@ -106,6 +106,10 @@ public:
 		return cap;
 	}
 
+	inline char* curr() {
+		return buffer + pop_pos;
+	}
+
 	inline int header() {
 		return pop_pos;
 	}

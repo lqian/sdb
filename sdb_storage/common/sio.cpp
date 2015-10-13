@@ -64,10 +64,7 @@ list<string> list_file(const string & pathname, const string & suffix,
 				string fn(ep->d_name, ep->d_reclen);
 				size_t found = fn.rfind(suffix);
 				if (found != string::npos) {
-					int fl = fn.length();
-					if (fl >= sl && found == fl - sl) {
-						files.push_back(fn);
-					}
+					files.push_back(fn);
 				}
 			}
 		}

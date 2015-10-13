@@ -26,6 +26,12 @@ namespace enginee {
 using namespace std;
 using namespace sdb::common;
 
+const int LOG_FILE_HEADER_LENGTH = 1024;
+const int LOG_BLOCK_HEADER_LENGTH = 24;
+const int DIRCTORY_ENTRY_LENGTH = 18;
+const int CHECK_POINT_LENGTH = 16;
+const int LOG_ENTRY_HEADER_LENGTH = 15;
+
 const string CHECKPOINT_FILE_SUFFIX = ".chk";
 const string LOG_FILE_SUFFIX = ".log";
 const string LOG_MGR_LOCK_FILENAME = "in_lock";
@@ -41,11 +47,6 @@ const int NOT_FIND_TRANSACTION = -1;
 const int FIND_TRANSACTION_START = 1;
 const int CONTINUE_TO_FIND = 2;
 
-const int LOG_FILE_HEADER_LENGTH = 1024;
-const int LOG_BLOCK_HEADER_LENGTH = 24;
-const int DIRCTORY_ENTRY_LENGTH = 18;
-const int CHECK_POINT_LENGTH = 16;
-
 const int LOG_BLK_SPACE_NOT_ENOUGH = -0X500;
 const int OUTOF_ENTRY_INDEX = -0X501;
 const int DATA_LENGTH_TOO_LARGE = -0X502;
@@ -57,6 +58,9 @@ const int OUT_LOCK_LOGMGR_FAILURE = -0X507;
 const int LOG_FILE_IS_ACTIVE = -0X508;
 const int INVALID_OPS_ON_ACTIVE_LOG_FILE = -0X509;
 const int MISSING_LAST_CHECK_POINT = -0X50A;
+const int EXCEED_LOGFILE_LIMITATION = -0X50B;
+
+const int NO_LOG_FILE_CHECK = 0X50C;
 
 class log_mgr;
 
@@ -74,6 +78,7 @@ enum dir_entry_type {
 
 struct check_point {
 	timestamp ts;
+	ulong log_file_seq;
 	int log_blk_off; // log block offset
 	int dir_ent_off; // log directory entry offset
 
@@ -138,6 +143,45 @@ public:
 		void as_abort();
 	};
 
+	/*
+	 * the class feature is included in trans_mgr::action.
+	 * currently use action instead of log_entry
+	 */
+	struct log_entry {
+		ulong seg_id;
+		uint blk_off;
+		ushort row_idx;
+
+		char flag = 0;
+
+		/*
+		 * writing data and length, include old data
+		 * and new data if the action has.
+		 *
+		 * serialized byte sequence
+		 *
+		 * | seg_id | blk_off | row_idx | flag | {new_value} | {old_value} |
+		 *
+		 * wl: total writting length, 4 bytes, include header, flag, new value and old value,
+		 * 		8 + 4 + 2 + 1 +  {4 + new_value_len} + {4 + old_value_len}
+		 * flag: 7th bit, has new value;
+		 *       6th bit, has old value;
+		 *
+		 */
+		char * wd = nullptr;
+		int wl = 0;
+
+		void create(char *n_buff, int n_len);
+		void update(char * n_buff, int n_len, char * o_buff, int o_len);
+		void remove(char * o_buff, int o_len);
+		void read_from(char_buffer & buff);
+		void write_to(char_buffer & buff);
+
+		int copy_nitem(char * buff);
+		int copy_oitem(char * buff);
+		~log_entry();
+	};
+
 	log_block(int block_size = 4096);
 	log_block(char *buff, int block_size = 4096);
 	log_block(const log_block & another);
@@ -190,6 +234,7 @@ class log_file {
 private:
 	bool initialized = false;
 	bool opened = false;
+	ulong log_file_id;
 	string pathname;
 	std::fstream log_stream;
 	header _header;
@@ -239,6 +284,9 @@ public:
 	log_file(const log_file & another) = delete;
 	log_file(const log_file && another) = delete;
 	~log_file();
+
+	bool operator==(const log_file & an);
+	bool operator!=(const log_file & an);
 
 	void set_log_mgr(log_mgr * lm);
 	int open();
@@ -297,21 +345,27 @@ private:
 	int log_file_max_size = 67108864;
 
 	log_file curr_log_file;
-	log_file last_log_file;
 
 	long check_interval; // check interval in milliseconds
 
 	ulong log_file_seq = 0;
 	ulong chk_file_seq = 0;
 
+	set<ulong> check_segs;
+	forward_list<check_point>check_points;
+
 	int in_lock();
 	int out_lock();
+
+	void add_check_snap(const log_file & lf);
+	int renew_log_file();
 
 public:
 	int load();
 	int load(const string & path);
 	bool is_open();
 	int close();
+	void clean();
 	int flush();
 
 	int log_start(timestamp ts);

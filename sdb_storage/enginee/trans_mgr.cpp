@@ -63,6 +63,37 @@ void action::write_to(char_buffer & buff) {
 	buff.push_back(wd, wl, false);
 }
 
+int action::copy_nitem(char *buff) {
+	if (flag >> NEW_VALUE_BIT & 1) {
+		char_buffer tmp(wd, wl, true);
+		tmp.skip(ACTION_HEADER_LENGTH);
+		int len = 0;
+		tmp >> len;
+		buff = new char[len];
+		memcpy(buff, tmp.curr(), len);
+		return len;
+	} else {
+		return sdb::FAILURE;
+	}
+}
+
+int action::copy_oitem(char *buff) {
+	if (flag >> OLD_VALUE_BIT & 1) {
+		char_buffer tmp(wd, wl, true);
+		tmp.skip(ACTION_HEADER_LENGTH);
+		int len = 0;
+		if (flag >> NEW_VALUE_BIT & 1) {
+			tmp >> len;
+			tmp.skip(len);
+		}
+		tmp >> len;
+		memcpy(buff, tmp.curr(), len);
+		return len;
+	} else {
+		return sdb::FAILURE;
+	}
+}
+
 action::~action() {
 	if (wd) {
 		delete[] wd;
