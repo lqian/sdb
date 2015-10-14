@@ -108,7 +108,7 @@ void log_block::copy_data(const dir_entry &e, action &a) {
 }
 
 ulong log_block::get_seg_id(const dir_entry & e) {
-	ulong * p = (ulong *) buffer + e.offset;
+	ulong * p = (ulong *) (buffer + e.offset);
 	return p[0];
 }
 
@@ -251,6 +251,7 @@ void log_block::reset() {
 	_header.magic = LOG_BLOCK_MAGIC;
 	_header.writing_entry_off = 0;
 	_header.writing_data_off = length;
+	read_entry_off = 0;
 }
 
 void log_block::assign_block_buffer() {
@@ -291,6 +292,7 @@ log_file::~log_file() {
 	if (write_buffer) {
 		delete[] write_buffer;
 	}
+
 	if (cutoff_point) {
 		delete cutoff_point;
 	}
@@ -310,6 +312,12 @@ int log_file::open() {
 int log_file::open(const string & pathname) {
 	int r = sdb::FAILURE;
 	this->pathname = pathname;
+
+	if (cutoff_point) {
+		delete cutoff_point;
+		cutoff_point = nullptr;
+	}
+
 	bool existed = sio::exist_file(pathname);
 	if (!existed) {
 		r = init_log_file();
@@ -348,9 +356,7 @@ int log_file::open(const string & pathname) {
 
 		if (opened && !_header.active) {
 			// read the last check_point from check file with the same file name
-			string chk_path = pathname;
-			chk_path.replace(chk_path.end() - 4, chk_path.end(),
-					CHECKPOINT_FILE_SUFFIX);
+			string chk_path = _log_mgr->mk_chk_name(pathname);
 
 			if (sio::exist_file(chk_path)) {
 				checkpoint_file chk_file;
@@ -527,6 +533,7 @@ int log_file::close() {
 	if (opened) {
 		log_stream.close();
 	}
+
 	opened = false;
 }
 
@@ -639,7 +646,8 @@ void log_file::check_log_block(log_block & lb) {
 			cp.log_file_seq = log_file_id;
 			cp.log_blk_off = read_blk_offset;
 			cp.dir_ent_off = lb.read_entry_off;
-			check_list.push_front(cp);
+			// check_list.push_front(cp);
+			_log_mgr->check_points.push_front(cp);
 		} else if (t == dir_entry_type::abort_item
 				|| t == dir_entry_type::commit_item) {
 			check_point cp;
@@ -647,10 +655,11 @@ void log_file::check_log_block(log_block & lb) {
 			cp.log_file_seq = log_file_id;
 			cp.log_blk_off = read_blk_offset;
 			cp.dir_ent_off = lb.read_entry_off;
-			check_list.remove(cp);
+			//check_list.remove(cp);
+			_log_mgr->check_points.remove(cp);
 		} else if (t == dir_entry_type::data_item) {
 			// gather segment to be flush
-			check_segs.insert(lb.get_seg_id(de));
+			_log_mgr->check_segs.insert(lb.get_seg_id(de));
 		}
 	}
 }
@@ -686,7 +695,7 @@ int log_file::rfind(timestamp ts, list<action> & actions) {
 }
 
 int log_file::irfind(timestamp ts, list<action> & actions) {
-	int r = sdb::FAILURE;
+	int r = NOT_FIND_TRANSACTION;
 	if (!opened) {
 		r = open();
 	}
@@ -723,6 +732,7 @@ int log_file::irfind(timestamp ts, list<action> & actions) {
 				}
 			}
 		}
+		delete[] buff;
 	}
 
 	return r;
@@ -730,7 +740,6 @@ int log_file::irfind(timestamp ts, list<action> & actions) {
 }
 
 int log_file::check(int blk_off, int dir_entry_off) {
-
 	if (_header.active) {
 		return LOG_FILE_IS_ACTIVE;
 	}
@@ -749,6 +758,7 @@ int log_file::check(int blk_off, int dir_entry_off) {
 
 		// others whole block
 		while (next_block(buff) == sdb::SUCCESS) {
+			lb.reset();
 			lb.ref_buffer(buff, _header.block_size);
 			check_log_block(lb);
 		}
@@ -756,37 +766,15 @@ int log_file::check(int blk_off, int dir_entry_off) {
 		delete[] buff;
 
 		// assume all logs has completed
-		if (cutoff_point == nullptr) {
-			cutoff_point = new check_point;
-		}
-		cutoff_point->ts = 0;
-		cutoff_point->log_blk_off = read_blk_offset;
-		cutoff_point->dir_ent_off = lb.read_entry_off;
+//		if (cutoff_point == nullptr) {
+//			cutoff_point = new check_point;
+//		}
+//		cutoff_point->ts = 0;
+//		cutoff_point->log_blk_off = read_blk_offset;
+//		cutoff_point->dir_ent_off = lb.read_entry_off;
 
 	}
 	return r;
-}
-
-int log_file::cut_off() {
-	int r = sdb::FAILURE;
-
-	if (!check_list.empty()) {
-		auto it = check_list.begin();
-		cutoff_point->ts = it->ts;
-		cutoff_point->log_blk_off = it->log_blk_off;
-		cutoff_point->dir_ent_off = it->dir_ent_off;
-	}
-
-	string chk_path = pathname;
-	chk_path.replace(chk_path.end() - 4, chk_path.end(),
-			CHECKPOINT_FILE_SUFFIX);
-	checkpoint_file chk_file;
-	r = chk_file.open(chk_path);
-	if (r) {
-		r = chk_file.write_checkpoint(cutoff_point);
-	}
-	return r;
-
 }
 
 void log_file::set_block_size(int bs) {
@@ -807,7 +795,7 @@ void log_file::header::read_from(char_buffer & buff) {
 }
 
 bool check_point::operator ==(const check_point & an) {
-	return ts == an.ts ;
+	return ts == an.ts;
 }
 
 void log_file::set_log_mgr(log_mgr * lm) {
@@ -848,14 +836,10 @@ int log_mgr::load(const string &path) {
 		}
 	}
 
-	char *alphas = new char[16];
-	ultoa(log_file_seq, alphas);
-	string pathname = this->path + "/" + alphas + LOG_FILE_SUFFIX;
-	string chkpath = this->path + "/" + alphas + CHECKPOINT_FILE_SUFFIX;
+	string pathname = mk_log_name(log_file_seq);
 
 	r = curr_log_file.open(pathname);
 	if (r) {
-		curr_log_file.set_log_mgr(this);
 		//if (sio::exist_file(chkpath)) {
 		//open last checkpoint file match the last log file
 		//	chk_file_seq = log_file_seq;
@@ -874,7 +858,6 @@ int log_mgr::load(const string &path) {
 	}
 
 	curr_log_file.set_log_mgr(this);
-	delete[] alphas;
 	opened = true;
 	return r;
 }
@@ -898,26 +881,71 @@ int log_mgr::out_lock() {
 	return r ? sdb::SUCCESS : OUT_LOCK_LOGMGR_FAILURE;
 }
 
-void log_mgr::add_check_snap(const log_file & lf) {
-	check_segs.insert(lf.check_segs.begin(), lf.check_segs.end());
-	check_points.insert_after(check_points.end(), lf.check_list.begin(),
-			lf.check_list.end());
+int log_mgr::renew_log_file() {
+	ulong id = log_file_seq;
+	string pathname = mk_log_name(++id);
+	log_file lf;
+	int r = lf.open(pathname);
+	if (r) {
+		lf.close();
+		log_file_seq = id;
+		curr_log_file.inactive();
+		curr_log_file.close();
+		curr_log_file.open(pathname);
+	}
+	return r;
 }
 
-int log_mgr::renew_log_file() {
-	char *alphas = new char[16];
-	ulong id = log_file_seq;
-	ultoa(++id, alphas);
-	string name = alphas + LOG_FILE_SUFFIX;
-	string pathname = path + "/" + name;
-	curr_log_file.inactive();
-	curr_log_file.close();
-	int r = curr_log_file.open(pathname);
-	if (r) {
-		log_file_seq = id;
+int log_mgr::cutoff(ulong seq) {
+	int r = sdb::FAILURE;
+	string chk_path;
+	check_point cutoff_point;
+	if (check_points.empty()) {
+		// the last inactive log file is completed check
+		chk_file_seq = seq;
+		cutoff_point.ts = -1;
+		cutoff_point.log_blk_off = -1;
+		cutoff_point.dir_ent_off = -1;
+		chk_path = mk_chk_name(chk_file_seq);
+	} else {
+		check_points.reverse();
+		auto it = check_points.begin();
+		cutoff_point.ts = it->ts;
+		cutoff_point.log_blk_off = it->log_blk_off;
+		cutoff_point.dir_ent_off = it->dir_ent_off;
+		chk_path = mk_chk_name(it->log_file_seq);
 	}
-	delete[] alphas;
+
+	checkpoint_file chk_file;
+	r = chk_file.open(chk_path);
+	if (r) {
+		r = chk_file.write_checkpoint(cutoff_point);
+	}
 	return r;
+
+}
+
+string log_mgr::mk_log_name(ulong id) {
+	char *alphas = new char[16];
+	ultoa(id, alphas);
+	string name = path + "/" + alphas + LOG_FILE_SUFFIX;
+	delete[] alphas;
+	return name;
+}
+
+string log_mgr::mk_chk_name(ulong id) {
+	char *alphas = new char[16];
+	ultoa(id, alphas);
+	string name = path + "/" + alphas + CHECKPOINT_FILE_SUFFIX;
+	delete[] alphas;
+	return name;
+}
+
+string log_mgr::mk_chk_name(const string & pathname) {
+	string chk_path = pathname;
+	chk_path.replace(chk_path.end() - 4, chk_path.end(),
+			CHECKPOINT_FILE_SUFFIX);
+	return chk_path;
 }
 
 int log_mgr::close() {
@@ -1014,12 +1042,28 @@ int log_mgr::log_abort(timestamp ts) {
 }
 
 int log_mgr::rfind(timestamp ts, list<action> & actions) {
-	int r = sdb::FAILURE;
+	int r = NOT_FIND_TRANSACTION;
 	if (sync_police == log_sync_police::immeidate) {
 		r = curr_log_file.rfind(ts, actions);
 
 		if (r != FIND_TRANSACTION_START) {
-			r = lf.irfind(ts, actions);
+			ulong id = log_file_seq;
+			string pathname;
+			log_file lf;
+			while (--id <= chk_file_seq) {
+				pathname = mk_log_name(id);
+				if (sio::exist_file(pathname)) {
+					if (lf.open(pathname)) {
+						r = lf.irfind(ts, actions);
+						lf.close();
+						if (r == FIND_TRANSACTION_START) {
+							return r;
+						}
+					} else {
+						return LOG_STREAM_ERROR;
+					}
+				}
+			}
 		}
 	}
 
@@ -1027,81 +1071,66 @@ int log_mgr::rfind(timestamp ts, list<action> & actions) {
 }
 
 int log_mgr::check() {
-	int r = sdb::FAILURE;
-	char *alphas = new char[16];
-	ultoa(chk_file_seq, alphas);
-	string name = alphas + LOG_FILE_SUFFIX;
-	string pathname = path + "/" + name;
-
-	list<string> log_files = sio::list_file(path, LOG_FILE_SUFFIX);
-	log_file lf;
-	if (chk_file_seq > 0) { // last check happen
-		r = lf.open(pathname);
-		if (r) {
-			check_point *lcp = lf.cutoff_point;
-			if (lcp) {
-				lf.log_file_id = chk_file_seq;
-				r = lf.check(lcp->log_blk_off, lcp->dir_ent_off);
-
-			} else {
-				return MISSING_LAST_CHECK_POINT;
-			}
-			add_check_snap(lf);
-
-			// continue to check newer inactive log file
-			while (r && ++chk_file_seq < log_file_seq) {
-				ultoa(chk_file_seq, alphas);
-				name = alphas + LOG_FILE_SUFFIX;
-				pathname = path + "/" + name;
-				if (sio::exist_file(pathname)) {
-					r = lf.open(pathname);
-					if (r) {
-						lf.log_file_id = chk_file_seq;
-						r = lf.check();
-					}
-					if (r) {
-						add_check_snap(lf);
-					}
-				}
-			}
-
-			//TODO flush segment to disk;
-			if (r) {
-				check_point cp;
-				auto it = check_points.begin();
-				chk_file_seq = it->log_file_seq; //
-				cp.ts = it->ts;
-				cp.log_blk_off = it->log_blk_off;
-				cp.dir_ent_off = it->dir_ent_off;
-				checkpoint_file ckf;
-				ultoa(chk_file_seq, alphas);
-				name = alphas + LOG_FILE_SUFFIX;
-				pathname = path + "/" + name;
-				r = ckf.open(pathname);
-				if (r) {
-					r = ckf.write_checkpoint(cp);
-				}
-			}
-
-		}
-	} else if (log_file_seq > 0) {
-		if (log_files.size() > 1) {
-			// at lease on inactive log file and active log file
-			r = lf.open(pathname);
-			lf.log_file_id = chk_file_seq;
-			if (r) {
-				r = lf.check();
-			}
-
-			if (r) {
-				r = lf.cut_off();
-			}
-		}
-	} else {
-		r = NO_LOG_FILE_CHECK;
+	if (log_file_seq == 0) {
+		return NO_LOG_FILE_CHECK;
 	}
 
-	delete[] alphas;
+	return check_from(chk_file_seq);
+}
+
+int log_mgr::check_from(ulong seq) {
+	int r = sdb::SUCCESS;
+	string fn;
+	log_file lf;
+	lf.set_log_mgr(this);
+	ulong target_seq = log_file_seq;
+	if (curr_log_file.is_active()) {
+		target_seq--;
+	}
+	while (r == sdb::SUCCESS && seq <= target_seq) {
+		fn = mk_log_name(seq);
+		if (sio::exist_file(fn)) {
+			r = lf.open(fn);
+			lf.log_file_id = seq;
+		}
+
+		if (r) {
+			if (seq == 0) {
+				if (lf.cutoff_point) {
+					check_point *cp = lf.cutoff_point;
+					r = lf.check(cp->log_blk_off, cp->dir_ent_off);
+				} else {
+					r = lf.check();
+				}
+			} else if (seq > 0 && seq == chk_file_seq) {
+				if (lf.cutoff_point) {
+					check_point *cp = lf.cutoff_point;
+					r = lf.check(cp->log_blk_off, cp->dir_ent_off);
+				} else {
+					r = MISSING_LAST_CHECK_POINT;
+				}
+			} else {
+				r = lf.check();
+			}
+		}
+
+		lf.close();
+		seq++;
+	}
+
+	//TODO flush segment to disk;
+	if (r) {
+		r = cutoff(target_seq);
+	}
+
+	return r;
+}
+
+int log_mgr::chg_currlog_inactive() {
+	int r = sdb::FAILURE;
+	if (curr_log_file.is_active()) {
+		r = curr_log_file.inactive();
+	}
 	return r;
 }
 

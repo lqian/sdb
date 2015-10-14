@@ -51,16 +51,16 @@ const int LOG_BLK_SPACE_NOT_ENOUGH = -0X500;
 const int OUTOF_ENTRY_INDEX = -0X501;
 const int DATA_LENGTH_TOO_LARGE = -0X502;
 const int INIT_LOG_FILE_FAILURE = -0x503;
-const int LOG_STREAM_ERROR = 0X504;
+const int LOG_STREAM_ERROR = -0X504;
 const int LOCKED_LOG_MGR_PATH = -0X505;
 const int LOCK_STREAM_ERROR = -0X506;
 const int OUT_LOCK_LOGMGR_FAILURE = -0X507;
 const int LOG_FILE_IS_ACTIVE = -0X508;
 const int INVALID_OPS_ON_ACTIVE_LOG_FILE = -0X509;
 const int MISSING_LAST_CHECK_POINT = -0X50A;
-const int EXCEED_LOGFILE_LIMITATION = -0X50B;
-
-const int NO_LOG_FILE_CHECK = 0X50C;
+const int CHECKPOINT_STREAM_ERROR = -0X50B;
+const int EXCEED_LOGFILE_LIMITATION = -0X50C;
+const int NO_LOG_FILE_CHECK = -0X50D;
 
 class log_mgr;
 
@@ -238,14 +238,14 @@ private:
 	string pathname;
 	std::fstream log_stream;
 	header _header;
-	check_point * cutoff_point = nullptr;
 	int read_blk_offset = LOG_FILE_HEADER_LENGTH; //includes the log file header length
 	log_block last_blk;  // the last log block for append log entry
 	char * write_buffer = nullptr;
 	log_mgr * _log_mgr = nullptr;
+	check_point * cutoff_point = nullptr;
 
-	forward_list<check_point> check_list;
-	set<ulong> check_segs;
+//	forward_list<check_point> check_list;
+//	set<ulong> check_segs;
 
 	int init_log_file();
 	int renewal_last_block();
@@ -259,7 +259,6 @@ private:
 	int re_open();
 	void check_log_block(log_block & lb);
 	int check(int blk_off = LOG_FILE_HEADER_LENGTH, int dir_ent_off = 0);
-	int cut_off();
 
 	/*
 	 * from the active log file end-place, find actions for a transaction
@@ -352,13 +351,18 @@ private:
 	ulong chk_file_seq = 0;
 
 	set<ulong> check_segs;
-	forward_list<check_point>check_points;
+	forward_list<check_point> check_points;
 
 	int in_lock();
 	int out_lock();
 
-	void add_check_snap(const log_file & lf);
 	int renew_log_file();
+	int cutoff(ulong seq);
+
+	string mk_log_name(ulong id);
+	string mk_chk_name(ulong id);
+	string mk_chk_name(const string & pathname);
+
 
 public:
 	int load();
@@ -374,8 +378,8 @@ public:
 	int log_abort(timestamp ts);
 
 	/*
-	 * find actions for a transaction in reserved order in case an transaction
-	 * need to be roll back
+	 * find actions for a transaction in reserved order in case
+	 * that an transaction need to be roll back
 	 */
 	int rfind(timestamp ts, list<action> & actions);
 
@@ -385,6 +389,8 @@ public:
 	int redo();
 	int undo();
 	int check();
+	int check_from(ulong seq);
+	int chg_currlog_inactive();
 
 	void set_log_file_max_size(int size = 67108864);
 	void set_sync_police(const enum log_sync_police & sp);
