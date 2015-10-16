@@ -42,7 +42,7 @@ public:
 	virtual ~seg_mgr();
 
 	enum swap_policy {
-		FIFO, LRU, LIRS, CLOCK_PRO
+		ALWAYS, FIFO, LRU, LIRS, CLOCK_PRO
 	};
 
 	int load();

@@ -126,7 +126,7 @@ void log_mgr_test() {
 	data[0] = 0xFF;
 	data[99] = 0xBB;
 	action a;
-	a.di = di;
+	a.dif = di;
 	a.seq = 1;
 	a.create(data, len);
 	lmg.log_start(ts);

@@ -10,6 +10,12 @@
 namespace sdb {
 namespace enginee {
 
+bool row_item::operator==(const row_item & an) {
+	return this == &an
+			|| (an.seg_id == seg_id && an.blk_off == blk_off
+					&& an.row_idx == row_idx);
+}
+
 bool data_item_ref::operator ==(const data_item_ref & an) {
 	return an.seg_id == seg_id && an.blk_off == blk_off && an.row_idx == row_idx;
 }
@@ -19,7 +25,7 @@ void action::create(char * buff, int len) {
 	wd = new char[wl];
 	char_buffer tmp(wd, wl, true);
 	flag |= (1 << NEW_VALUE_BIT);
-	tmp << di.seg_id << di.blk_off << di.row_idx << flag;
+	tmp << dif.seg_id << dif.blk_off << dif.row_idx << flag;
 	tmp.push_back(buff, len, true);
 }
 
@@ -29,7 +35,7 @@ void action::update(char * n_buff, int n_len, char * o_buff, int o_len) {
 	char_buffer tmp(wd, wl, true);
 	flag |= (1 << NEW_VALUE_BIT);
 	flag |= (1 << OLD_VALUE_BIT);
-	tmp << di.seg_id << di.blk_off << di.row_idx << flag;
+	tmp << dif.seg_id << dif.blk_off << dif.row_idx << flag;
 	tmp.push_back(n_buff, n_len, true);
 	tmp.push_back(o_buff, o_len, true);
 }
@@ -40,13 +46,13 @@ void action::remove(char * o_buff, int o_len) {
 	char_buffer tmp(wd, wl, true);
 	char flag = 0;
 	flag |= (1 << OLD_VALUE_BIT);
-	tmp << di.seg_id << di.blk_off << di.row_idx << flag;
+	tmp << dif.seg_id << dif.blk_off << dif.row_idx << flag;
 	tmp.push_back(o_buff, o_len, true);
 }
 
 void action::read_from(char_buffer & buff) {
 	int len;
-	buff >> di.seg_id >> di.blk_off >> di.row_idx >> flag >> len;
+	buff >> dif.seg_id >> dif.blk_off >> dif.row_idx >> flag >> len;
 	buff.skip(len);
 	if ((flag >> NEW_VALUE_BIT & 1) && (flag >> OLD_VALUE_BIT & 1)) {
 		buff >> len;
@@ -59,7 +65,7 @@ void action::read_from(char_buffer & buff) {
 }
 
 void action::write_to(char_buffer & buff) {
-	buff << di.seg_id << di.blk_off << di.row_idx << flag;
+	buff << dif.seg_id << dif.blk_off << dif.row_idx << flag;
 	buff.push_back(wd, wl, false);
 }
 
@@ -103,7 +109,7 @@ action::~action() {
 action & action::operator=(const action & an) {
 	seq = an.seq;
 	op = an.op;
-	di = an.di;
+	dif = an.dif;
 	if (an.wl > 0) {
 		wl = an.wl;
 		wd = new char[wl];
@@ -115,7 +121,7 @@ action & action::operator=(const action & an) {
 action::action(const action & an) {
 	seq = an.seq;
 	op = an.op;
-	di = an.di;
+	dif = an.dif;
 	if (an.wl > 0) {
 		wl = an.wl;
 		wd = new char[wl];
@@ -124,57 +130,85 @@ action::action(const action & an) {
 	memcpy(wd, an.wd, wl);
 }
 
+void transaction::begin() {
+	tm->assign_trans(this);
+}
+
 void transaction::execute() {
 	tst = ACTIVE;
-	for (auto & a : actions) {
-		if (a.op == action_op::WRITE) {
-			if (ts > a.di.wts) {
-				if (write_log(&a.di)) { // write log
-					write(&a.di);  // write data
+	auto ret = tm->att.insert(std::make_pair(ts, this));
+	if (ret.second) {
+		for (auto & a : actions) {
+			if (a.op == action_op::WRITE) {
+				if (ts > a.dif.wts) {
+					if (lm->log_action(ts, a) < 0) { // write log
+						abort();
+						return;
+					}
 				} else {
-					rollback();
+					// skip current write
+				}
+			} else if (a.op == action_op::READ) {
+				if (ts > a.dif.wts) {
+					if (read(&a.dif) != sdb::SUCCESS) {
+						abort();
+						return;
+					}
+				} else {
+					abort();
 					return;
 				}
-			} else {
-				// skip current update
-			}
-		} else if (a.op == action_op::READ) {
-			if (ts > a.di.wts) {
-				if (read(&a.di) != sdb::SUCCESS) {
-					rollback();
-					return;
-				}
-			} else {
-				rollback();
-				return;
 			}
 		}
-	}
-	tst = PARTIALLY_COMMITTED;
 
-	if (auto_commit) {
-		commit();
+		tst = PARTIALLY_COMMITTED;
+		if (auto_commit) {
+			commit();
+		}
+	} else {
+		tst = PRE_ASSIGN;
 	}
 }
 
 void transaction::commit() {
-
+	if (tst == PARTIALLY_COMMITTED) {
+		int r = deffer_write_data();
+		if (r) {
+			if (lm->log_commit(ts)) {
+				tst = COMMITTED;
+			} else {
+				tst = FAILED;
+			}
+		} else {
+			// restore old value from action
+		}
+	}
+	tm->att.erase(ts);
 }
 
-void transaction::rollback() {
-
+void transaction::abort() {
+	if (lm->log_abort(ts)) {
+		tst = ABORTED;
+	} else {
+		tst = FAILED;
+	}
+	tm->att.erase(ts);
 }
 
-int transaction::write_log(data_item_ref *pdi) {
-	int r = sdb::SUCCESS;
-
-	return r;
-}
-
-int transaction::restore() {
-	int r = sdb::SUCCESS;
-
-	return r;
+/*
+ * return SUCCESS if all data write successfully.
+ * else index of actions that write successfully, in this case write data
+ * is partially success.
+ */
+int transaction::deffer_write_data() {
+	for (auto & a : actions) {
+		if (true) { // table.update or seg_mgr.update(dif, char * buff, int len);
+			write_idx++;
+		} else {
+			return sdb::FAILURE;
+		}
+	}
+	return sdb::SUCCESS;;
 }
 
 int transaction::write(data_item_ref * di) {
@@ -204,7 +238,7 @@ void transaction::add_action(const action & a) {
 void transaction::add_action(action_op op, data_item_ref * di) {
 	action a;
 	a.op = op;
-	a.di = (*di);
+	a.dif = (*di);
 	actions.push_back(a);
 }
 
@@ -223,7 +257,7 @@ void trans_mgr::submit(transaction * t) {
 }
 
 trans_mgr::trans_mgr() {
-
+	time(&timer);
 }
 
 trans_mgr::~trans_mgr() {

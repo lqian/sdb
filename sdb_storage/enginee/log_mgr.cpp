@@ -167,7 +167,7 @@ void log_block::dir_entry::as_abort() {
 	offset = ABORT_DEFINE;
 }
 
-int log_block::add_action(timestamp ts, action & a) {
+int log_block::add_action(timestamp ts, const action & a) {
 	if (remain() >= a.wl + DIRCTORY_ENTRY_LENGTH) {
 		int weo = _header.writing_entry_off;
 		dir_entry e;
@@ -282,10 +282,12 @@ void log_block::write_to(char *buff) {
 
 log_file::log_file() {
 }
+
 log_file::log_file(const string & fn) :
 		pathname(fn), initialized(false) {
 
 }
+
 log_file::~log_file() {
 	close();
 
@@ -385,7 +387,7 @@ int log_file::re_open() {
 }
 
 // do not support span blocks currently
-int log_file::append(timestamp ts, action &a) {
+int log_file::append(timestamp ts, const action &a) {
 	int r = last_blk.add_action(ts, a);
 	if (r != LOG_BLK_SPACE_NOT_ENOUGH) {
 		if (_log_mgr->sync_police == log_sync_police::immeidate) {
@@ -798,6 +800,16 @@ bool check_point::operator ==(const check_point & an) {
 	return ts == an.ts;
 }
 
+void check_point::as_comp_point() {
+	ts = -1;
+	log_blk_off = -1;
+	dir_ent_off = -1;
+}
+
+bool check_point::is_comp_point() {
+	return log_blk_off == -1 && dir_ent_off == -1;
+}
+
 void log_file::set_log_mgr(log_mgr * lm) {
 	this->_log_mgr = lm;
 }
@@ -903,9 +915,7 @@ int log_mgr::cutoff(ulong seq) {
 	if (check_points.empty()) {
 		// the last inactive log file is completed check
 		chk_file_seq = seq;
-		cutoff_point.ts = -1;
-		cutoff_point.log_blk_off = -1;
-		cutoff_point.dir_ent_off = -1;
+		cutoff_point.as_comp_point();
 		chk_path = mk_chk_name(chk_file_seq);
 	} else {
 		check_points.reverse();
@@ -1008,7 +1018,7 @@ int log_mgr::log_start(timestamp ts) {
 	return r;
 }
 
-int log_mgr::log_action(timestamp ts, action & a) {
+int log_mgr::log_action(timestamp ts, const action & a) {
 	int r = curr_log_file.append(ts, a);
 	if (r == EXCEED_LOGFILE_LIMITATION) {
 		r = renew_log_file();
@@ -1098,14 +1108,22 @@ int log_mgr::check_from(ulong seq) {
 			if (seq == 0) {
 				if (lf.cutoff_point) {
 					check_point *cp = lf.cutoff_point;
-					r = lf.check(cp->log_blk_off, cp->dir_ent_off);
+					if (cp->is_comp_point()) {
+						continue;
+					} else {
+						r = lf.check(cp->log_blk_off, cp->dir_ent_off);
+					}
 				} else {
 					r = lf.check();
 				}
 			} else if (seq > 0 && seq == chk_file_seq) {
 				if (lf.cutoff_point) {
 					check_point *cp = lf.cutoff_point;
-					r = lf.check(cp->log_blk_off, cp->dir_ent_off);
+					if (cp->is_comp_point()) {
+						continue;
+					} else {
+						r = lf.check(cp->log_blk_off, cp->dir_ent_off);
+					}
 				} else {
 					r = MISSING_LAST_CHECK_POINT;
 				}

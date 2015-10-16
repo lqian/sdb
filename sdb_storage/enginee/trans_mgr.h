@@ -14,7 +14,11 @@
 #include <mutex>
 #include <atomic>
 #include <set>
+#include <ctime>
 
+#include "seg_mgr.h"
+#include "log_mgr.h"
+#include "trans_def.h"
 #include "../sdb_def.h"
 #include "../common/char_buffer.h"
 #include "ThreadPool.h"
@@ -61,87 +65,99 @@ enum isolation {
  *
  */
 enum trans_status {
-	INITIAL, ACTIVE, ABORT, COMMITTED, PARTIALLY_COMMITTED, FAILED
+	INITIAL, ACTIVE, ABORTED, COMMITTED, PARTIALLY_COMMITTED, FAILED, PRE_ASSIGN
 };
 
-enum action_op {
-	WRITE, READ
-};
-
-struct data_item_ref {
+struct row_item {
 	ulong seg_id;
 	uint blk_off;
 	ushort row_idx;
-	timestamp wts = 0; // write timestamp
-	timestamp rts = 0; // read timestamp
 
-	bool operator==(const data_item_ref & an);
+	bool operator==(const row_item & an);
 };
 
-class action {
-public:
-	unsigned short seq; // maybe
-	action_op op;
-	data_item_ref di;  // data item ref
-	char flag = 0;
+struct trans_row_item: row_item {
+	timestamp wts = 0;
+	timestamp rts = 0;
+};
 
-	char * wd = nullptr; // action data buffer, includes data_item_ref  and flag
-	int wl = 0; // action data length, include data_item_ref and flag
+class trans_mgr {
+	friend class transaction;
+private:
+	time_t timer;
+	timestamp curr_ts;
+	std::map<timestamp, p_trans> att; // active transaction table
+	std::map<data_item_ref *, std::set<p_trans>> adit; // active data item table
 
-	/*
-	 * op is write, but the action doesn't have old data, the new data specified
-	 * with two parameters, the method assume that data_item_ref has been assigned
-	 */
-	void create(char * n_buff, int n_len);
+	std::mutex mtx;
+	uint ticks = 0;
+	sdb::common::ThreadPool thread_pool;
 
-	void update(char * n_buff, int n_len, char * o_buff, int o_len);
-
-	void remove(char * o_buff, int o_len);
-
-	action& operator=(const action & an);
-
-	void read_from(char_buffer & buff);
-	void write_to(char_buffer & buff);
-	int copy_nitem(char * buff);
-	int copy_oitem(char * buff);
-
-	action() {
+	inline void next_ts() {
+		ticks++;
+		curr_ts &= 0xFFFFFFFF00000000;
+		curr_ts |= ticks;
 	}
-	action(const action & an);
-	~action();
+
+public:
+	void assign_trans(p_trans t);
+	void submit(p_trans t);
+
+	trans_mgr();
+	virtual ~trans_mgr();
 };
+
+static trans_mgr LOCAL_TRANS_MGR;
 
 class transaction {
 	friend class trans_mgr;
 private:
 	timestamp ts = 0;
 	trans_status tst = INITIAL;
+	/*
+	 * when a stable.save/update/delete/find, convert logic operation to
+	 * an action object and put it to the list
+	 */
 	std::list<action> actions;
-	std::list<p_trans> deps;  	  // the transaction depends other transactions
+	std::list<p_trans> deps;  	   // the transaction depends other transactions
 	std::list<p_trans> wait_fors;  // other transaction wait for the transaction
+	int write_idx = -1;
 
 	bool auto_commit;
-	trans_mgr * tm = nullptr;
 
-	/*
-	 * restore data item modification by the transaction
-	 */
-	int restore();
+	trans_mgr * tm = nullptr;
+	log_mgr * lm = nullptr;
+	seg_mgr * sm = nullptr;
+
+	void execute();
+
 	int read(data_item_ref * pdi);
 	int write(data_item_ref * pdi);
-	int write_log(data_item_ref *pdi);
-public:
-	void execute();
-	void commit();
-	void rollback();
+
+	/*
+	 * write data of actions to segment
+	 */
+	int deffer_write_data();
 
 	void add_action(action_op op, data_item_ref * di);
 	void add_action(const action & a);
 
-	transaction() {
+public:
+	void begin();
+	void commit();
+	void abort();
+
+	transaction(bool ac = true) :
+			auto_commit(ac) {
+		tm = &LOCAL_TRANS_MGR;
+		lm = &LOCAL_LOG_MGR;
+		sm = &LOCAL_SEG_MGR;
 	}
-	transaction(timestamp _ts) :
-			ts(_ts) {
+	transaction(timestamp _ts, bool ac = true) :
+			ts(_ts), auto_commit(ac) {
+		tm = &LOCAL_TRANS_MGR;
+		lm = &LOCAL_LOG_MGR;
+		sm = &LOCAL_SEG_MGR;
 	}
 	~transaction() {
 	}
@@ -150,45 +166,27 @@ public:
 		this->tm = tm;
 	}
 
+	inline void set_seg_mgr(seg_mgr * sm) {
+		this->sm = sm;
+	}
+
+	inline void set_log_mgr(log_mgr *lm) {
+		this->lm = lm;
+	}
+
 	inline bool assignable() {
-		return ts == 0 || tm == nullptr;
+		return ts == 0 || tm == nullptr || lm == nullptr || sm == nullptr;
 	}
 
 	inline bool is_auto_commit() const {
 		return auto_commit;
 	}
 
-	inline void set_auto_commit(bool autoCommit) {
-		auto_commit = autoCommit;
+	inline void set_auto_commit(bool ac) {
+		auto_commit = ac;
 	}
 };
 
-class trans_mgr {
-private:
-	timestamp curr_ts;
-	std::map<timestamp, p_trans> att; // active transaction table
-	std::map<data_item_ref *, std::set<p_trans>> adit; // active data item table
-
-	std::mutex mtx;
-	uint ticks = 0;
-	sdb::common::ThreadPool thread_pool;
-public:
-	void assign_trans(p_trans t);
-	void submit(p_trans t);
-	inline void store_ts(timestamp &ts) {
-		if (ts > curr_ts) {
-			curr_ts = ts;
-		}
-	}
-
-	inline void next_ts() {
-		ticks++;
-		curr_ts &= 0xFFFFFFFF00000000;
-		curr_ts |= ticks;
-	}
-	trans_mgr();
-	virtual ~trans_mgr();
-};
 
 class trans_task: public sdb::common::Runnable {
 private:

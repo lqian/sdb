@@ -17,7 +17,9 @@
 #include <map>
 #include <list>
 #include <string>
-#include "trans_mgr.h"
+
+#include "trans_def.h"
+#include "../sdb_def.h"
 #include "../common/char_buffer.h"
 #include "../common/sio.h"
 
@@ -83,6 +85,9 @@ struct check_point {
 	int dir_ent_off; // log directory entry offset
 
 	bool operator==(const check_point & an);
+
+	inline void as_comp_point();
+	inline bool is_comp_point();
 };
 
 class undo_buffer {
@@ -190,7 +195,7 @@ public:
 	~log_block();
 
 	int add_start(timestamp ts);
-	int add_action(timestamp ts, action & a);
+	int add_action(timestamp ts, const action & a);
 	int add_commit(timestamp ts);
 	int add_abort(timestamp ts);
 
@@ -294,7 +299,7 @@ public:
 	bool is_open();
 
 	int append_start(timestamp ts);
-	int append(timestamp ts, action& a);
+	int append(timestamp ts, const action& a);
 	int append_commit(timestamp ts);
 	int append_abort(timestamp ts);
 
@@ -373,7 +378,7 @@ public:
 	int flush();
 
 	int log_start(timestamp ts);
-	int log_action(timestamp ts, action & a);
+	int log_action(timestamp ts, const action & a);
 	int log_commit(timestamp ts);
 	int log_abort(timestamp ts);
 
@@ -402,6 +407,8 @@ public:
 	log_mgr(const log_mgr && another) = delete;
 	virtual ~log_mgr();
 };
+
+static log_mgr LOCAL_LOG_MGR;
 
 } /* namespace enginee */
 } /* namespace sdb */
