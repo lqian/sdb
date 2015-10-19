@@ -125,6 +125,9 @@ public:
 	inline bool is_terminated() {
 		return terminated;
 	}
+	inline void set_core_size(int cs) {
+		coreSize = cs;
+	}
 };
 
 } /* namespace common */

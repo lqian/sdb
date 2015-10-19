@@ -60,6 +60,11 @@ public:
 
 	int get_row(ulong seg_id, uint blk_off, int idx, char_buffer & buff);
 
+	/*
+	 * write a exist row_idx with buffer and its length
+	 */
+	int write(ulong seg_id, uint blk_off, int idx, char * buff, int len);
+
 	inline void set_swap_police(swap_policy & sp) {
 		this->sp = sp;
 	}

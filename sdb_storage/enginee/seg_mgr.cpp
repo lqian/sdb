@@ -89,6 +89,27 @@ int seg_mgr::get_row(ulong seg_id, uint blk_off, int idx, char_buffer & buff) {
 	return r;
 }
 
+int seg_mgr::write(ulong seg_id, uint blk_off, int row_idx, char * buff,
+		int len) {
+	int r = sdb::FAILURE;
+	segment * seg = find_segment(seg_id);
+	if (seg != nullptr) {
+		mem_data_block blk;
+		blk.offset = blk_off;
+		int r = seg->read_block(blk);
+		if (r) {
+			r = blk.update_row_data_by_index(row_idx, buff, len);
+			if (r == DELETE_OFFSET) {
+				//TODO
+			} else if (r == UNKNOWN_OFFSET) {
+				//TODO
+			}
+		}
+	}
+
+	return r;
+}
+
 int seg_mgr::do_load(const string & pathname) {
 	list<string> files;
 	string fullname;
@@ -176,7 +197,7 @@ int seg_mgr::assign_data_file(data_file * pdf) {
 	}
 	pdf->set_id(nid);
 	pdf->set_path(pathname + "/" + fn);
-	delete[]fn;
+	delete[] fn;
 
 	auto mit = df_map.insert(std::make_pair(nid, pdf));
 	if (mit.second) {

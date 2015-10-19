@@ -10,6 +10,7 @@
 
 #include <cstdlib>
 #include <list>
+#include <forward_list>
 #include <map>
 #include <mutex>
 #include <atomic>
@@ -25,8 +26,7 @@
 
 namespace sdb {
 namespace enginee {
-
-using namespace common;
+using namespace std;
 using namespace sdb::common;
 
 class trans_task;
@@ -39,11 +39,9 @@ typedef unsigned int uint;
 typedef unsigned short ushort;
 typedef unsigned long timestamp;
 typedef transaction * p_trans;
+typedef data_item_ref * p_dif;
 
-const short NEW_VALUE_BIT = 7;
-const short OLD_VALUE_BIT = 6;
 
-const int ACTION_HEADER_LENGTH = 15;
 
 /*
  * CAUTION: currently only support read_committed
@@ -86,10 +84,10 @@ class trans_mgr {
 private:
 	time_t timer;
 	timestamp curr_ts;
-	std::map<timestamp, p_trans> att; // active transaction table
-	std::map<data_item_ref *, std::set<p_trans>> adit; // active data item table
+	map<timestamp, p_trans> att; // active transaction table
+	map<data_item_ref *, std::set<p_trans>> adit; // active data item table
 
-	std::mutex mtx;
+	mutex mtx;
 	uint ticks = 0;
 	sdb::common::ThreadPool thread_pool;
 
@@ -111,6 +109,7 @@ static trans_mgr LOCAL_TRANS_MGR;
 
 class transaction {
 	friend class trans_mgr;
+	friend class trans_task;
 private:
 	timestamp ts = 0;
 	trans_status tst = INITIAL;
@@ -119,9 +118,9 @@ private:
 	 * an action object and put it to the list
 	 */
 	std::list<action> actions;
-	std::list<p_trans> deps;  	   // the transaction depends other transactions
-	std::list<p_trans> wait_fors;  // other transaction wait for the transaction
-	int write_idx = -1;
+	std::forward_list<p_trans> deps;  	   // the transaction depends other transactions
+	std::forward_list<p_trans> wait_fors;  // other transaction wait for the transaction
+	int op_step = 0;
 
 	bool auto_commit;
 
@@ -131,13 +130,9 @@ private:
 
 	void execute();
 
-	int read(data_item_ref * pdi);
-	int write(data_item_ref * pdi);
-
-	/*
-	 * write data of actions to segment
-	 */
-	int deffer_write_data();
+	int read(action & a);
+	int write(action & a);
+	void restore();
 
 	void add_action(action_op op, data_item_ref * di);
 	void add_action(const action & a);
