@@ -45,13 +45,13 @@ struct data_item_ref {
 	void un_lock();
 };
 
-class action {
-public:
+struct action {
 	unsigned short seq; // maybe
 	action_op op;
-	data_item_ref * dif;  // data item ref
-	char flag = 0;
+	data_item_ref * dif = nullptr;  // data item ref
+	bool assign_dif = false;
 
+	char flag = 0;
 	char * wd = nullptr; // action data write buffer, includes data_item_ref  and flag
 	int wl = 0; // action data write length, include data_item_ref and flag
 

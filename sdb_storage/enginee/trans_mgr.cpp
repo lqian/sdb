@@ -137,6 +137,11 @@ action::~action() {
 	if (rd) {
 		delete[] rd;
 	}
+
+	if (assign_dif && dif) {
+		delete dif;
+		assign_dif = false;
+	}
 }
 
 action & action::operator=(const action & an) {

@@ -103,6 +103,10 @@ void log_block::copy_data(const dir_entry &e, char_buffer & buff) {
 }
 
 void log_block::copy_data(const dir_entry &e, action &a) {
+	if (!a.assign_dif) {
+		a.dif = new data_item_ref;
+		a.assign_dif = true;
+	}
 	char_buffer buff(buffer + e.offset, e.length, true);
 	a.read_from(buff);
 }
