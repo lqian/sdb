@@ -64,8 +64,7 @@ void action::read_from(char_buffer & buff) {
 		buff.skip(o_len);
 	} else if ((flag | 0x80) == 0x80) {
 		n_len = len;
-	}
-	else if ((flag | 0x40) == 0x40) {
+	} else if ((flag | 0x40) == 0x40) {
 		o_len = len;
 	}
 
@@ -97,7 +96,7 @@ int action::ref_nitem(char * & buff) {
 	if (flag >> NEW_VALUE_BIT & 1) {
 		char_buffer tmp(wd, wl, true);
 		tmp.skip(ACTION_HEADER_LENGTH);
-		int len = 0;
+		int len = -1;
 		tmp >> len;
 		buff = tmp.curr();
 		return len;
@@ -224,7 +223,7 @@ void transaction::execute() {
 			}
 		} else if (a.op == action_op::READ) {
 			if (ts > a.dif->wts && a.dif->cmt_flag == trans_leave) {
-				if (read(a) != sdb::SUCCESS) {
+				if (read(a) == sdb::FAILURE) {
 					abort();
 					return;
 				}
@@ -248,9 +247,9 @@ void transaction::commit() {
 	}
 	if (tst == PARTIALLY_COMMITTED) {
 		if (lm->log_commit(ts) >= 0) {
-			for (auto & a : actions) {
-				if (a.op == action_op::WRITE) {
-					a.dif->cmt_flag == commit_flag::trans_leave;
+			for (auto it = actions.begin(); it != actions.end(); it++) {
+				if (it->op == action_op::WRITE) {
+					it->dif->cmt_flag = commit_flag::trans_leave;
 				}
 			}
 			tm->remove_trans(this);
@@ -297,7 +296,9 @@ int transaction::read(action & a) {
 
 int transaction::write(action & a) {
 	int r = sdb::FAILURE;
-	char * nbuff = a.wd + ACTION_HEADER_LENGTH + INT_CHARS;
+	char * nbuff;
+	a.ref_nitem(nbuff);
+
 	a.dif->mtx.lock();
 	a.dif->cmt_flag = commit_flag::trans_on;
 
@@ -410,8 +411,10 @@ void trans_mgr::add_trans(data_item_ref *dif, p_trans pts) {
 	adit_mtx.unlock();
 }
 
-void trans_mgr::submit(transaction * t) {
-	assign_trans(t);
+void trans_mgr::submit(transaction * t, bool assign) {
+	if (assign) {
+		assign_trans(t);
+	}
 	trans_task * task = new trans_task(t);
 	t->task = task;
 	thread_pool.push_back(task);

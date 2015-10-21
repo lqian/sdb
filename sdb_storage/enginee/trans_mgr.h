@@ -108,7 +108,7 @@ public:
 	void open();
 	int close();
 	void assign_trans(p_trans t);
-	void submit(p_trans t);
+	void submit(p_trans t, bool assign = true);
 
 	inline void set_core_size(int cs = 4) {
 		core_size = cs;
@@ -155,13 +155,9 @@ private:
 
 	trans_task * task = nullptr;
 
-
-
 	int read(action & a);
 	int write(action & a);
 	void restore();
-
-
 
 public:
 	void begin();
@@ -171,6 +167,10 @@ public:
 
 	void add_action(action_op op, data_item_ref * di);
 	void add_action(const action & a);
+
+	inline list<action> & get_actions() {
+		return actions;
+	}
 
 	transaction(bool ac = true) :
 			auto_commit(ac) {

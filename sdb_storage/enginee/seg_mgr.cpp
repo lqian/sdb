@@ -82,8 +82,9 @@ int seg_mgr::get_row(ulong seg_id, uint blk_off, int idx, char_buffer & buff) {
 	if (seg != nullptr) {
 		mem_data_block blk;
 		blk.offset = blk_off;
-		int r = seg->read_block(blk);
+		r = seg->read_block(blk);
 		if (r) {
+			blk.parse_off_tbl();
 			r = blk.get_row_by_idx(idx, buff);
 		}
 	}
@@ -97,7 +98,7 @@ int seg_mgr::write(ulong seg_id, uint blk_off, int row_idx, const char * buff,
 	if (seg != nullptr) {
 		mem_data_block blk;
 		blk.offset = blk_off;
-		int r = seg->read_block(blk);
+		r = seg->read_block(blk);
 		if (r) {
 			blk.parse_off_tbl();
 			r = blk.update_row_by_index(row_idx, buff, len);
@@ -114,10 +115,10 @@ int seg_mgr::write(const data_item_ref *dif, const char * buff,
 	if (seg != nullptr) {
 		mem_data_block blk;
 		blk.offset = dif->blk_off;
-		int r = seg->read_block(blk);
+		r = seg->read_block(blk);
 		if (r) {
 			blk.parse_off_tbl();
-			return blk.update_row_by_index(dif->row_idx, buff, len);
+			r = blk.update_row_by_index(dif->row_idx, buff, len);
 		}
 	}
 
