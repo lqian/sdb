@@ -11,6 +11,8 @@ using namespace std;
 using namespace sdb::enginee;
 using namespace sdb::common;
 
+int rl = 10;
+
 void before() {
 	log_mgr * lm = &sdb::enginee::LOCAL_LOG_MGR;
 	string path = "/tmp/logs";
@@ -109,7 +111,6 @@ void trans_double() {
 	dif.row_idx = blk.assign_row(rl);
 	blk.write_off_tbl();
 
-
 	char *n_buff1 = new char[rl];
 	for (int i = 0; i < rl; i++) {
 		n_buff1[i] = 'A' + i;
@@ -125,7 +126,7 @@ void trans_double() {
 
 	char *n_buff2 = new char[rl];
 	for (int i = 0; i < rl; i++) {
-		n_buff1[i] = 'a' + i;
+		n_buff2[i] = 'a' + i;
 	}
 
 	action b = a;
