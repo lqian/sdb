@@ -28,7 +28,7 @@ enum action_op {
 	WRITE, READ
 };
 
-enum  commit_flag {
+enum commit_flag {
 	trans_leave, trans_on
 };
 struct data_item_ref {
@@ -50,8 +50,10 @@ struct action {
 	action_op op;
 	data_item_ref * dif = nullptr;  // data item ref
 	bool assign_dif = false;
-
 	char flag = 0;
+
+	int n_len, o_len;
+
 	char * wd = nullptr; // action data write buffer, includes data_item_ref  and flag
 	int wl = 0; // action data write length, include data_item_ref and flag
 
@@ -72,11 +74,10 @@ struct action {
 
 	void read_from(char_buffer & buff);
 	void write_to(char_buffer & buff);
-	int copy_nitem(char * buff);
-	int copy_oitem(char * buff);
-	int ref_oitem(char *buff);
-	int ref_nitem(char * buff);
-
+	int copy_nitem(char * & buff);
+	int copy_oitem(char * & buff);
+	int ref_oitem(char * & buff);
+	int ref_nitem(char * & buff);
 	action() {
 	}
 	action(const action & an);
