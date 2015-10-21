@@ -31,8 +31,7 @@ void ThreadPool::await_terminate(bool force) {
 	for (size_t i = 0; i < threads.size(); i++) {
 		if (force) {
 			threads[i].detach();
-		}
-		else if (threads[i].joinable()) {
+		} else if (threads[i].joinable()) {
 			threads[i].join();
 		}
 	}
@@ -55,8 +54,18 @@ void ThreadPool::push_back(Runnable &r) {
 	taskQueue.push_back(f);
 }
 
+void ThreadPool::push_back(Runnable * r) {
+	function<void()> f = bind(&Runnable::run, r);
+	taskQueue.push_back(f);
+}
+
 bool ThreadPool::push_back(Runnable &r, long ms) {
 	function<void()> f = bind(&Runnable::run, &r);
+	return taskQueue.push_back(f, chrono::milliseconds(ms));
+}
+
+bool ThreadPool::push_back(Runnable *r, long ms) {
+	function<void()> f = bind(&Runnable::run, r);
 	return taskQueue.push_back(f, chrono::milliseconds(ms));
 }
 

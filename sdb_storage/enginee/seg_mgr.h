@@ -11,7 +11,9 @@
 #include <map>
 #include <list>
 #include <mutex>
+
 #include "../storage/datafile.h"
+#include "trans_def.h"
 
 namespace sdb {
 namespace enginee {
@@ -63,7 +65,12 @@ public:
 	/*
 	 * write a exist row_idx with buffer and its length
 	 */
-	int write(ulong seg_id, uint blk_off, int idx, char * buff, int len);
+	int write(ulong seg_id, uint blk_off, int idx, const char * buff, const int& len);
+
+	/*
+	 * write a data_item with buffer and length, return success if write else false
+	 */
+	int write(const data_item_ref *dif, const char * buff, const int & len);
 
 	inline void set_swap_police(swap_policy & sp) {
 		this->sp = sp;

@@ -21,6 +21,7 @@ bool data_item_ref::operator ==(const data_item_ref & an) {
 }
 
 void action::create(char * buff, int len) {
+	n_len = len;
 	wl = ACTION_HEADER_LENGTH + INT_CHARS + len;
 	wd = new char[wl];
 	char_buffer tmp(wd, wl, true);
@@ -30,6 +31,8 @@ void action::create(char * buff, int len) {
 }
 
 void action::update(char * n_buff, int n_len, char * o_buff, int o_len) {
+	this->n_len = n_len;
+	this->o_len = o_len;
 	wl = ACTION_HEADER_LENGTH + INT_CHARS + INT_CHARS + n_len + o_len;
 	wd = new char[wl];
 	char_buffer tmp(wd, wl, true);
@@ -41,6 +44,7 @@ void action::update(char * n_buff, int n_len, char * o_buff, int o_len) {
 }
 
 void action::remove(char * o_buff, int o_len) {
+	this->o_len = o_len;
 	wl = ACTION_HEADER_LENGTH + INT_CHARS + o_len;
 	wd = new char[wl];
 	char_buffer tmp(wd, wl, true);
@@ -54,9 +58,15 @@ void action::read_from(char_buffer & buff) {
 	int len;
 	buff >> dif->seg_id >> dif->blk_off >> dif->row_idx >> flag >> len;
 	buff.skip(len);
-	if ((flag >> NEW_VALUE_BIT & 1) && (flag >> OLD_VALUE_BIT & 1)) {
-		buff >> len;
-		buff.skip(len);
+	if ((flag | 0xC0) == 0xC0) { // update 2^7 + 2^6
+		n_len = len;
+		buff >> o_len;
+		buff.skip(o_len);
+	} else if ((flag | 0x80) == 0x80) {
+		n_len = len;
+	}
+	else if ((flag | 0x40) == 0x40) {
+		o_len = len;
 	}
 
 	wl = buff.header();
@@ -69,7 +79,7 @@ void action::write_to(char_buffer & buff) {
 	buff.push_back(wd, wl, false);
 }
 
-int action::copy_nitem(char *buff) {
+int action::copy_nitem(char * & buff) {
 	if (flag >> NEW_VALUE_BIT & 1) {
 		char_buffer tmp(wd, wl, true);
 		tmp.skip(ACTION_HEADER_LENGTH);
@@ -82,7 +92,8 @@ int action::copy_nitem(char *buff) {
 		return sdb::FAILURE;
 	}
 }
-int action::ref_nitem(char * buff) {
+
+int action::ref_nitem(char * & buff) {
 	if (flag >> NEW_VALUE_BIT & 1) {
 		char_buffer tmp(wd, wl, true);
 		tmp.skip(ACTION_HEADER_LENGTH);
@@ -95,7 +106,7 @@ int action::ref_nitem(char * buff) {
 	}
 }
 
-int action::copy_oitem(char *buff) {
+int action::copy_oitem(char * & buff) {
 	if (flag >> OLD_VALUE_BIT & 1) {
 		char_buffer tmp(wd, wl, true);
 		tmp.skip(ACTION_HEADER_LENGTH);
@@ -112,7 +123,7 @@ int action::copy_oitem(char *buff) {
 	}
 }
 
-int action::ref_oitem(char * buff) {
+int action::ref_oitem(char * & buff) {
 	if (flag >> OLD_VALUE_BIT & 1) {
 		char_buffer tmp(wd, wl, true);
 		tmp.skip(ACTION_HEADER_LENGTH);
@@ -148,6 +159,10 @@ action & action::operator=(const action & an) {
 	seq = an.seq;
 	op = an.op;
 	dif = an.dif;
+	assign_dif = an.assign_dif;
+	flag = an.flag;
+	n_len = an.n_len;
+	o_len = an.o_len;
 	if (an.wl > 0) {
 		wl = an.wl;
 		wd = new char[wl];
@@ -167,6 +182,10 @@ action::action(const action & an) {
 	seq = an.seq;
 	op = an.op;
 	dif = an.dif;
+	assign_dif = an.assign_dif;
+	flag = an.flag;
+	n_len = an.n_len;
+	o_len = an.o_len;
 	if (an.wl > 0) {
 		wl = an.wl;
 		wd = new char[wl];
@@ -186,44 +205,40 @@ void transaction::begin() {
 
 void transaction::execute() {
 	tst = ACTIVE;
-	auto ret = tm->att.insert(std::make_pair(ts, this));
-	if (ret.second) {
-		for (auto & a : actions) {
-			if (a.op == action_op::WRITE) {
-				if (ts > a.dif->wts && a.dif->cmt_flag == trans_leave) {
-					if (lm->log_action(ts, a) >= 0) {
-						if (write(a) != sdb::SUCCESS) {
-							abort();
-						} else {
 
-						}
-					} else {
-						//can not log the action, abort current transaction
+	for (auto & a : actions) {
+		if (a.op == action_op::WRITE) {
+			if (ts > a.dif->wts && a.dif->cmt_flag == trans_leave) {
+				if (lm->log_action(ts, a) >= 0) {
+					if (write(a) < 0) {
 						abort();
 						return;
 					}
 				} else {
-					// a later transaction already write the data item. skip current write
-				}
-			} else if (a.op == action_op::READ) {
-				if (ts > a.dif->wts && a.dif->cmt_flag == trans_leave) {
-					if (read(a) != sdb::SUCCESS) {
-						abort();
-					}
-				} else {
+					//can not log the action, abort current transaction
 					abort();
 					return;
 				}
+			} else {
+				// a later transaction already write the data item. skip current write
 			}
-			op_step++;
+		} else if (a.op == action_op::READ) {
+			if (ts > a.dif->wts && a.dif->cmt_flag == trans_leave) {
+				if (read(a) != sdb::SUCCESS) {
+					abort();
+					return;
+				}
+			} else {
+				abort();
+				return;
+			}
 		}
+		op_step++;
+	}
 
-		tst = PARTIALLY_COMMITTED;
-		if (auto_commit) {
-			commit();
-		}
-	} else {
-		tst = PRE_ASSIGN;
+	tst = PARTIALLY_COMMITTED;
+	if (auto_commit) {
+		commit();
 	}
 }
 
@@ -232,20 +247,13 @@ void transaction::commit() {
 		// waiting until deps is empty
 	}
 	if (tst == PARTIALLY_COMMITTED) {
-		if (deps.empty() && lm->log_commit(ts) >= 0) {
+		if (lm->log_commit(ts) >= 0) {
 			for (auto & a : actions) {
 				if (a.op == action_op::WRITE) {
 					a.dif->cmt_flag == commit_flag::trans_leave;
 				}
-
-				auto it = tm->adit.find(a.dif);
-				if (it != tm->adit.end()) {
-					it->second.erase(this);
-					if (it->second.size() == 0) {
-						tm->adit.erase(a.dif);
-					}
-				}
 			}
+			tm->remove_trans(this);
 			tst = COMMITTED;
 
 			//info other transaction reduce deps
@@ -257,7 +265,6 @@ void transaction::commit() {
 			tst = FAILED;
 		}
 	}
-	tm->att.erase(ts);
 }
 
 void transaction::abort() {
@@ -271,7 +278,6 @@ void transaction::abort() {
 	} else {
 		tst = FAILED;
 	}
-	tm->att.erase(ts);
 }
 
 int transaction::read(action & a) {
@@ -291,11 +297,11 @@ int transaction::read(action & a) {
 
 int transaction::write(action & a) {
 	int r = sdb::FAILURE;
-	char * nbuff;
-	int len = a.ref_nitem(nbuff);
+	char * nbuff = a.wd + ACTION_HEADER_LENGTH + INT_CHARS;
 	a.dif->mtx.lock();
 	a.dif->cmt_flag = commit_flag::trans_on;
 
+//	tm->adit_mtx.lock();
 	auto it = tm->adit.find(a.dif);
 	if (it != tm->adit.end()) {
 		for (auto & e : it->second) {
@@ -308,12 +314,13 @@ int transaction::write(action & a) {
 		pset.insert(this);
 		tm->adit.insert(std::make_pair(a.dif, pset));
 	}
+//	tm->adit_mtx.unlock();  // unlock adit_mtx
 
-	r = sm->write(a.dif->seg_id, a.dif->blk_off, a.dif->row_idx, nbuff, len);
-	if (r == sdb::SUCCESS) {
+	r = sm->write(a.dif, nbuff, a.n_len);
+	if (r >= 0) {
 		a.dif->wts = ts;
 	}
-	a.dif->mtx.unlock();
+	a.dif->mtx.unlock(); // write data, unlock data_item_ref.mtx
 	return r;
 }
 
@@ -350,22 +357,68 @@ void transaction::add_action(action_op op, data_item_ref * di) {
 	actions.push_back(a);
 }
 
+void trans_mgr::open() {
+	thread_pool.set_core_size(core_size);
+	thread_pool.set_max_task(max_active_trans);
+	thread_pool.init_thread_workers();
+	time(&timer);
+	ticks_mtx.lock();
+	curr_ts = (timer << 24);
+	ticks_mtx.unlock();
+	opened = true;
+}
+
+int trans_mgr::close() {
+	thread_pool.await_terminate();
+	return thread_pool.is_terminated() && thread_pool.is_empty();
+}
+
 void trans_mgr::assign_trans(p_trans t) {
-	mtx.lock();
-	next_ts();
+	ticks_mtx.lock();
 	t->ts = curr_ts;
-	mtx.unlock();
+	next_ts();
+	ticks_mtx.unlock();
 	t->tm = this;
+}
+
+void trans_mgr::remove_trans(p_trans pts) {
+	adit_mtx.lock();
+	auto ait = pts->actions.begin();
+	while (ait != pts->actions.end()) {
+		auto it = adit.find(ait->dif);
+		if (it != adit.end()) {
+			it->second.erase(pts);
+			if (it->second.size() == 0) {
+				adit.erase(ait->dif);
+			}
+		}
+		ait++;
+	}
+	adit_mtx.unlock();
+}
+
+void trans_mgr::add_trans(data_item_ref *dif, p_trans pts) {
+	adit_mtx.lock();
+	auto it = adit.find(dif);
+	if (it != adit.end()) {
+		it->second.insert(pts);
+	} else {
+		set<p_trans> pset;
+		pset.insert(pts);
+		adit.insert(std::make_pair(dif, pset));
+	}
+	adit_mtx.unlock();
 }
 
 void trans_mgr::submit(transaction * t) {
 	assign_trans(t);
-	trans_task task(t);
+	trans_task * task = new trans_task(t);
+	t->task = task;
 	thread_pool.push_back(task);
 }
 
 trans_mgr::trans_mgr() {
-	time(&timer);
+
 }
 
 trans_mgr::~trans_mgr() {

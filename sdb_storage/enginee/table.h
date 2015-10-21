@@ -49,6 +49,9 @@ public:
 	int head();  // more to the head of table rows
 	int tail();  // move to the tail of table rows
 
+
+	/* transaction api for trans_add_row, trans_get_row, trans_delete_row, trans_update_row */
+
 	/* low storage api for add_row, get_row, delete_row, update_row */
 	int add_row(row_store & rs);
 

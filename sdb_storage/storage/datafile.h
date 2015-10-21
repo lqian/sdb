@@ -944,12 +944,15 @@ struct mem_data_block: data_block {
 	 * 4) if does not find the offset and others, return UNKOWN_OFFSET
 	 *
 	 */
-	int update_row_data_by_index(int idx, const char *rb, const int rl) {
+	int update_row_by_index(int idx, const char *rb, const int rl) {
 		int r = UNKNOWN_OFFSET;
-		if (idx != -1 && idx < off_tbl.size()) {
+		if (idx > -1 && idx < off_tbl.size()) {
 			int off = off_tbl[idx];
 			int o_rl = (idx == 0 ? length : off_tbl[idx - 1]) - off;
-			if ((idx + 1) == off_tbl.size()) { // the last row
+			if (o_rl == rl) {
+				memcpy(buffer + off, rb, rl);
+				r = idx;
+			} else if ((idx + 1) == off_tbl.size()) { // the last row
 				if (enough_space(rl - o_rl)) { // enough space, maybe shrink existed row space
 					int n_off = off + o_rl - rl;
 					off_tbl[idx] = n_off;

@@ -399,6 +399,7 @@ public:
 
 	void set_log_file_max_size(int size = 67108864);
 	void set_sync_police(const enum log_sync_police & sp);
+	void set_path(const string & path);
 	const log_sync_police & get_sync_police() const;
 
 	log_mgr();

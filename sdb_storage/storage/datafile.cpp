@@ -270,7 +270,6 @@ int data_file::flush_segment(segment *seg) {
 	}
 
 	fs.seekg(seg->offset + data_file_head_size - pos, ios_base::cur);
-	pos = fs.tellg();
 	if (!fs.eof()) {
 		common::char_buffer head_buff(segment_head_size);
 		seg->fill_head_to_buff(head_buff);

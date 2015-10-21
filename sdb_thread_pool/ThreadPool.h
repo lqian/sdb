@@ -108,7 +108,9 @@ public:
 	~ThreadPool();
 	void init_thread_workers();
 	void push_back(Runnable & r);
+	void push_back(Runnable * r);
 	bool push_back(Runnable & r, const long milliseconds);
+	bool push_back(Runnable * r, const long milliseconds);
 	void insert(Runnable & r);
 	bool insert(Runnable & r, const long milliseconds);
 
@@ -127,6 +129,10 @@ public:
 	}
 	inline void set_core_size(int cs) {
 		coreSize = cs;
+	}
+
+	inline void set_max_task(int mt) {
+		taskQueue.max_task_num = mt;
 	}
 };
 

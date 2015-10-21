@@ -129,7 +129,7 @@ int sys_seg::update_row(const object_type & ot, const string & col_name,
 		rs.write_to(buff);
 		char *p = buff.data();
 		int rl = buff.size();
-		int r = blk.update_row_data_by_index(idx, p, rl);
+		int r = blk.update_row_by_index(idx, p, rl);
 		blk.write_off_tbl();
 		if (r == DELETE_OFFSET) {   // row move between block
 			mem_data_block nblk;

@@ -16,18 +16,19 @@ namespace enginee {
 
 int seg_mgr::load() {
 	// check directory existed
-	auto it = data_file_paths.begin();
-	for (; it != data_file_paths.end(); ++it) {
-		if (!sio::make_dir(*it)) {
-			return sdb::FAILURE;
+	for (auto & path : data_file_paths) {
+		if (!sio::exist_file(path)) {
+			if (!sio::make_dir(path)) {
+				return sdb::FAILURE;
+			}
 		}
 	}
 
 	//open all data files, TODO segment replacement policy in future
-	it = data_file_paths.begin();
+
 	int r = sdb::SUCCESS;
-	for (; r != sdb::FAILURE && it != data_file_paths.end(); it++) {
-		r = do_load(*it);
+	for (auto & path : data_file_paths) {
+		r = do_load(path);
 	}
 
 	return r;
@@ -89,8 +90,8 @@ int seg_mgr::get_row(ulong seg_id, uint blk_off, int idx, char_buffer & buff) {
 	return r;
 }
 
-int seg_mgr::write(ulong seg_id, uint blk_off, int row_idx, char * buff,
-		int len) {
+int seg_mgr::write(ulong seg_id, uint blk_off, int row_idx, const char * buff,
+		const int & len) {
 	int r = sdb::FAILURE;
 	segment * seg = find_segment(seg_id);
 	if (seg != nullptr) {
@@ -98,16 +99,34 @@ int seg_mgr::write(ulong seg_id, uint blk_off, int row_idx, char * buff,
 		blk.offset = blk_off;
 		int r = seg->read_block(blk);
 		if (r) {
-			r = blk.update_row_data_by_index(row_idx, buff, len);
-			if (r == DELETE_OFFSET) {
-				//TODO
-			} else if (r == UNKNOWN_OFFSET) {
-				//TODO
-			}
+			blk.parse_off_tbl();
+			r = blk.update_row_by_index(row_idx, buff, len);
+		}
+	}
+
+	return r >= 0 ? sdb::SUCCESS : sdb::FAILURE;
+}
+
+int seg_mgr::write(const data_item_ref *dif, const char * buff,
+		const int & len) {
+	int r = sdb::FAILURE;
+	segment * seg = find_segment(dif->seg_id);
+	if (seg != nullptr) {
+		mem_data_block blk;
+		blk.offset = dif->blk_off;
+		int r = seg->read_block(blk);
+		if (r) {
+			blk.parse_off_tbl();
+			return blk.update_row_by_index(dif->row_idx, buff, len);
 		}
 	}
 
 	return r;
+//	if (r >= 0) {
+//		return sdb::SUCCESS;
+//	} else {
+//		return sdb::FAILURE;
+//	}
 }
 
 int seg_mgr::do_load(const string & pathname) {
@@ -223,7 +242,6 @@ int seg_mgr::assign_data_file(data_file * pdf) {
 int seg_mgr::assign_data_file(data_file * pdf,
 		map<string, data_file *>::iterator it) {
 	int r = sdb::FAILURE;
-	mtx.lock();
 
 	unsigned long nid = ++local_data_file_id;
 	char *fn = new char[16];
@@ -243,7 +261,6 @@ int seg_mgr::assign_data_file(data_file * pdf,
 		}
 	}
 
-	mtx.unlock();
 	return r;
 }
 

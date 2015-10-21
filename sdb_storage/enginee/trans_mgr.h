@@ -41,8 +41,6 @@ typedef unsigned long timestamp;
 typedef transaction * p_trans;
 typedef data_item_ref * p_dif;
 
-
-
 /*
  * CAUTION: currently only support read_committed
  */
@@ -82,24 +80,51 @@ struct trans_row_item: row_item {
 class trans_mgr {
 	friend class transaction;
 private:
+	bool opened;
 	time_t timer;
 	timestamp curr_ts;
-	map<timestamp, p_trans> att; // active transaction table
-	map<data_item_ref *, std::set<p_trans>> adit; // active data item table
+	int core_size = 4;
+	int max_active_trans = 2000;
 
-	mutex mtx;
+	/*
+	 *  active data item and active transaction map
+	 */
+	map<data_item_ref *, std::set<p_trans>> adit;
+
+	mutex ticks_mtx, adit_mtx;
 	uint ticks = 0;
 	sdb::common::ThreadPool thread_pool;
 
+	inline void remove_trans(p_trans pts);
+	inline void add_trans(data_item_ref *dif, p_trans pts);
+
 	inline void next_ts() {
 		ticks++;
-		curr_ts &= 0xFFFFFFFF00000000;
+		curr_ts &= 0xFFFFFFFFFF000000;
 		curr_ts |= ticks;
 	}
 
 public:
+	void open();
+	int close();
 	void assign_trans(p_trans t);
 	void submit(p_trans t);
+
+	inline void set_core_size(int cs = 4) {
+		core_size = cs;
+	}
+
+	inline void set_max_active_trans(int mat) {
+		max_active_trans = mat;
+	}
+
+	inline bool is_open() {
+		return opened;
+	}
+
+	inline timestamp get_curr_ts() const {
+		return curr_ts;
+	}
 
 	trans_mgr();
 	virtual ~trans_mgr();
@@ -118,8 +143,8 @@ private:
 	 * an action object and put it to the list
 	 */
 	std::list<action> actions;
-	std::forward_list<p_trans> deps;  	   // the transaction depends other transactions
-	std::forward_list<p_trans> wait_fors;  // other transaction wait for the transaction
+	std::forward_list<p_trans> deps; // the transaction depends other transactions
+	std::forward_list<p_trans> wait_fors; // other transaction wait for the transaction
 	int op_step = 0;
 
 	bool auto_commit;
@@ -128,19 +153,24 @@ private:
 	log_mgr * lm = nullptr;
 	seg_mgr * sm = nullptr;
 
-	void execute();
+	trans_task * task = nullptr;
+
+
 
 	int read(action & a);
 	int write(action & a);
 	void restore();
 
-	void add_action(action_op op, data_item_ref * di);
-	void add_action(const action & a);
+
 
 public:
 	void begin();
+	void execute();
 	void commit();
 	void abort();
+
+	void add_action(action_op op, data_item_ref * di);
+	void add_action(const action & a);
 
 	transaction(bool ac = true) :
 			auto_commit(ac) {
@@ -155,6 +185,9 @@ public:
 		sm = &LOCAL_SEG_MGR;
 	}
 	~transaction() {
+		if (task) {
+			delete task;
+		}
 	}
 
 	inline void set_trans_mgr(trans_mgr * tm) {
@@ -180,8 +213,11 @@ public:
 	inline void set_auto_commit(bool ac) {
 		auto_commit = ac;
 	}
-};
 
+	inline const trans_status status() const {
+		return this->tst;
+	}
+};
 
 class trans_task: public sdb::common::Runnable {
 private:
@@ -195,7 +231,18 @@ public:
 	trans_task(p_trans _t) :
 			t(_t) {
 	}
+
+	trans_task(const trans_task & an) {
+		t = an.t;
+	}
+
+	trans_task & operator=(const trans_task & an) {
+		t = an.t;
+		return *this;
+	}
+
 	virtual ~trans_task() {
+		std::cout << "destory trans_task" << std::endl;
 	}
 };
 } /* namespace enginee */

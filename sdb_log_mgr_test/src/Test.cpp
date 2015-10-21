@@ -4,6 +4,7 @@
 
 #include <forward_list>
 #include "enginee/log_mgr.h"
+#include "enginee/trans_mgr.h"
 
 using namespace sdb::enginee;
 using namespace sdb::common;
@@ -192,6 +193,8 @@ void forward_list_test() {
 	p2 = p1;
 
 }
+
+
 
 void runSuite() {
 	cute::suite s;

@@ -824,6 +824,9 @@ void log_mgr::set_log_file_max_size(int size) {
 void log_mgr::set_sync_police(const enum log_sync_police & sp) {
 	sync_police = sp;
 }
+void log_mgr::set_path(const string &path) {
+	this->path = path;
+}
 
 const log_sync_police & log_mgr::get_sync_police() const {
 	return sync_police;
