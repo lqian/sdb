@@ -13,6 +13,7 @@
 #include <forward_list>
 #include <map>
 #include <mutex>
+#include <condition_variable>
 #include <atomic>
 #include <set>
 #include <ctime>
@@ -61,7 +62,7 @@ enum isolation {
  *
  */
 enum trans_status {
-	INITIAL, ACTIVE, ABORTED, COMMITTED, PARTIALLY_COMMITTED, FAILED, PRE_ASSIGN
+	INITIAL, ACTIVE, ABORTED, READY_ABORTED, COMMITTED, PARTIALLY_COMMITTED, FAILED, PRE_ASSIGN
 };
 
 struct row_item {
@@ -146,7 +147,6 @@ private:
 	std::forward_list<p_trans> deps; // the transaction depends other transactions
 	std::forward_list<p_trans> wait_fors; // other transaction wait for the transaction
 	int op_step = 0;
-
 	bool auto_commit;
 
 	trans_mgr * tm = nullptr;
@@ -155,9 +155,22 @@ private:
 
 	trans_task * task = nullptr;
 
+	mutex mtx;
+	condition_variable_any cva;
+
 	int read(action & a);
 	int write(action & a);
 	void restore();
+
+	/*
+	 * this transaction receive commit message from another transaction(t)
+	 */
+	void inform_commit_from(p_trans t);
+
+	/*
+	 * this transaction receive abort message
+	 */
+	void inform_abort();
 
 public:
 	void begin();
@@ -167,10 +180,6 @@ public:
 
 	void add_action(action_op op, data_item_ref * di);
 	void add_action(const action & a);
-
-	inline list<action> & get_actions() {
-		return actions;
-	}
 
 	transaction(bool ac = true) :
 			auto_commit(ac) {
@@ -184,11 +193,16 @@ public:
 		lm = &LOCAL_LOG_MGR;
 		sm = &LOCAL_SEG_MGR;
 	}
+
 	~transaction() {
 		if (task) {
 			delete task;
 		}
 	}
+
+	transaction(const transaction & an) = delete;
+	transaction & operator=(const transaction & an) = delete;
+	bool operator==(const transaction & an) = delete;
 
 	inline void set_trans_mgr(trans_mgr * tm) {
 		this->tm = tm;
@@ -217,6 +231,10 @@ public:
 	inline const trans_status status() const {
 		return this->tst;
 	}
+
+	inline list<action> & get_actions() {
+		return actions;
+	}
 };
 
 class trans_task: public sdb::common::Runnable {
@@ -242,7 +260,6 @@ public:
 	}
 
 	virtual ~trans_task() {
-		std::cout << "destory trans_task" << std::endl;
 	}
 };
 } /* namespace enginee */

@@ -91,6 +91,25 @@ int seg_mgr::get_row(ulong seg_id, uint blk_off, int idx, char_buffer & buff) {
 	return r;
 }
 
+int seg_mgr::get_row(const data_item_ref * dif, char_buffer & buff) {
+	int r = sdb::FAILURE;
+	segment * seg = find_segment(dif->seg_id);
+	if (seg) {
+		mem_data_block blk;
+		blk.offset = dif->blk_off;
+		r = seg->read_block(blk);
+		if (r) {
+			blk.parse_off_tbl();
+			r = blk.get_row_by_idx(dif->row_idx, buff);
+		}
+	}
+	return r;
+}
+
+int seg_mgr::get_row(const data_item_ref & dif, char_buffer & buff) {
+	return get_row(&dif, buff);
+}
+
 int seg_mgr::write(ulong seg_id, uint blk_off, int row_idx, const char * buff,
 		const int & len) {
 	int r = sdb::FAILURE;
@@ -102,10 +121,13 @@ int seg_mgr::write(ulong seg_id, uint blk_off, int row_idx, const char * buff,
 		if (r) {
 			blk.parse_off_tbl();
 			r = blk.update_row_by_index(row_idx, buff, len);
+			if (r > -1) {
+				blk.write_off_tbl();
+			}
 		}
 	}
 
-	return r >= 0 ? sdb::SUCCESS : sdb::FAILURE;
+	return r;
 }
 
 int seg_mgr::write(const data_item_ref *dif, const char * buff,
@@ -120,14 +142,12 @@ int seg_mgr::write(const data_item_ref *dif, const char * buff,
 			blk.parse_off_tbl();
 			r = blk.update_row_by_index(dif->row_idx, buff, len);
 		}
+		if (r >-1) {
+			blk.write_off_tbl();
+		}
 	}
 
 	return r;
-//	if (r >= 0) {
-//		return sdb::SUCCESS;
-//	} else {
-//		return sdb::FAILURE;
-//	}
 }
 
 int seg_mgr::do_load(const string & pathname) {
@@ -268,12 +288,16 @@ int seg_mgr::assign_data_file(data_file * pdf,
 /*
  *
  */
-int seg_mgr::assign_segment(segment * seg) {
+int seg_mgr::assign_segment(segment * & seg) {
 	int r = sdb::FAILURE;
 	static int round = 0;
 	mtx.lock();
 
+	if (seg == nullptr) {
+		seg = new segment();
+	}
 	seg->set_id(++local_segment_id);
+
 	if (seg->no_length()) {
 		seg->set_length(seg_default_length);
 	}

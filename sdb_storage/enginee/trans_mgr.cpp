@@ -203,27 +203,43 @@ void transaction::begin() {
 }
 
 void transaction::execute() {
-	tst = ACTIVE;
+	if (ts == 0) {
+		tm->assign_trans(this);
+	}
 
+	tst = ACTIVE;
 	for (auto & a : actions) {
 		if (a.op == action_op::WRITE) {
-			if (ts > a.dif->wts && a.dif->cmt_flag == trans_leave) {
-				if (lm->log_action(ts, a) >= 0) {
-					if (write(a) < 0) {
+			if (ts > a.dif->wts) {
+				if (a.dif->cmt_flag == trans_leave) {
+					if (lm->log_action(ts, a) >= 0) {
+						if (write(a) < 0) {
+							abort();
+							return;
+						}
+						op_step++;
+					} else {
+						//can not log the action, abort current transaction
 						abort();
 						return;
 					}
-				} else {
-					//can not log the action, abort current transaction
+				} else { // the data_item was write by another transaction, but not commit
 					abort();
 					return;
 				}
-			} else {
+			} else if (ts < a.dif->wts) {
 				// a later transaction already write the data item. skip current write
+				op_step++;
 			}
 		} else if (a.op == action_op::READ) {
-			if (ts > a.dif->wts && a.dif->cmt_flag == trans_leave) {
-				if (read(a) == sdb::FAILURE) {
+			if (ts > a.dif->wts) {
+				if (a.dif->cmt_flag == trans_leave) {
+					if (read(a) == sdb::FAILURE) {
+						abort();
+						return;
+					}
+					op_step++;
+				} else {
 					abort();
 					return;
 				}
@@ -232,7 +248,6 @@ void transaction::execute() {
 				return;
 			}
 		}
-		op_step++;
 	}
 
 	tst = PARTIALLY_COMMITTED;
@@ -242,9 +257,10 @@ void transaction::execute() {
 }
 
 void transaction::commit() {
-	if (deps.empty()) {
-		// waiting until deps is empty
-	}
+	mtx.lock();
+	cva.wait(mtx, [this]() {return deps.empty();});
+	mtx.unlock();
+
 	if (tst == PARTIALLY_COMMITTED) {
 		if (lm->log_commit(ts) >= 0) {
 			for (auto it = actions.begin(); it != actions.end(); it++) {
@@ -255,14 +271,16 @@ void transaction::commit() {
 			tm->remove_trans(this);
 			tst = COMMITTED;
 
-			//info other transaction reduce deps
+			// info other transaction reduce deps
 			for (auto & wf : wait_fors) {
-				wf->deps.remove(this);
+				wf->inform_commit_from(this);
 			}
-		} else {
+		} else { // when a transaction hasn't commit log, judge it as aborted status
 			restore();
-			tst = FAILED;
+			tst = ABORTED;
 		}
+	} else if (tst == READY_ABORTED) {
+		abort();
 	}
 }
 
@@ -335,16 +353,33 @@ void transaction::restore() {
 
 	for (int i = 0; i < op_step; i++, it++) {
 		if (it->op == action_op::WRITE) {
-			if (ts > it->dif->wts) {
+			if (ts >= it->dif->wts) {
 				char * nbuff;
 				int len = it->ref_oitem(nbuff);
 				it->dif->mtx.lock();
 				sm->write(it->dif->seg_id, it->dif->blk_off, it->dif->row_idx,
 						nbuff, len);
+				it->dif->cmt_flag = trans_leave;
 				it->dif->mtx.unlock();
 			}
 		}
 	}
+
+	tm->remove_trans(this);
+}
+
+void transaction::inform_commit_from(p_trans t) {
+	mtx.lock();
+	deps.remove(t);
+	cva.notify_one();
+	mtx.unlock();
+}
+
+void transaction::inform_abort() {
+	mtx.lock();
+	tst = READY_ABORTED;
+	cva.notify_all();
+	mtx.unlock();
 }
 
 void transaction::add_action(const action & a) {

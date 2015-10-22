@@ -56,11 +56,15 @@ public:
 
 	void set_seg_default_length(int length = M_64);
 
-	int assign_segment(segment * seg);
+	int assign_segment(segment * & seg);
 
 	segment * find_segment(ulong id);
 
 	int get_row(ulong seg_id, uint blk_off, int idx, char_buffer & buff);
+
+	int get_row(const data_item_ref & dif, char_buffer & buff);
+
+	int get_row(const data_item_ref * dif, char_buffer & buff);
 
 	/*
 	 * write a exist row_idx with buffer and its length
