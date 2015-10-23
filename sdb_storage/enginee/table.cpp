@@ -11,7 +11,7 @@ namespace sdb {
 namespace enginee {
 
 bool table::has_next_row() {
-	if (curr_blk.row_count() > curr_row_idx) {
+	if (curr_blk.entry_count > curr_row_idx) {
 		return true;
 	} else if (has_next_block()) {
 		next_block(&curr_blk);
@@ -73,8 +73,6 @@ void table::next_block(mem_data_block * blk) {
 	}
 	blk->offset = curr_off;
 	curr_seg->read_block(blk);
-	blk->off_tbl.clear();
-	blk->parse_off_tbl();
 	curr_row_idx = 0;
 }
 
@@ -87,9 +85,7 @@ void table::pre_block(mem_data_block * blk) {
 	}
 	blk->offset = curr_off;
 	curr_seg->read_block(blk);
-	blk->off_tbl.clear();
-	blk->parse_off_tbl();
-	curr_row_idx = blk->row_count();
+	curr_row_idx = blk->entry_count;
 }
 
 int table::get_row(unsigned short off, char_buffer &buff) {
@@ -136,7 +132,6 @@ int table::open() {
 	if (r != sdb::SUCCESS) {
 		return r;
 	}
-	curr_blk.parse_off_tbl();
 	last_blk = new mem_data_block;
 	last_blk->offset = last_seg->last_block_off();
 	r = last_seg->read_block(last_blk);
@@ -148,10 +143,6 @@ int table::head() {
 	curr_off = 0;
 	curr_blk.offset = curr_off;
 	int r = first_seg->read_block(curr_blk);
-	if (r) {
-		curr_blk.off_tbl.clear();
-		curr_blk.parse_off_tbl();
-	}
 	return r;
 }
 
@@ -160,10 +151,6 @@ int table::tail(){
 	curr_seg = last_seg;
 	curr_off = last_seg->last_block_off();
 	r = curr_seg->read_block(curr_blk);
-	if (r) {
-		curr_blk.off_tbl.clear();
-		curr_blk.parse_off_tbl();
-	}
 	return r;
 }
 
@@ -174,7 +161,6 @@ int table::close() {
 }
 
 int table::flush() {
-	last_blk->write_off_tbl();
 	return sdb::SUCCESS;
 }
 
@@ -186,7 +172,6 @@ int table::add_row(row_store & rs) {
 	//last block is full
 	r = last_blk->add_row_data(buff.data(), buff.size());
 	if (r == UNKNOWN_OFFSET) {
-		last_blk->write_off_tbl();
 		if (!last_seg->has_remain_block()) {
 			segment * seg = new segment;
 			r = segmgr->assign_segment(seg);
@@ -222,11 +207,7 @@ int table::delete_row(unsigned int blk_off, unsigned short row_off) {
 	blk.offset = blk_off;
 	int r = last_seg->read_block(blk);
 	if (r) {
-		blk.parse_off_tbl();
 		r = blk.delete_row_off(row_off);
-		if (r) {
-			blk.write_off_tbl();
-		}
 	}
 	return r;
 }
@@ -240,11 +221,7 @@ int table::delete_row(unsigned long seg_id, unsigned int blk_off,
 		blk.offset = blk_off;
 		r = seg->read_block(blk);
 		if (r) {
-			blk.parse_off_tbl();
 			r = blk.delete_row_off(row_off);
-			if (r) {
-				blk.write_off_tbl();
-			}
 		}
 	} else {
 		return SEGMENG_NOT_EXISTED;
@@ -261,11 +238,6 @@ int table::update_row(unsigned short off, row_store & rs) {
 	if (r == DELETE_OFFSET) { // the row offset is delete
 		mem_data_block * old = last_blk;
 		r = add_row(rs);
-		if (r != UNKNOWN_OFFSET) {
-			old->write_off_tbl();
-		} else {
-			return r;
-		}
 	}
 
 	return r;
@@ -283,9 +255,6 @@ int table::update_row(unsigned int blk_off, unsigned short off,
 		r = blk.update_row_data(off, buff.data(), buff.size());
 		if (r == DELETE_OFFSET) {
 			r = add_row(rs);
-			if (r != UNKNOWN_OFFSET) {
-				blk.write_off_tbl();
-			}
 		}
 	}
 	return r;
@@ -305,9 +274,6 @@ int table::update_row(unsigned long seg_id, unsigned int blk_off,
 			r = blk.update_row_data(blk_off, buff.data(), buff.size());
 			if (r == DELETE_OFFSET) {
 				r = add_row(rs);
-				if (r != UNKNOWN_OFFSET) {
-					blk.write_off_tbl();
-				}
 			}
 		}
 	} else {
@@ -346,7 +312,6 @@ table::table() {
 }
 
 table::~table() {
-	last_blk->write_off_tbl();
 	delete last_blk;
 }
 

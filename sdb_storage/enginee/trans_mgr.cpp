@@ -320,7 +320,7 @@ int transaction::write(action & a) {
 	a.dif->mtx.lock();
 	a.dif->cmt_flag = commit_flag::trans_on;
 
-//	tm->adit_mtx.lock();
+	tm->adit_mtx.lock();
 	auto it = tm->adit.find(a.dif);
 	if (it != tm->adit.end()) {
 		for (auto & e : it->second) {
@@ -333,7 +333,7 @@ int transaction::write(action & a) {
 		pset.insert(this);
 		tm->adit.insert(std::make_pair(a.dif, pset));
 	}
-//	tm->adit_mtx.unlock();  // unlock adit_mtx
+	tm->adit_mtx.unlock();  // unlock adit_mtx
 
 	r = sm->write(a.dif, nbuff, a.n_len);
 	if (r >= 0) {

@@ -45,7 +45,6 @@ int sys_seg::add_row(const object_type & ot, row_store & rs) {
 				return sdb::SUCCESS;
 			}
 		} else {
-			lblk.write_off_tbl();
 			return sdb::SUCCESS;
 		}
 	} else {
@@ -130,7 +129,6 @@ int sys_seg::update_row(const object_type & ot, const string & col_name,
 		char *p = buff.data();
 		int rl = buff.size();
 		int r = blk.update_row_by_index(idx, p, rl);
-		blk.write_off_tbl();
 		if (r == DELETE_OFFSET) {   // row move between block
 			mem_data_block nblk;
 			if (seg == *this) {
@@ -200,10 +198,9 @@ int sys_seg::delete_row(const object_type & ot, const string & col_name,
 
 int sys_seg::find_row(mem_data_block &blk, const field_desc &fd,
 		const field_value & tfv, row_store & rs) {
-	blk.parse_off_tbl();
 	field_value fv;
 	common::char_buffer buff;
-	for (int i = 0; i < blk.off_tbl.size(); i++) {
+	for (int i = 0; i < blk.entry_count; i++) {
 		buff.reset();
 		if (blk.get_row_by_idx(i, buff)) {
 			buff.rewind();
@@ -285,8 +282,6 @@ int sys_seg::initialize() {
 		buff.reset();
 		append_index_attrs_desc(buff);
 		fst_blk.add_row_data(buff.data(), buff.size());
-
-		fst_blk.write_off_tbl();
 
 		//assign a empty block for each table desc
 		mem_data_block empty_blk;

@@ -63,7 +63,8 @@ const int offset_bytes = 2;
 const int PRE_SEG_SPAN_DFILE_BIT = 0;
 const int NEXT_SEG_SPAN_DFILE_BIT = 1;
 
-const short block_header_size = 48;
+const short block_head_size = 48;
+const short mem_block_head_size = 56;
 
 /*
  * block head flag bit define
@@ -657,21 +658,21 @@ struct data_block {
 	 but excludes data block header */
 	short length; /* total length of buffer, excludes header length */
 
-	short u_off_start = 0;
-	short u_off_end = 0; /* update offset start and end  if the block buffer has been modified */
-
+	/* update offset start and end  if the block buffer has been modified */
+	//short u_off_start = 0;
+	//short u_off_end = 0;
 	data_block *pre_blk, *next_blk;
 	segment *seg;
 
-	void init(int off, short len) {
+	inline virtual void init(int off, short w_len) {
 		offset = off;
-		length = len;
-		buffer = new char[length + block_header_size];
+		length = w_len - block_head_size;
+		buffer = new char[length + block_head_size];
 		header = (head *) buffer;
 		init_header();
-		buffer += block_header_size;
-		u_off_start = 0;
-		u_off_end = 0;
+		buffer += block_head_size;
+		//u_off_start = 0;
+		//u_off_end = 0;
 	}
 
 	/*
@@ -679,23 +680,23 @@ struct data_block {
 	 * the header start position. the off parameter denotes the data block offset beh-
 	 * hind segment header.
 	 */
-	virtual void ref(int off, char *buff, short len) {
+	inline virtual void ref(int off, char *buff, short w_len) {
 		offset = off;
-		length = len;
+		length = w_len - block_head_size;
 		header = (head *) buff;
-		buffer = buff + block_header_size;
+		buffer = buff + block_head_size;
 		ref_flag = true;
-		u_off_start = 0;
-		u_off_end = 0;
+		//u_off_start = 0;
+		//u_off_end = 0;
 	}
 
-	virtual void init_header() {
+	inline virtual void init_header() {
 		header->flag = 0;
 		header->blk_magic = block_magic;
 		time(&(header->create_time));
 	}
 
-	void set_pre_block(data_block * p) {
+	inline void set_pre_block(data_block * p) {
 		pre_blk = p;
 		p->next_blk = this;
 		header->pre_blk_off = p->offset;
@@ -718,7 +719,7 @@ struct data_block {
 		}
 	}
 
-	void set_next_blk(data_block *p) {
+	inline void set_next_blk(data_block *p) {
 		next_blk = p;
 		p->pre_blk = this;
 		header->next_blk_off = p->offset;
@@ -741,15 +742,15 @@ struct data_block {
 		}
 	}
 
-	virtual void set_flag(int bit) {
+	inline virtual void set_flag(int bit) {
 		header->flag |= (1 << bit);
 	}
 
-	virtual void remove_flag(int bit) {
+	inline virtual void remove_flag(int bit) {
 		header->flag &= ~(1 << bit);
 	}
 
-	virtual bool test_flag(int b) {
+	inline virtual bool test_flag(int b) {
 		return (header->flag >> b & 1) == 1;
 	}
 
@@ -797,79 +798,92 @@ struct data_block {
  * periodically re-organize data block to recycle them for re-use.
  */
 struct mem_data_block: data_block {
-	vector<unsigned short> off_tbl;
+	struct head: data_block::head {
+		ushort dir_off = 0;
+	}* header = nullptr;
+
 	short free_perct = 100;
+	unsigned short entry_count = 0;
+	unsigned short * p_dir_off = nullptr;
+
+	inline virtual void init(int off, short w_len) {
+		offset = off;
+		length = w_len - sizeof(head);
+		buffer = new char[length];
+		header = (head *) buffer;
+		init_header();
+		buffer += block_head_size;
+		p_dir_off = (unsigned short *) buffer;
+	}
+
+	inline virtual void init_header() {
+		header->flag = 0;
+		header->blk_magic = block_magic;
+		header->dir_off = 0;
+		time(&(header->create_time));
+	}
 
 	/*
-	 * maybe the offset table contains deleted row
+	 * reference the data header and content from a given buff parameter that denoted
+	 * the header start position. the off parameter denotes the data block offset beh-
+	 * hind segment header.
 	 */
-	const int row_count() {
-		return off_tbl.size();
-	}
-
-	void calc_free_perct() {
-		int s = off_tbl.size();
-		if (s > 0) {
-			free_perct = (off_tbl[s - 1] - s * offset_bytes) * 100 / length;
+	inline virtual void ref(int off, char *buff, short w_len) {
+		offset = off;
+		length = w_len - mem_block_head_size;
+		header = (head *) buff;
+		buffer = buff + mem_block_head_size;
+		p_dir_off = (unsigned short *) buffer;
+		ref_flag = true;
+		if (header->dir_off > 0) {
+			entry_count = (header->dir_off >> 1);
 		}
 	}
 
-	int get_row_by_idx(const int idx, common::char_buffer & buff) {
-		unsigned short offset = off_tbl[idx];
-		if (offset >> ROW_DELETED_FLAG_BIT) {
-			return DELETE_OFFSET;
+	inline void calc_free_perct() {
+		if (entry_count) {
+			free_perct = 100
+					* (length - header->dir_off - p_dir_off[entry_count - 1])
+					/ length;
 		}
-		int rl = -1;
-		if (idx == 0) {
-			rl = length - offset;
+	}
+
+	inline int get_row_by_idx(int idx, char_buffer & buff) {
+		if (idx >= 0 && idx < entry_count) {
+			unsigned short offset = p_dir_off[idx];
+			if (offset >> ROW_DELETED_FLAG_BIT) {
+				return DELETE_OFFSET;
+			}
+			int rl = -1;
+			if (idx == 0) {
+				rl = length - offset;
+			} else {
+				rl = p_dir_off[--idx] - offset;
+			}
+
+			buff.ref_buff(buffer + offset, rl);
+			return sdb::SUCCESS;
 		} else {
-			rl = off_tbl[idx - 1] - offset;
+			return idx;
 		}
-
-//		buff.push_back(buffer + offset, rl, false);
-		buff.ref_buff(buffer + offset, rl);
-		return sdb::SUCCESS;
 	}
 
-	int get_row(const unsigned short off, common::char_buffer & buff) {
+	inline int get_row(const unsigned short off, char_buffer & buff) {
 		int r = index(off);
 		return r == -1 ? UNKNOWN_OFFSET : get_row_by_idx(r, buff);
 	}
 
-	bool enough_reserved_space(short len) {
-		int s = off_tbl.size();
-		return ((off_tbl[s - 1] - s * offset_bytes - len - offset_bytes) * 100
-				/ length) >= 20;
+	inline bool enough_reserved_space(short len) {
+		return 100 * (p_dir_off[entry_count - 1] - header->dir_off - len)
+				/ length >= 20;
 	}
 
-	int remainder_space() {
-		int s = off_tbl.size();
-		return s == 0 ? length : off_tbl[s - 1] - s * offset_bytes;
+	inline int remain() {
+		return p_dir_off[entry_count - 1] - header->dir_off;
 	}
 
-	bool enough_space(short len) {
-		int s = off_tbl.size();
-		return s == 0 ?
-				length :
-				off_tbl[s - 1] - s * offset_bytes - len - offset_bytes > 0;
-	}
-
-	/**
-	 * parse the OFFSET TABLE from char buffer, and modification start and end offset
-	 */
-	void parse_off_tbl() {
-		unsigned short * p = (unsigned short *) buffer;
-		while ((*p) > 0) { // TODO maybe this incur a bug
-			off_tbl.push_back((*p));
-			++p;
-		}
-
-		int s = off_tbl.size();
-		u_off_start = s * offset_bytes;
-		u_off_end = length;
-		if (s > 0) {
-			u_off_end = off_tbl[s - 1];
-		}
+	inline bool enough_space(short len) {
+		return p_dir_off[entry_count - 1] - header->dir_off >= len;
 	}
 
 	/**
@@ -877,26 +891,27 @@ struct mem_data_block: data_block {
 	 * if there isn't any row in the block and length of row is less than block length, add it,
 	 * else keep 20% un-utilization disk space at least.
 	 */
-	int add_row_data(const char* rb, const int rl) {
+	inline int add_row_data(const char* rb, const int rl) {
 		int r = UNKNOWN_OFFSET;
-		int s = off_tbl.size();
-		if (s == 0) {
+		if (entry_count == 0) {
 			// there isn't any ROW DATA in the data block
 			if (rl <= length - offset_bytes) {
 				unsigned short l_off = length - rl;
-				off_tbl.push_back(l_off);
 				memcpy(buffer + l_off, rb, rl);
-				calc_free_perct();
-				r = l_off;
+				r = entry_count;
+				p_dir_off[r] = l_off;
+				header->dir_off += offset_bytes;
+				entry_count++;
 			}
 		} else if (enough_reserved_space(rl)) {
 			// make sure that reserve 20% free space in the data block
-			unsigned short l_off = off_tbl[s - 1];
-			l_off -= rl;
-			off_tbl.push_back(l_off);
-			memcpy(buffer + l_off, rb, rl);
-			calc_free_perct();
-			r = l_off;
+			unsigned short off = p_dir_off[entry_count - 1];
+			off -= rl;
+			memcpy(buffer + off, rb, rl);
+			r = entry_count;
+			p_dir_off[r] = off;
+			header->dir_off += offset_bytes;
+			entry_count++;
 		}
 		return r;
 	}
@@ -905,22 +920,25 @@ struct mem_data_block: data_block {
 	 * assign a space for row with specified length, if assign success,
 	 * return row offset index, else return UNKNOWN_OFFSET
 	 */
-	int assign_row(const int & rl) {
+	inline int assign_row(const int & rl) {
 		int r = UNKNOWN_OFFSET;
-		int s = off_tbl.size();
-		if (s == 0) {
+		if (entry_count == 0) {
 			// there isn't any ROW DATA in the data block
 			if (rl <= length - offset_bytes) {
 				unsigned short l_off = length - rl;
-				off_tbl.push_back(l_off);
-				r = s;
+				r = entry_count;
+				p_dir_off[r] = l_off;
+				header->dir_off += offset_bytes;
+				entry_count++;
 			}
 		} else if (enough_reserved_space(rl)) {
 			// make sure that reserve 20% free space in the data block
-			unsigned short l_off = off_tbl[s - 1];
-			l_off -= rl;
-			off_tbl.push_back(l_off);
-			r = s;
+			unsigned short off = p_dir_off[entry_count - 1];
+			off -= rl;
+			r = entry_count;
+			p_dir_off[r] = off;
+			header->dir_off += offset_bytes;
+			entry_count++;
 		}
 		return r;
 	}
@@ -944,57 +962,45 @@ struct mem_data_block: data_block {
 	 * 4) if does not find the offset and others, return UNKOWN_OFFSET
 	 *
 	 */
-	int update_row_by_index(int idx, const char *rb, const int rl) {
+	inline int update_row_by_index(int idx, const char *rb, const int rl) {
 		int r = UNKNOWN_OFFSET;
-		if (idx > -1 && idx < off_tbl.size()) {
-			int off = off_tbl[idx];
-			int o_rl = (idx == 0 ? length : off_tbl[idx - 1]) - off;
-			if (o_rl == rl) {
-				memcpy(buffer + off, rb, rl);
+		if (idx < 0) {
+			return r;
+		}
+		int off = p_dir_off[idx];
+		int o_rl = (idx == 0 ? length : p_dir_off[idx - 1]) - off;
+		if (o_rl == rl) {
+			memcpy(buffer + off, rb, rl);
+			r = idx;
+		} else if (idx + 1 == entry_count) { // the last row
+			if (enough_space(rl - o_rl)) {
+				// enough space, maybe shrink existed row space
+				int n_off = off + o_rl - rl;
+				memcpy(buffer + n_off, rb, rl);
+				p_dir_off[idx] = n_off;
 				r = idx;
-			} else if ((idx + 1) == off_tbl.size()) { // the last row
-				if (enough_space(rl - o_rl)) { // enough space, maybe shrink existed row space
-					int n_off = off + o_rl - rl;
-					off_tbl[idx] = n_off;
-					r = idx;
-					memcpy(buffer + n_off, rb, rl);
-					// change the modification buffer range
-					if (u_off_start > idx * offset_bytes)
-						u_off_start = idx * offset_bytes;
-					if (u_off_end < n_off + rl)
-						u_off_end = n_off + rl;
-				} else if (delete_row_by_idx(idx)) { // not enough space, only delete existed row offset
-					r = DELETE_OFFSET;
-				}
-			} else if (o_rl >= rl) { // not last row, but existed row has enough space
-				memcpy(buffer + off, rb, rl);
-				if (u_off_end < off + rl)
-					u_off_end = off + rl;
-				r = idx;
-			} else if (remainder_space() >= rl) {
-				// not last row, not enough space in existed row,
-				// but the block has enough remainder space
-				// delete original offset first, then assign new space.
-				if (delete_row_by_idx(idx)) {
-					if (enough_space(rl)) {
-						int s = off_tbl.size();
-						unsigned short l_off = off_tbl[s - 1];
-						l_off -= rl;
-						r = off_tbl.size();
-						off_tbl.push_back(l_off);
-						memcpy(buffer + l_off, rb, rl);
-
-						// change the modification buffer range
-						if (u_off_start > idx * offset_bytes)
-							u_off_start = idx * offset_bytes;
-						if (u_off_end < l_off)
-							u_off_end = l_off;
-					} else {
-						r = DELETE_OFFSET;
-					}
-				}
+			} else if (delete_row_by_idx(idx)) {
+				// not enough space, only delete existed row offset
+				r = DELETE_OFFSET;
 			}
-			calc_free_perct();
+		} else if (o_rl >= rl) {
+			// not last rows, but existed row has enough space
+			memcpy(buffer + off, rb, rl);
+			r = idx;
+		} else if (remain() >= rl) {
+			// not last row, not enough space in existed row,
+			// but the block has enough remainder space
+			// delete original offset first, then assign new space.
+			delete_row_by_idx(idx);
+			unsigned short l_off = p_dir_off[entry_count - 1];
+			l_off -= rl;
+			memcpy(buffer + l_off, rb, rl);
+			p_dir_off[entry_count] = l_off;
+			header->dir_off += offset_bytes;
+			r = entry_count;
+			entry_count++;
+		} else {
+			r = DELETE_OFFSET;
 		}
 
 		return r;
@@ -1018,94 +1024,36 @@ struct mem_data_block: data_block {
 	 *
 	 * 4) if does not find the offset and others, return UNKOWN_OFFSET
 	 */
-	int update_row_data(const unsigned short off, const char *rb,
+	inline int update_row_data(const unsigned short row_off, const char *rb,
 			const int rl) {
 		int r = UNKNOWN_OFFSET;
-		int idx = index(off);
-		if (idx != -1) {
-			int o_rl = (idx == 0 ? length : off_tbl[idx - 1]) - off;
-			if ((idx + 1) == off_tbl.size()) { // the last row
-				if (enough_space(rl - o_rl)) { // enough space, maybe shrink existed row space
-					int n_off = off + o_rl - rl;
-					off_tbl[idx] = n_off;
-					r = n_off;
-					memcpy(buffer + n_off, rb, rl);
-					// change the modification buffer range
-					if (u_off_start > idx * offset_bytes)
-						u_off_start = idx * offset_bytes;
-					if (u_off_end < n_off + rl)
-						u_off_end = n_off + rl;
-				} else if (delete_row_off(off)) { // not enough space, only delete existed row offset
-					r = DELETE_OFFSET;
-				}
-			} else if (o_rl >= rl) { // not last row, but existed row has enough space
-				memcpy(buffer + off, rb, rl);
-				if (u_off_end < off + rl)
-					u_off_end = off + rl;
-				r = off;
-			} else if (remainder_space() >= rl) {
-				// not last row, not enough space in existed row,
-				// but the block has enough remainder space
-				// delete original offset first, then assign new space.
-				if (delete_row_off(off)) {
-					if (enough_space(rl)) {
-						int s = off_tbl.size();
-						unsigned short l_off = off_tbl[s - 1];
-						l_off -= rl;
-						off_tbl.push_back(l_off);
-						memcpy(buffer + l_off, rb, rl);
-						r = l_off;
-
-						// change the modification buffer range
-						if (u_off_start > idx * offset_bytes)
-							u_off_start = idx * offset_bytes;
-						if (u_off_end < l_off)
-							u_off_end = l_off;
-
-					} else {
-						r = DELETE_OFFSET;
-					}
-				}
-			}
-			calc_free_perct();
-		}
-
-		return r;
+		int idx = index(row_off);
+		return idx == -1 ? r : update_row_by_index(idx, rb, rl);
 	}
 
-	bool delete_row_off(const unsigned short off) {
+	inline bool delete_row_off(const unsigned short off) {
 		int idx = index(off);
 		return delete_row_by_idx(idx);
 	}
 
-	bool delete_row_by_idx(int idx) {
-		if (idx != -1 && idx < off_tbl.size()) {
+	inline bool delete_row_by_idx(int idx) {
+		if (idx != -1 && idx < entry_count) {
 			unsigned short n = (1 << ROW_DELETED_FLAG_BIT); /* the 15th bit as 1, DELETE flag*/
-			unsigned short off = off_tbl[idx];
-			off_tbl[idx] = off | n;
-			if (u_off_start > idx * offset_bytes)
-				u_off_start = idx * offset_bytes;
+			unsigned short off = p_dir_off[idx];
+			p_dir_off[idx] = off | n;
 			return true;
 		} else {
 			return false;
 		}
 	}
 
-	int index(const unsigned short off) {
-		auto it = find(off_tbl.begin(), off_tbl.end(), off);
-		return it == off_tbl.end() ? -1 : it - off_tbl.begin();
-	}
-
-	/**
-	 * write off table to the buffer
-	 */
-	void write_off_tbl() {
-		common::char_buffer cb(128);
-		for (auto it = off_tbl.begin(); it != off_tbl.end(); ++it) {
-			cb << (*it);
+	inline int index(const unsigned short row_off) {
+		for (int i = 0; i < entry_count; i++) {
+			if (p_dir_off[i] == row_off) {
+				return i;
+			}
 		}
-
-		memcpy(buffer, cb.data(), cb.size());
+		return -1;
 	}
 
 	virtual ~ mem_data_block() {

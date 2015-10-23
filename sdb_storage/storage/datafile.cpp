@@ -329,7 +329,7 @@ int data_file::write_block(segment &seg, data_block &blk,
 			if (!fs.fail()) {
 				fs.seekg(blk.offset + (update_seg_head ? 0 : segment_head_size),
 						ios_base::cur);
-				fs.write((char *) blk.header, block_header_size);
+				fs.write((char *) blk.header, block_head_size);
 				fs.write(blk.buffer, blk.length);
 				fs.flush();
 				if (!fs.fail())
@@ -346,7 +346,7 @@ int data_file::read_block(segment &seg, data_block &blk) {
 			- pos;
 	fs.seekg(off - pos, ios_base::cur);
 	if (!fs.eof()) {
-		fs.read(blk.buffer - block_header_size, blk.length + block_header_size);
+		fs.read(blk.buffer - block_head_size, seg.block_size);
 		if (fs.good()) {
 			return SUCCESS;
 		}
@@ -360,8 +360,8 @@ int data_file::read_block(segment *seg, data_block *blk) {
 			+ segment_head_size - pos;
 	fs.seekg(off - pos, ios_base::cur);
 	if (!fs.eof()) {
-		fs.read(blk->buffer - block_header_size,
-				blk->length + block_header_size);
+		fs.read(blk->buffer - block_head_size,
+				blk->length + block_head_size);
 		if (fs.good()) {
 			return SUCCESS;
 		}
@@ -567,7 +567,7 @@ void segment::fill_head_to_buff(char_buffer &buff) {
 		buff << pre_seg_dfile_id;
 	}
 	if ((span_dfile_flag & NEXT_SEG_SPAN_DFILE_BIT) == 2) {
-		buff << next_seg_dfile_id ;
+		buff << next_seg_dfile_id;
 	}
 }
 
@@ -616,14 +616,14 @@ segment & segment::operator=(const segment & another) {
 
 void segment::fetch_head_from_buff(common::char_buffer & buff) {
 	buff >> magic >> id >> offset >> status >> length >> seg_type >> create_time
-				>> assign_time >> update_time >> block_size >> block_count
-				>> pre_seg_offset >> pre_seg_id >> next_seg_offset >> next_seg_id
-				>> span_dfile_flag;
+			>> assign_time >> update_time >> block_size >> block_count
+			>> pre_seg_offset >> pre_seg_id >> next_seg_offset >> next_seg_id
+			>> span_dfile_flag;
 
 	if ((span_dfile_flag & PRE_SEG_SPAN_DFILE_BIT) == 1) {
 		buff >> pre_seg_dfile_id;
 	}
-	if ((span_dfile_flag & PRE_SEG_SPAN_DFILE_BIT ) == 2) {
+	if ((span_dfile_flag & PRE_SEG_SPAN_DFILE_BIT) == 2) {
 		buff >> next_seg_dfile_id;
 	}
 }
@@ -640,12 +640,12 @@ int segment::assign_block(data_block &blk) {
 	if (r > block_size) {
 		int off = block_size * block_count;
 		if (has_buffer()) {
-			blk.ref(off, content_buffer + off, block_size - block_header_size);
+			blk.ref(off, content_buffer + off, block_size);
 			blk.init_header();
-			time(&blk.header->assign_time);
 		} else {
-			blk.init(off, block_size - block_header_size);
+			blk.init(off, block_size);
 		}
+		time(&blk.header->assign_time);
 		block_count++;
 		return sdb::SUCCESS;
 	} else {
@@ -658,11 +658,11 @@ int segment::assign_block(data_block * blk) {
 	if (r > block_size) {
 		int off = block_size * block_count;
 		if (has_buffer()) {
-			blk->ref(off, content_buffer + off, block_size - block_header_size);
+			blk->ref(off, content_buffer + off, block_size);
 			blk->init_header();
 			time(&blk->header->assign_time);
 		} else {
-			blk->init(off, block_size - block_header_size);
+			blk->init(off, block_size);
 		}
 		block_count++;
 		return sdb::SUCCESS;
@@ -675,7 +675,7 @@ int segment::remove_block(data_block & blk) {
 	blk.set_flag(REMOVED_BLK_BIT);
 	if (blk.ref_flag) {
 		char * p = (char *) &blk.header;
-		memcpy(content_buffer + blk.offset, p, block_header_size);
+		memcpy(content_buffer + blk.offset, p, block_head_size);
 		return sdb::SUCCESS;
 	} else {
 		return flush_block(blk);
@@ -692,8 +692,7 @@ int segment::read_block(data_block &blk) {
 	} else if (blk.offset % block_size != 0) {
 		return BLK_OFF_INVALID;
 	} else if (has_buffer()) {
-		blk.ref(blk.offset, content_buffer + blk.offset,
-				block_size - block_header_size);
+		blk.ref(blk.offset, content_buffer + blk.offset, block_size);
 		return SUCCESS;
 	} else {
 		return d_file->read_block(*this, blk);
@@ -704,8 +703,7 @@ int segment::read_block(data_block * blk) {
 	if (blk->offset + block_size > length) {
 		return BLK_OFF_OVERFLOW;
 	} else if (has_buffer()) {
-		blk->ref(blk->offset, content_buffer + blk->offset,
-				block_size - block_header_size);
+		blk->ref(blk->offset, content_buffer + blk->offset, block_size);
 		return SUCCESS;
 	} else {
 		return d_file->read_block(this, blk);

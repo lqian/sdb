@@ -121,16 +121,12 @@ void mem_block_test() {
 	mdb.ref_flag = true;
 
 	// a row to be add
-	int ral = 57;
-	char * ra = new char[ral];
-	for (int i = 0; i < ral; i++) {
-		ra[i] = (i + 1);
-	}
+	int ral = 26;
+	char * ra = "abcdefghijklmnopqrstuvwxyz";
 
 	unsigned short t_off = mdb.length - ral;  // target offset of ra
-	unsigned short ra_off = mdb.add_row_data(ra, ral);
-	ASSERT(ra_off == t_off);
-	ASSERT(mdb.off_tbl.size() == 1 && mdb.off_tbl[0] == t_off);
+	int idx = mdb.add_row_data(ra, ral);
+	ASSERT(mdb.entry_count == 1 && mdb.p_dir_off[idx] == t_off);
 	ASSERT(memcmp(mdb.buffer + t_off, ra, ral) == 0);
 
 	int rbl = 102;
@@ -140,47 +136,44 @@ void mem_block_test() {
 	}
 
 	t_off -= rbl; 			// target offset of rb
-	unsigned short rb_off = mdb.add_row_data(rb, rbl);
-	ASSERT(rb_off == t_off);
-	ASSERT(mdb.off_tbl.size() == 2 && mdb.off_tbl[1] == t_off);
+	idx = mdb.add_row_data(rb, rbl);
+	ASSERT(mdb.entry_count == 2 && mdb.p_dir_off[idx] == t_off);
 	// update the rb as shrink manner in the end
-	unsigned short sb_off = mdb.update_row_data(rb_off, rb, rbl - 20);
-	ASSERT(sb_off - 20 == rb_off);
+	idx = mdb.update_row_by_index(idx, rb, rbl - 20);
+	ASSERT(idx >= 0 && t_off - 20 == mdb.p_dir_off[idx]);
 
 	// update the rb as extend manner in the end
-	unsigned short eb_off = mdb.update_row_data(sb_off, rb, rbl + 10);
-	ASSERT(eb_off + 10 == rb_off);
+	idx = mdb.update_row_data(idx, rb, rbl + 10);
+	ASSERT(idx >= 0 && t_off + 10 == mdb.p_dir_off[idx]);
 	delete[] rb;
 
 	// update the ral as shrink manner
-	ral = 54;
-	t_off = mdb.off_tbl[0];
-
-	ASSERT(mdb.index(t_off) == 0);
-
-	int u_off = mdb.update_row_data(mdb.off_tbl[0], ra, ral);
-	ASSERT(u_off == t_off);
+	ral = 13;
+	idx = 0;
+	t_off = mdb.p_dir_off[idx];
+	idx = mdb.update_row_by_index(idx, ra, ral);
+	ASSERT(mdb.p_dir_off[idx] == t_off);
 	delete[] ra;
 
 	//update the ral as re-create manner
 	ral += 20;
+	idx = 0;
 	ra = new char[ral];
-	t_off = mdb.off_tbl[1] - ral;
-	int n_off = mdb.update_row_data(mdb.off_tbl[0], ra, ral);
-	ASSERT(mdb.off_tbl.size() == 3);
-	int flag = mdb.off_tbl[0] >> 15;
+	t_off = mdb.p_dir_off[idx] - ral;
+	int n_off = mdb.update_row_by_index(idx, ra, ral);
+	ASSERT(mdb.entry_count == 3);
+	int flag = mdb.p_dir_off[0] >> 15;
 	ASSERT(flag == 1); // check the delete flag
 	ASSERT(t_off = n_off);
 
 	// test write offset tbl
-	mdb.write_off_tbl();
-	char_buffer head_buff(mdb.buffer, 3 * sdb::storage::offset_bytes);
+	char_buffer head_buff(mdb.buffer, 3 * sdb::storage::offset_bytes, true);
 
 	unsigned short off0, off1, off2;
 	head_buff >> off0 >> off1 >> off2;
-	ASSERT(off0 == mdb.off_tbl[0]);
-	ASSERT(off1 == mdb.off_tbl[1]);
-	ASSERT(off2 == mdb.off_tbl[2]);
+	ASSERT(off0 == mdb.p_dir_off[0]);
+	ASSERT(off1 == mdb.p_dir_off[1]);
+	ASSERT(off2 == mdb.p_dir_off[2]);
 }
 
 void test_block_write() {
@@ -204,17 +197,16 @@ void test_block_write() {
 	seg.assign_block(b1);
 
 	ASSERT(b1.ref_flag);
-	ASSERT(b1.length == K_4 * kilo_byte - sdb::storage::block_header_size);
+	ASSERT(b1.length == K_4 * kilo_byte - sdb::storage::block_head_size);
 
 	int row_len = path.length();
 	int w_off = b1.add_row_data(path.c_str(), row_len);
 	ASSERT(w_off == b1.length - row_len);
 
-	ASSERT(b1.off_tbl.size() == 1);
-	ASSERT(b1.off_tbl[0] == b1.length - row_len);
-	char * row_data = b1.buffer + b1.off_tbl[0];
+	ASSERT(b1.entry_count == 1);
+	ASSERT(b1.p_dir_off[0] == b1.length - row_len);
+	char * row_data = b1.buffer + b1.p_dir_off[0];
 	ASSERT(memcmp(row_data, path.c_str(), row_len) == 0);
-	b1.write_off_tbl();
 	ASSERT(df.write_block(seg, b1, true) == sdb::SUCCESS);
 
 	//re-open the data file for read block
@@ -230,12 +222,11 @@ void test_block_write() {
 	ASSERT(b1.header->blk_magic == b2.header->blk_magic);
 	ASSERT(b1.header->create_time == b2.header->create_time);
 
-	ASSERT(b2.length == K_4 * kilo_byte - sdb::storage::block_header_size);
-	b2.parse_off_tbl();
+	ASSERT(b2.length == K_4 * kilo_byte - sdb::storage::block_head_size);
+	ASSERT(b2.entry_count == 1 && b2.p_dir_off[0] == b2.length - path.length());
 	ASSERT(
-			b2.off_tbl.size() == 1
-					&& b2.off_tbl[0] == b2.length - path.length());
-	ASSERT(memcmp(b2.buffer + b2.off_tbl[0], path.c_str(), path.length()) == 0);
+			memcmp(b2.buffer + b2.p_dir_off[0], path.c_str(), path.length())
+					== 0);
 
 }
 

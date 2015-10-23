@@ -33,7 +33,7 @@ bptree::bptree(index_segment * _root_seg, int kl, int vl, int bs) {
 	this->key_len = kl;
 	this->val_len = vl;
 	this->block_size = bs * kilo_byte;
-	this->m = (block_size - block_header_size)
+	this->m = (block_size - block_head_size)
 			/ (key_len + val_len + node2_header_size);
 
 	if (root_seg->block_count == 0) {
@@ -52,7 +52,7 @@ bptree::bptree(index_segment * _root_seg, int m, int kl, int vl, int bs) {
 	this->val_len = vl;
 	this->block_size = bs * kilo_byte;
 	this->m = m;
-	int rm = (block_size - block_header_size)
+	int rm = (block_size - block_head_size)
 			/ (key_len + val_len + node2_header_size);
 	if (m > rm) {
 		//	throw exception("invalid max order value");

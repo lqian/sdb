@@ -43,7 +43,6 @@ void before() {
 	seg->assign_block(blk);
 	dif.row_idx = blk.assign_row(rl);
 	dif.blk_off = blk.offset;
-	blk.write_off_tbl();
 	n_buff = new char[rl];
 	for (int i = 0; i < rl; i++) {
 		n_buff[i] = 'A' + i;
@@ -90,7 +89,7 @@ void trans_write_read() {
 	t2.execute();
 	ASSERT(t2.status() == trans_status::COMMITTED);
 	auto it = t2.get_actions().begin();
-	ASSERT(it->rl == rl && memcmp(it->rd, n_buff, rl)==0);
+	ASSERT(it->rl == rl && memcmp(it->rd, n_buff, rl) == 0);
 }
 
 void trans_double() {
@@ -185,6 +184,36 @@ void trans_wait() {
 	ASSERT(t.status() == trans_status::COMMITTED);
 }
 
+/*
+ * a earlier transaction skip write action
+ */
+
+void trans_skip() {
+	char * n_buff = "abcdefghij";
+	char * n_buff2 = "qrstuvwxyz";
+
+	action a;
+	a.dif = &dif;
+	a.op = action_op::WRITE;
+	action b(a);
+	a.create(n_buff, rl);
+	b.create(n_buff2, rl);
+
+	transaction t1, t2;
+	tmgr->assign_trans(&t1);
+	tmgr->assign_trans(&t2);
+	t1.add_action(a);
+	t2.add_action(b);
+	t2.execute();
+	ASSERT(t2.status() == COMMITTED);
+	tmgr->submit(&t1);  // this transaction action should be skip
+	this_thread::sleep_for(chrono::seconds(1));
+	ASSERT(t1.status() == COMMITTED);
+
+	char_buffer buff;
+	ASSERT(smgr->get_row(a.dif, buff) >= 0 );
+	ASSERT(memcmp(buff.data(), n_buff2, rl) == 0);
+}
 void runSuite() {
 	cute::suite s;
 	s.push_back(CUTE(before));
@@ -194,6 +223,7 @@ void runSuite() {
 	s.push_back(CUTE(trans_double));
 	s.push_back(CUTE(trans_abort));
 	s.push_back(CUTE(trans_wait));
+	s.push_back(CUTE(trans_skip));
 
 	s.push_back(CUTE(after));
 	cute::ide_listener lis;

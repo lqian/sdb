@@ -81,6 +81,7 @@ struct trans_row_item: row_item {
 class trans_mgr {
 	friend class transaction;
 private:
+	isolation iso_level;
 	bool opened;
 	time_t timer;
 	timestamp curr_ts;
@@ -106,6 +107,9 @@ private:
 	}
 
 public:
+	trans_mgr();
+	virtual ~trans_mgr();
+
 	void open();
 	int close();
 	void assign_trans(p_trans t);
@@ -127,8 +131,13 @@ public:
 		return curr_ts;
 	}
 
-	trans_mgr();
-	virtual ~trans_mgr();
+	inline void set_isolation(isolation iso_level) {
+		this->iso_level = iso_level;
+	}
+
+	inline const isolation get_isolation() const {
+		return iso_level;
+	}
 };
 
 static trans_mgr LOCAL_TRANS_MGR;

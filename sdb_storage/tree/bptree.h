@@ -206,8 +206,6 @@ struct fixed_size_index_block: data_block {
 		header = (head *) buff;
 		buffer = buff + index_block_header_size;
 		ref_flag = true;
-		u_off_start = 0;
-		u_off_end = 0;
 	}
 
 	virtual void init_header() {
