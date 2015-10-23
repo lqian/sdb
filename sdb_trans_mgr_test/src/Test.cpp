@@ -94,7 +94,6 @@ void trans_write_read() {
 
 void trans_double() {
 	dif.row_idx = blk.assign_row(rl);  // assign a new row
-	blk.write_off_tbl();
 
 	char *n_buff1 = new char[rl];
 	for (int i = 0; i < rl; i++) {
@@ -123,6 +122,7 @@ void trans_double() {
 	// wait for the transaction completed
 	std::this_thread::sleep_for(std::chrono::seconds(1));
 	ASSERT(t1.status() == trans_status::COMMITTED);
+	ASSERT(t2.status() == trans_status::COMMITTED);
 }
 
 /*
@@ -180,7 +180,6 @@ void trans_wait() {
 	this_thread::sleep_for(chrono::seconds(1));
 	ASSERT(w.status() == trans_status::ABORTED);
 	t.commit();
-	this_thread::sleep_for(chrono::seconds(1));
 	ASSERT(t.status() == trans_status::COMMITTED);
 }
 
@@ -206,7 +205,8 @@ void trans_skip() {
 	t2.add_action(b);
 	t2.execute();
 	ASSERT(t2.status() == COMMITTED);
-	tmgr->submit(&t1);  // this transaction action should be skip
+	tmgr->submit(&t1, false);  // this transaction action should be skip
+//	t1.execute();
 	this_thread::sleep_for(chrono::seconds(1));
 	ASSERT(t1.status() == COMMITTED);
 
