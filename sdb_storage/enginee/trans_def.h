@@ -41,8 +41,6 @@ struct data_item_ref {
 
 	mutex mtx;
 	bool operator==(const data_item_ref & an);
-	void lock();
-	void un_lock();
 };
 
 struct action {
@@ -52,7 +50,7 @@ struct action {
 	bool assign_dif = false;
 	char flag = 0;
 
-	int n_len, o_len;
+	int n_len=0, o_len=0;
 
 	char * wd = nullptr; // action data write buffer, includes data_item_ref  and flag
 	int wl = 0; // action data write length, include data_item_ref and flag

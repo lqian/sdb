@@ -113,7 +113,7 @@ public:
 	void open();
 	int close();
 	void assign_trans(p_trans t);
-	void submit(p_trans t, bool assign = true);
+	void submit(p_trans t, bool assign_ts = true);
 
 	inline void set_core_size(int cs = 4) {
 		core_size = cs;

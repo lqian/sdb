@@ -696,6 +696,10 @@ struct data_block {
 		time(&(header->create_time));
 	}
 
+	inline virtual void set_assign_time(long t) {
+		header->assign_time = t;
+	}
+
 	inline void set_pre_block(data_block * p) {
 		pre_blk = p;
 		p->next_blk = this;
@@ -840,6 +844,10 @@ struct mem_data_block: data_block {
 		}
 	}
 
+	inline virtual void set_assign_time(long t) {
+		header->assign_time = t;
+	}
+
 	inline void calc_free_perct() {
 		if (entry_count) {
 			free_perct = 100
@@ -858,7 +866,7 @@ struct mem_data_block: data_block {
 			if (idx == 0) {
 				rl = length - offset;
 			} else {
-				rl = p_dir_off[--idx] - offset;
+				rl = p_dir_off[idx-1] - offset;
 			}
 
 			buff.ref_buff(buffer + offset, rl);

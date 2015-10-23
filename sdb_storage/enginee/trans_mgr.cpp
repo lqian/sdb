@@ -98,6 +98,7 @@ int action::ref_nitem(char * & buff) {
 		tmp.skip(ACTION_HEADER_LENGTH);
 		int len = -1;
 		tmp >> len;
+		n_len = len;
 		buff = tmp.curr();
 		return len;
 	} else {
@@ -157,11 +158,23 @@ action::~action() {
 action & action::operator=(const action & an) {
 	seq = an.seq;
 	op = an.op;
-	dif = an.dif;
-	assign_dif = an.assign_dif;
 	flag = an.flag;
 	n_len = an.n_len;
 	o_len = an.o_len;
+
+	assign_dif = an.assign_dif;
+	if (assign_dif) {
+		dif = new data_item_ref;
+		dif->seg_id = an.dif->seg_id;
+		dif->blk_off = an.dif->blk_off;
+		dif->row_idx = an.dif->row_idx;
+		dif->cmt_flag = an.dif->cmt_flag;
+		dif->rts = an.dif->rts;
+		dif->wts = an.dif->wts;
+	} else {
+		dif = an.dif;
+	}
+
 	if (an.wl > 0) {
 		wl = an.wl;
 		wd = new char[wl];
@@ -180,11 +193,22 @@ action & action::operator=(const action & an) {
 action::action(const action & an) {
 	seq = an.seq;
 	op = an.op;
-	dif = an.dif;
-	assign_dif = an.assign_dif;
 	flag = an.flag;
 	n_len = an.n_len;
 	o_len = an.o_len;
+	assign_dif = an.assign_dif;
+	if (assign_dif) {
+		dif = new data_item_ref;
+		dif->seg_id = an.dif->seg_id;
+		dif->blk_off = an.dif->blk_off;
+		dif->row_idx = an.dif->row_idx;
+		dif->cmt_flag = an.dif->cmt_flag;
+		dif->rts = an.dif->rts;
+		dif->wts = an.dif->wts;
+	} else {
+		dif = an.dif;
+	}
+
 	if (an.wl > 0) {
 		wl = an.wl;
 		wd = new char[wl];
@@ -446,8 +470,8 @@ void trans_mgr::add_trans(data_item_ref *dif, p_trans pts) {
 	adit_mtx.unlock();
 }
 
-void trans_mgr::submit(transaction * t, bool assign) {
-	if (assign) {
+void trans_mgr::submit(transaction * t, bool assign_ts) {
+	if (assign_ts) {
 		assign_trans(t);
 	}
 	trans_task * task = new trans_task(t);

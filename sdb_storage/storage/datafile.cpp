@@ -645,7 +645,9 @@ int segment::assign_block(data_block &blk) {
 		} else {
 			blk.init(off, block_size);
 		}
-		time(&blk.header->assign_time);
+		time_t t;
+		time(&t);
+		blk.set_assign_time(t);
 		block_count++;
 		return sdb::SUCCESS;
 	} else {
