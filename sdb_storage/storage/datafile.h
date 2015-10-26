@@ -331,19 +331,19 @@ public:
 	 * for eventually write blocks to disk, outside should invoke flush, flush_head or
 	 *  flush_blcok method. operation of block has the same manner.
 	 */
-	int assign_block(data_block & blk);
-	int assign_block(data_block * blk);
-	int remove_block(data_block & blk);
-	int flush_block(data_block & blk);
-	int read_block(data_block &blk);
-	int read_block(data_block *blk);
+	virtual int assign_block(data_block & blk);
+	virtual int assign_block(data_block * blk);
+	virtual int remove_block(data_block & blk);
+	virtual int flush_block(data_block & blk);
+	virtual int read_block(data_block &blk);
+	virtual int read_block(data_block *blk);
 
 	int flush();
 
 	int flush(int off, int len);
 
-	bool operator ==(const segment & other);
-	bool operator !=(const segment & other);
+	virtual bool operator ==(const segment & other);
+	virtual bool operator !=(const segment & other);
 	segment & operator=(const segment & other);
 
 	inline time_t get_create_time() const {

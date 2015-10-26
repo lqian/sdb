@@ -129,11 +129,17 @@ int seg_mgr::write(const data_item_ref *dif, const char * buff,
 	int r = sdb::FAILURE;
 	segment * seg = find_segment(dif->seg_id);
 	if (seg != nullptr) {
-		mem_data_block blk;
-		blk.offset = dif->blk_off;
-		r = seg->read_block(blk);
-		if (r) {
-			r = blk.update_row_by_index(dif->row_idx, buff, len);
+		short st = seg->get_seg_type();
+		if (st == segment_type::data_segment_type) {
+			mem_data_block blk;
+			blk.offset = dif->blk_off;
+			r = seg->read_block(blk);
+			if (r) {
+				r = blk.update_row_by_index(dif->row_idx, buff, len);
+			}
+		}
+		else if (st == segment_type::index_segment_type) {
+			//update index page
 		}
 	}
 

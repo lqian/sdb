@@ -115,6 +115,7 @@ struct val {
 	char * v = nullptr;
 
 	void set_val(char *buff, short l) {
+		v = new char[l];
 		memcpy(v, buff, l);
 		len = l;
 	}

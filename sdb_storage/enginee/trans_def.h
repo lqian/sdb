@@ -31,10 +31,14 @@ enum action_op {
 enum commit_flag {
 	trans_leave, trans_on
 };
-struct data_item_ref {
+
+struct data_item {
 	ulong seg_id;
-	uint blk_off;
-	ushort row_idx;
+		uint blk_off;
+		ushort row_idx;
+};
+
+struct data_item_ref : data_item {
 	timestamp wts = 0; // write timestamp
 	timestamp rts = 0; // read timestamp
 	char cmt_flag = 0;
