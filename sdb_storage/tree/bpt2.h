@@ -11,13 +11,16 @@
 #include <list>
 
 #include "../enginee/trans_def.h"
+#include "../storage/datafile.h"
 
 namespace sdb {
 namespace tree {
 using namespace std;
 using namespace sdb::enginee;
+using namespace sdb::storage;
 
-struct _page;
+struct _ipage;
+struct _lpage;
 
 struct _key_field {
 	void ref(char*buff, int len);
@@ -44,39 +47,69 @@ struct _val {
 };
 
 /*
- * a index node only has store key
+ * a index node only has store key, left page offset and right page offset
  */
 struct _inode {
 	struct head {
 		short flag;
-		uint left_pg_off;
-		uint right_pg_off;
+		uint left_lpg_off;
+		uint right_lpg_off;
 	}* header;
 
+	uint offset;
 	char * buff = nullptr;
 	int len = 0;
 
-	_page * cp; // container page;
+	_ipage * cp; // container page;
+	_lpage * left_page; // inode's left page that contains node's key less than or equals the inode
+	_lpage * right_page; // inode's right page that contains node's key greater than the inode
 
-	virtual void ref(char *buff, int len);
+	virtual void ref(uint offset, char *buff, int len);
 	virtual void init_header();
 	virtual void set_key(const _key & k);
 	virtual void set_key(const _key * k);
 };
 
-struct fs_inode: _inode {
-
-};
-
-struct vs_inode: _inode {
-
-};
-
-// leaf node
-struct _lnode: _inode {
-	struct head: _inode::head {
-		uint parent_pg_off;
+struct _ipage: data_block {
+	struct head: data_block::head {
+		ushort node_count;
 	}*header;
+
+	inline virtual void ref(int off, char *buff, short w_len) {
+		offset = off;
+		length = w_len - sizeof(head);
+		header = (head *) buff;
+		header->node_count = 0;
+		buffer = buff + sizeof(head);
+		ref_flag = true;
+	}
+
+	virtual int assign_inode(_inode & n);
+	virtual int write_inode(ushort idx, const _inode &n);
+	virtual int add_inode(const _inode &n);
+	virtual int remove_inode(ushort idx);
+	virtual bool is_root();
+};
+
+// fixed size node page
+struct fsn_ipage: _ipage {
+
+};
+
+// variant size node page
+struct vsn_ipage: _ipage {
+
+};
+
+// leaf node,
+struct _lnode {
+	struct head {
+		char flag;
+	}*header;
+
+	char * buff;  // include key and value
+	int len;
+	_lpage * cp; // container page
 
 	virtual void ref(char *buff, int len);
 	virtual void ref(char *buff, int len);
@@ -87,26 +120,69 @@ struct _lnode: _inode {
 	virtual void set_val(const _val *v);
 };
 
-//variant size node
-struct vs_node {
+struct _lpage: data_block {
+	struct head: data_block::head {
+		ushort node_count;
+	}*header;
+
+	_lpage *pre_page;
+	_lpage *next_page;
+
+	inline virtual void ref(int off, char *buff, short w_len) {
+		offset = off;
+		length = w_len - sizeof(head);
+		header = (head *) buff;
+		header->node_count = 0;
+		buffer = buff + sizeof(head);
+		ref_flag = true;
+	}
+
+
+	virtual int assign_lnode(_lnode & ln) {
+		return 0;
+	}
+	virtual int remove_lnode(ushort idx) {
+		return 0;
+	}
+};
+
+/*
+ * fixed size page that only contains fixed size leaf node
+ */
+struct fsn_lpage: _lpage {
+	struct head: _lpage::head {
+		ushort node_size;
+	}*header;
+
+	inline virtual void ref(int off, char *buff, short w_len) {
+		offset = off;
+		length = w_len - sizeof(head);
+		header = (head *) buff;
+		header->node_count = 0;
+		buffer = buff + sizeof(head);
+		ref_flag = true;
+	}
+
+	virtual int assign_lnode(_lnode & ln) ;
+
+	virtual int remove_lnode(ushort idx) ;
+};
+
+struct fs_inode: _inode {
 
 };
 
-//fixed size node
-struct fs_node {
+struct vs_inode: _inode {
 
 };
 
-struct _page {
+//variant size leaf node
+struct vs_lnode: _lnode {
 
 };
 
-// variant size node page
-struct vsn_page: _page {
-
-};
-// fixed size node page
-struct fsn_page: _page {
+//fixed size leaf node
+struct fs_node: _lnode {
 
 };
 

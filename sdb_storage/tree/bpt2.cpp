@@ -10,6 +10,19 @@
 namespace sdb {
 namespace tree {
 
+int fsn_lpage::assign_lnode(_lnode &ln) {
+	int r = header->node_count;
+	int ns = header->node_size;
+	int off = header->node_count * ns;
+	if (off + ns <= length) {
+		ln.ref(buffer + off, ns);
+		header->node_count++;
+	} else {
+		r = sdb::FAILURE;
+	}
+	return r;
+}
+
 bpt2::bpt2() {
 	// TODO Auto-generated constructor stub
 
