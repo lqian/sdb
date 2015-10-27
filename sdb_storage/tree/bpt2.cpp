@@ -64,6 +64,7 @@ void _val::to_data_item(data_item *di) {
 	tmp >> di->seg_id >> di->blk_off >> di->row_idx;
 }
 
+
 void _inode::set_left_ipage(_ipage * p) {
 	left_lpage = nullptr;
 	left_ipage = p;

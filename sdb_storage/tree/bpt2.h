@@ -13,6 +13,7 @@
 #include "../enginee/trans_def.h"
 #include "../storage/datafile.h"
 #include "../common/char_buffer.h"
+#include <string>
 
 namespace sdb {
 namespace tree {
@@ -44,6 +45,7 @@ struct _ipage;
 struct _lpage;
 
 struct _key_field {
+	string field_name;
 	char * buff;
 	int len;
 
@@ -51,8 +53,11 @@ struct _key_field {
 		this->buff = buff;
 		this->len = len;
 	}
-	virtual int compare(const _key_field & kf);
-	virtual ~_key_field() {
+	virtual int compare(const _key_field & kf) {
+	}
+
+	bool operator==(const _key_field & an) {
+		return an.field_name == field_name;
 	}
 };
 
@@ -132,15 +137,50 @@ struct int_key_field: _key_field {
 };
 
 struct _key {
-	char * k_buff;
-	char * v_buff;
-	int kb_len;
-	int vb_len;
+	char * buff;
+	int kv_off = 0;
+	int len;
 
 	list<_key_field> key_fields;
-	void ref(char *k_buff, int k_len, char*v_buff, int v_len);
-	int compare(const _key & an);
-	void add_field(const _key_field & kf);
+	inline void ref(char *buff, int len) {
+		this->buff = buff;
+		this->len = len;
+	}
+
+	inline int next_field(_key_field &kf) {
+		return 1;
+	}
+	inline bool equal_fields(const _key & an) {
+		bool equals = true;
+		for (auto it = key_fields.begin(), ait = an.key_fields.begin();
+				equals && it != key_fields.end() && ait != an.key_fields.end();
+				++it, ++ait) {
+			equals = it->field_name == ait->field_name;
+		}
+
+		return equals;
+	}
+
+	/*
+	 * the method assume that the field number equals, although a field has null value
+	 */
+	inline int compare(_key & an) {
+		int r = 0;
+		_key_field tk, ak;
+		while (next_field(tk) && an.next_field(ak)) {
+			r = tk.compare(ak);
+		}
+		return r;
+	}
+
+	inline void push_back(const _key_field & kf) {
+		for (auto & e : key_fields) {
+			if (kf == e) {
+				return;
+			}
+		}
+		key_fields.push_back(kf);
+	}
 };
 
 struct _val {
@@ -192,7 +232,9 @@ struct _inode {
 	virtual int read_key(_key &k) {
 		return 0;
 	}
-	virtual int read_key(_key *k);
+	virtual int read_key(_key *k) {
+		return 0;
+	}
 
 	void set_left_lpage(_lpage * p);
 	void set_right_lpage(_lpage *p);
@@ -204,12 +246,30 @@ struct _inode {
  * fixed size index node
  */
 struct fs_inode: _inode {
+	virtual void ref(uint off, char *buff, int len) {
+		header = (head *) buff;
+		offset = off;
+		this->buff = buff + sizeof(head);
+		this->len = len - sizeof(head);
+	}
 
+	virtual int write_key(const _key & k) {
+		return 0;
+	}
+	virtual int write_key(const _key * k) {
+		return 0;
+	}
+	virtual int read_key(_key &k) {
+		return 0;
+	}
+	virtual int read_key(_key *k) {
+		return 0;
+	}
 };
-
-struct vs_inode: _inode {
-
-};
+//
+//struct vs_inode: _inode {
+//
+//};
 
 struct _ipage: data_block {
 	struct head: data_block::head {
@@ -228,10 +288,16 @@ struct _ipage: data_block {
 		ref_flag = true;
 	}
 
-	virtual int assign_inode(_inode & n);
-	virtual int read_inode(ushort idx, _inode &n);
-	virtual int remove_inode(ushort idx);
-	virtual bool is_root();
+	virtual int assign_inode(_inode & n) {
+	}
+	virtual int read_inode(ushort idx, _inode &n) {
+	}
+	virtual int remove_inode(ushort idx) {
+	}
+	bool is_root() {
+		return false;
+	}
+	;
 	void set_parent(const _inode * n);
 };
 
@@ -253,14 +319,13 @@ struct fsn_ipage: _ipage {
 	virtual int assign_inode(_inode & n);
 	virtual int read_inode(ushort idx, _inode &n);
 	virtual int remove_inode(ushort idx);
-	virtual bool is_root();
 
 };
 
 // variant size node page
-struct vsn_ipage: _ipage {
-
-};
+//struct vsn_ipage: _ipage {
+//
+//};
 
 // leaf node,
 struct _lnode {
@@ -332,7 +397,9 @@ struct _lpage: data_block {
 	virtual int remove_lnode(ushort idx) {
 		return 0;
 	}
-	virtual int read_lnode(ushort idx, _lnode &ln);
+	virtual int read_lnode(ushort idx, _lnode &ln) {
+		return 0;
+	}
 
 	void set_parent(const _inode * n);
 };
