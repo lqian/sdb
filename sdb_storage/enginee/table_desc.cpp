@@ -122,7 +122,7 @@ int row_store::set_field_value(const unsigned char & ik, const char * val,
 	if (verify) {
 		field_desc fd = tdesc->get_field_desc(ik);
 		if (fd.is_assigned()) {
-			field_value fv(fd.field_type, val, len);
+			field_value fv(fd.type, val, len);
 			fv_map.erase(fd.inner_key);
 			fv_map.insert(pair<unsigned char, field_value>(ik, fv));
 			set_bit(ik, true);
@@ -264,13 +264,13 @@ void row_store::load_from(char_buffer & buff) {
 			if (tdesc->exists_field(fd.inner_key)) {
 				if (fd.is_variant()) {
 					int len = buff.pop_int();
-					field_value fv(fd.field_type, len);
+					field_value fv(fd.type, len);
 					buff.pop_cstr(fv.value, fv.len, false);
 					fv_map.insert(
 							pair<unsigned char, field_value>(fd.inner_key, fv));
 
 				} else {
-					field_value fv(fd.field_type, fd.size);
+					field_value fv(fd.type, fd.size);
 					buff.pop_cstr(fv.value, fv.len, false);
 					fv_map.insert(
 							pair<unsigned char, field_value>(fd.inner_key, fv));

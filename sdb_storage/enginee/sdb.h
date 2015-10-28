@@ -22,7 +22,7 @@ const int unassign_inner_key = 0;
 const int MAX_FIELD_COUNT = 255;
 const int MAX_DB_NAME_SIZE(64);
 
-enum sdb_table_field_type {
+enum field_type {
 	unknow_type = 0x09,
 	bool_type = 0x10,
 	short_type,
@@ -31,6 +31,13 @@ enum sdb_table_field_type {
 	float_type,
 	double_type,
 	time_type,
+
+	ushort_type,
+	uint_type,
+	ulong_type,
+	ufloat_type,
+	udouble_type,
+
 	unsigned_char_type = 0x40,
 	unsigned_short_type,
 	unsigned_int_type,

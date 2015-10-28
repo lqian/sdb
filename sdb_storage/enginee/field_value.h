@@ -24,7 +24,7 @@ class row_store;
 class field_value {
 	friend class row_store;
 private:
-	sdb_table_field_type type = unknow_type;
+	field_type type = unknow_type;
 	char * value = nullptr;
 	int len = 0;
 public:
@@ -32,12 +32,12 @@ public:
 	field_value() {
 	}
 
-	explicit field_value(const sdb_table_field_type & _type, const int _len) :
+	explicit field_value(const field_type & _type, const int _len) :
 			type(_type), len(_len) {
 		value = new char[len];
 	}
 
-	explicit field_value(const sdb_table_field_type & _type,
+	explicit field_value(const field_type & _type,
 			const char * _value, const int & _len) :
 			type(_type), len(_len) {
 		value = new char[len];
@@ -110,11 +110,11 @@ public:
 		this->len = len;
 	}
 
-	sdb_table_field_type get_type() const {
+	field_type get_type() const {
 		return type;
 	}
 
-	void set_type(sdb_table_field_type type) {
+	void set_type(field_type type) {
 		this->type = type;
 	}
 

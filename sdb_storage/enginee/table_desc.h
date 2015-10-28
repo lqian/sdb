@@ -42,7 +42,7 @@ class field_desc {
 private:
 	unsigned char inner_key = unassign_inner_key;
 	string field_name;
-	sdb_table_field_type field_type = unknow_type;
+	field_type type = unknow_type;
 	int size;
 	string comment;
 	bool deleted;
@@ -55,13 +55,13 @@ public:
 	field_desc() {
 	}
 
-	field_desc(const string & fn, const sdb_table_field_type ft, const bool na =
+	field_desc(const string & fn, const field_type ft, const bool na =
 			false, const bool pk = false, const string & c = "", const bool d =
 			false) :
-			field_name(fn), field_type(ft), nullable(na), primary_key(pk), comment(
+			field_name(fn), type(ft), nullable(na), primary_key(pk), comment(
 					c), deleted(d) {
 
-		switch (field_type) {
+		switch (type) {
 		case bool_type:
 			size = BOOL_CHARS;
 			break;
@@ -94,15 +94,15 @@ public:
 		}
 	}
 
-	field_desc(const string & fn, const sdb_table_field_type ft, const int s,
+	field_desc(const string & fn, const field_type ft, const int s,
 			const bool na = false, const bool pk = false, const string & c = "",
 			const bool d = false) :
-			field_name(fn), field_type(ft), size(s), nullable(na), primary_key(
+			field_name(fn), type(ft), size(s), nullable(na), primary_key(
 					pk), comment(c), deleted(d) {
 	}
 
 	void write_to(common::char_buffer &buff) {
-		int ft = field_type;
+		int ft = type;
 		buff << inner_key << field_name << ft << size << comment << deleted
 				<< nullable << primary_key;
 	}
@@ -111,13 +111,13 @@ public:
 		int ft;
 		buff >> inner_key >> field_name >> ft >> size >> comment >> deleted
 				>> nullable >> primary_key;
-		field_type = (sdb_table_field_type) ft;
+		type = (field_type) ft;
 	}
 
 	field_desc(const field_desc & other) {
 		inner_key = other.inner_key;
 		field_name = other.field_name;
-		field_type = other.field_type;
+		type = other.type;
 		size = other.size;
 		comment = other.comment;
 		deleted = other.deleted;
@@ -133,7 +133,7 @@ public:
 	void operator=(const field_desc & other) {
 		inner_key = other.inner_key;
 		field_name = other.field_name;
-		field_type = other.field_type;
+		type = other.type;
 		size = other.size;
 		comment = other.comment;
 		deleted = other.deleted;
@@ -141,7 +141,7 @@ public:
 
 	friend bool operator==(const field_desc & a, const field_desc & b) {
 		return a.inner_key == b.inner_key && a.field_name == b.field_name
-				&& a.field_type == b.field_type && a.deleted == b.deleted
+				&& a.type == b.type && a.deleted == b.deleted
 				&& a.comment == b.comment;
 	}
 
@@ -169,12 +169,12 @@ public:
 		field_name = fieldname;
 	}
 
-	const enginee::sdb_table_field_type get_field_type() const {
-		return field_type;
+	const enginee::field_type get_field_type() const {
+		return type;
 	}
 
-	void set_field_type(enginee::sdb_table_field_type fieldtype = unknow_type) {
-		field_type = fieldtype;
+	void set_field_type(enginee::field_type fieldtype = unknow_type) {
+		type = fieldtype;
 	}
 
 	short get_inner_key() const {
@@ -186,8 +186,8 @@ public:
 	}
 
 	bool is_variant() const {
-		return (field_type == char_type || field_type == varchar_type)
-				|| field_type > varchar_type;
+		return (type == char_type || type == varchar_type)
+				|| type > varchar_type;
 	}
 
 	bool is_nullable() const {

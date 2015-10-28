@@ -134,6 +134,6 @@ unsigned long to_ulong(const char* p_char) {
 }
 
 int ultoa(unsigned long lv, char * p) {
-	return sprintf(p , "%016lX", lv);
+	return sprintf(p, "%016lX", lv);
 }
 
