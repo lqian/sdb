@@ -658,14 +658,15 @@ int segment::assign_block(data_block &blk) {
 int segment::assign_block(data_block * blk) {
 	int r = length - segment_head_size - block_size * block_count;
 	if (r > block_size) {
-		int off = block_size * block_count;
+		uint off = block_size * block_count;
 		if (has_buffer()) {
 			blk->ref(off, content_buffer + off, block_size);
 			blk->init_header();
-			time(&blk->header->assign_time);
+//			time(&blk->header->assign_time);
 		} else {
 			blk->init(off, block_size);
 		}
+		blk->seg = this;
 		block_count++;
 		return sdb::SUCCESS;
 	} else {

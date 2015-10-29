@@ -34,8 +34,8 @@ enum commit_flag {
 
 struct data_item {
 	ulong seg_id;
-		uint blk_off;
-		ushort row_idx;
+	uint blk_off;
+	ushort row_idx;
 };
 
 struct data_item_ref : data_item {

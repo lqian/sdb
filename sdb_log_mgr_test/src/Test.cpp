@@ -37,7 +37,7 @@ void log_block_test() {
 	int size = 0;
 	while (lb.has_next()) {
 		lb.next_entry(e);
-		if (e.get_type() == dir_entry_type::data_item) {
+		if (e.get_type() == dir_entry_type::t_data_item) {
 			size += e.length;
 		}
 	}
@@ -46,16 +46,16 @@ void log_block_test() {
 	lb.tail();
 	while (lb.has_pre()) {
 		lb.pre_entry(e);
-		if (e.get_type() == dir_entry_type::data_item) {
+		if (e.get_type() == dir_entry_type::t_data_item) {
 			size += e.length;
 		}
 	}
 	ASSERT(size == 140);
 
 	log_block::dir_entry e2 = lb.get_entry(3);
-	ASSERT(e2.get_type() == dir_entry_type::commit_item);
+	ASSERT(e2.get_type() == dir_entry_type::t_commit_item);
 	log_block::dir_entry e3 = lb.get_entry(5);
-	ASSERT(e3.get_type() == dir_entry_type::abort_item);
+	ASSERT(e3.get_type() == dir_entry_type::t_abort_item);
 }
 
 void log_file_test() {

@@ -143,16 +143,16 @@ void log_block::dir_entry::read_from(char_buffer & buff) {
 dir_entry_type log_block::dir_entry::get_type() {
 	if (length == 0) {
 		if (offset == COMMIT_DEFINE) {
-			return dir_entry_type::commit_item;
+			return dir_entry_type::t_commit_item;
 		} else if (offset == ABORT_DEFINE) {
-			return dir_entry_type::abort_item;
+			return dir_entry_type::t_abort_item;
 		} else if (offset == START_DEFINE) {
-			return dir_entry_type::start_item;
+			return dir_entry_type::t_start_item;
 		} else {
 			return dir_entry_type::unknown;
 		}
 	} else {
-		return dir_entry_type::data_item;
+		return dir_entry_type::t_data_item;
 	}
 }
 
@@ -169,6 +169,138 @@ void log_block::dir_entry::as_start() {
 void log_block::dir_entry::as_abort() {
 	length = 0;
 	offset = ABORT_DEFINE;
+}
+
+void log_block::log_entry::create(char * buff, int len) {
+	n_len = len;
+	wl = ACTION_HEADER_LENGTH + INT_CHARS + len;
+	wd = new char[wl];
+	char_buffer tmp(wd, wl, true);
+	flag |= (1 << NEW_VALUE_BIT);
+	tmp << di->seg_id << di->blk_off << di->row_idx << flag;
+	tmp.push_back(buff, len, true);
+}
+
+void log_block::log_entry::update(char * n_buff, int n_len, char * o_buff,
+		int o_len) {
+	this->n_len = n_len;
+	this->o_len = o_len;
+	wl = ACTION_HEADER_LENGTH + INT_CHARS + INT_CHARS + n_len + o_len;
+	wd = new char[wl];
+	char_buffer tmp(wd, wl, true);
+	flag |= (1 << NEW_VALUE_BIT);
+	flag |= (1 << OLD_VALUE_BIT);
+	tmp << di->seg_id << di->blk_off << di->row_idx << flag;
+	tmp.push_back(n_buff, n_len, true);
+	tmp.push_back(o_buff, o_len, true);
+}
+
+void log_block::log_entry::remove(char * o_buff, int o_len) {
+	this->o_len = o_len;
+	wl = ACTION_HEADER_LENGTH + INT_CHARS + o_len;
+	wd = new char[wl];
+	char_buffer tmp(wd, wl, true);
+	char flag = 0;
+	flag |= (1 << OLD_VALUE_BIT);
+	tmp << di->seg_id << di->blk_off << di->row_idx << flag;
+	tmp.push_back(o_buff, o_len, true);
+}
+
+void log_block::log_entry::read_from(char_buffer & buff) {
+	int len;
+	buff >> di->seg_id >> di->blk_off >> di->row_idx >> flag >> len;
+	buff.skip(len);
+	if ((flag | 0xC0) == 0xC0) { // update 2^7 + 2^6
+		n_len = len;
+		buff >> o_len;
+		buff.skip(o_len);
+	} else if ((flag | 0x80) == 0x80) {
+		n_len = len;
+	} else if ((flag | 0x40) == 0x40) {
+		o_len = len;
+	}
+
+	wl = buff.header();
+	wd = new char[wl];
+	memcpy(wd, buff.data(), wl);
+}
+
+void log_block::log_entry::write_to(char_buffer & buff) {
+	buff << di->seg_id << di->blk_off << di->row_idx << flag;
+	buff.push_back(wd, wl, false);
+}
+
+int log_block::log_entry::copy_nitem(char * & buff) {
+	if (flag >> NEW_VALUE_BIT & 1) {
+		char_buffer tmp(wd, wl, true);
+		tmp.skip(ACTION_HEADER_LENGTH);
+		int len = 0;
+		tmp >> len;
+		buff = new char[len];
+		memcpy(buff, tmp.curr(), len);
+		return len;
+	} else {
+		return sdb::FAILURE;
+	}
+}
+
+int log_block::log_entry::ref_nitem(char * & buff) {
+	if (flag >> NEW_VALUE_BIT & 1) {
+		char_buffer tmp(wd, wl, true);
+		tmp.skip(ACTION_HEADER_LENGTH);
+		int len = -1;
+		tmp >> len;
+		n_len = len;
+		buff = tmp.curr();
+		return len;
+	} else {
+		return sdb::FAILURE;
+	}
+}
+
+int log_block::log_entry::copy_oitem(char * & buff) {
+	if (flag >> OLD_VALUE_BIT & 1) {
+		char_buffer tmp(wd, wl, true);
+		tmp.skip(ACTION_HEADER_LENGTH);
+		int len = 0;
+		if (flag >> NEW_VALUE_BIT & 1) {
+			tmp >> len;
+			tmp.skip(len);
+		}
+		tmp >> len;
+		memcpy(buff, tmp.curr(), len);
+		return len;
+	} else {
+		return sdb::FAILURE;
+	}
+}
+
+int log_block::log_entry::ref_oitem(char * & buff) {
+	if (flag >> OLD_VALUE_BIT & 1) {
+		char_buffer tmp(wd, wl, true);
+		tmp.skip(ACTION_HEADER_LENGTH);
+		int len = 0;
+		if (flag >> NEW_VALUE_BIT & 1) {
+			tmp >> len;
+			tmp.skip(len);
+		}
+		tmp >> len;
+		buff = tmp.curr();
+		return len;
+	} else {
+		return sdb::FAILURE;
+	}
+}
+
+log_block::log_entry::~log_entry() {
+	if (wd) {
+		delete[] wd;
+	}
+
+	if (assign_di && di) {
+		delete di;
+		assign_di = false;
+	}
 }
 
 int log_block::add_action(timestamp ts, const action & a) {
@@ -193,6 +325,30 @@ int log_block::add_action(timestamp ts, const action & a) {
 	} else {
 		return LOG_BLK_SPACE_NOT_ENOUGH;
 	}
+}
+
+int log_block::add_log_entry(timestamp ts, const log_entry & le) {
+	if (remain() >= le.wl + DIRCTORY_ENTRY_LENGTH) {
+			int weo = _header.writing_entry_off;
+			dir_entry de;
+			de.ts = ts;
+			de.seq = le.seq;
+			de.length = le.wl;
+			de.offset = _header.writing_data_off - le.wl;
+
+			char_buffer buff(DIRCTORY_ENTRY_LENGTH);
+			de.write_to(buff);
+
+			memcpy(buffer + weo, buff.data(), DIRCTORY_ENTRY_LENGTH);
+			char * write_buffer = buffer + de.offset;
+			memcpy(write_buffer, le.wd, le.wl);
+
+			_header.writing_entry_off += DIRCTORY_ENTRY_LENGTH;
+			_header.writing_data_off -= le.wl;
+			return weo;
+		} else {
+			return LOG_BLK_SPACE_NOT_ENOUGH;
+		}
 }
 
 int log_block::add_commit(timestamp ts) {
@@ -646,7 +802,7 @@ void log_file::check_log_block(log_block & lb) {
 	while (lb.has_next()) {
 		lb.next_entry(de);
 		dir_entry_type t = de.get_type();
-		if (t == dir_entry_type::start_item) {
+		if (t == dir_entry_type::t_start_item) {
 			check_point cp;
 			cp.ts = de.ts;
 			cp.log_file_seq = log_file_id;
@@ -654,8 +810,8 @@ void log_file::check_log_block(log_block & lb) {
 			cp.dir_ent_off = lb.read_entry_off;
 			// check_list.push_front(cp);
 			_log_mgr->check_points.push_front(cp);
-		} else if (t == dir_entry_type::abort_item
-				|| t == dir_entry_type::commit_item) {
+		} else if (t == dir_entry_type::t_abort_item
+				|| t == dir_entry_type::t_commit_item) {
 			check_point cp;
 			cp.ts = de.ts;
 			cp.log_file_seq = log_file_id;
@@ -663,7 +819,7 @@ void log_file::check_log_block(log_block & lb) {
 			cp.dir_ent_off = lb.read_entry_off;
 			//check_list.remove(cp);
 			_log_mgr->check_points.remove(cp);
-		} else if (t == dir_entry_type::data_item) {
+		} else if (t == dir_entry_type::t_data_item) {
 			// gather segment to be flush
 			_log_mgr->check_segs.insert(lb.get_seg_id(de));
 		}
@@ -685,9 +841,9 @@ int log_file::rfind(timestamp ts, list<action> & actions) {
 			while (lb.has_pre()) {
 				lb.pre_entry(de);
 				if (de.ts == ts) {
-					if (de.get_type() == start_item) {
+					if (de.get_type() == t_start_item) {
 						return FIND_TRANSACTION_START;
-					} else if (de.get_type() == data_item) {
+					} else if (de.get_type() == t_data_item) {
 						action a;
 						r = CONTINUE_TO_FIND;
 						lb.copy_data(de, a);
@@ -727,9 +883,9 @@ int log_file::irfind(timestamp ts, list<action> & actions) {
 			while (lb.has_pre()) {
 				lb.pre_entry(de);
 				if (de.ts == ts) {
-					if (de.get_type() == start_item) {
+					if (de.get_type() == t_start_item) {
 						return FIND_TRANSACTION_START;
-					} else if (de.get_type() == data_item) {
+					} else if (de.get_type() == t_data_item) {
 						r = CONTINUE_TO_FIND;
 						action a;
 						lb.copy_data(de, a);

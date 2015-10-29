@@ -10,11 +10,15 @@
 
 #include <list>
 #include <string>
+#include <condition_variable>
 
 #include "../enginee/trans_def.h"
 #include "../storage/datafile.h"
 #include "../common/char_buffer.h"
 #include "../enginee/sdb.h"
+#include "../enginee/seg_mgr.h"
+
+#include "kv.h"
 
 namespace sdb {
 namespace index {
@@ -23,11 +27,11 @@ using namespace sdb::common;
 using namespace sdb::enginee;
 using namespace sdb::storage;
 
-const int INODE_REMOVE_BIT = 15;
-const int INODE_LEFT_IPAGE_BIT = 14;
-const int INODE_RIGHT_IPAGE_BIT = 13;
-const int INODE_LEFT_LPAGE_BIT = 12;
-const int INODE_RIGHT_LPAGE_BIT = 11;
+const int VAL_LEN = 14;
+
+const int NODE_REMOVE_BIT = 15;
+const int NODE_LEFT_PAGE_BIT = 14;
+const int NODE_RIGHT_PAGE_BIT = 13;
 
 const int PAGE_REMOVE_BIT = 15;
 const int PAGE_PARENT_BIT = 14;
@@ -42,364 +46,99 @@ void remove_flag(ushort &s, const int bit);
 void set_flag(short &s, const int bit);
 void remove_flag(short &s, const int bit);
 
+struct _page;
 struct _ipage;
 struct _lpage;
+struct _inode;
 
-struct _key_field {
-	string field_name;
-	field_type type;
-	int field_len;
-	char_buffer buffer;
-
-	_key_field(){}
-	_key_field(const _key_field & an) {
-		field_name = an.field_name;
-		type = an.type;
-		field_len = an.field_len;
-	}
-
-	inline void ref(char*buff, int len) {
-		buffer.ref_buff(buff, len);
-	}
-
-	int compare(_key_field & kf) {
-		return compare(&kf);
-	}
-
-	int compare_short(sdb::index::_key_field* kf) {
-		short v;
-		buffer >> v;
-		short t;
-		kf->buffer >> t;
-		return v > t ? 1 : v == t ? 0 : -1;
-	}
-
-	int compare_ushort(sdb::index::_key_field* kf) {
-		ushort v;
-		buffer >> v;
-		ushort t;
-		kf->buffer >> t;
-		return v > t ? 1 : v == t ? 0 : -1;
-	}
-
-	int compare_uint(sdb::index::_key_field* kf) {
-		uint v;
-		buffer >> v;
-		uint t;
-		kf->buffer >> t;
-		return v > t ? 1 : v == t ? 0 : -1;
-	}
-
-	int compare_long(sdb::index::_key_field*& kf) {
-		long v;
-		buffer >> v;
-		long t;
-		kf->buffer >> t;
-		return v > t ? 1 : v == t ? 0 : -1;
-	}
-
-	int compare_ulong(sdb::index::_key_field* kf) {
-		ulong v;
-		buffer >> v;
-		ulong t;
-		kf->buffer >> t;
-		return v > t ? 1 : v == t ? 0 : -1;
-	}
-
-	int compare_float(sdb::index::_key_field* kf) {
-		float v;
-		buffer >> v;
-		float t;
-		kf->buffer >> t;
-		return v > t ? 1 : v == t ? 0 : -1;
-	}
-
-	int compare_double(sdb::index::_key_field* kf) {
-		double v;
-		buffer >> v;
-		double t;
-		kf->buffer >> t;
-		return v > t ? 1 : v == t ? 0 : -1;
-	}
-
-	int compare(_key_field * kf) {
-		switch (type) {
-		case bool_type:
-			return compare_bool(kf);
-		case short_type:
-			return compare_short(kf);
-		case ushort_type:
-			return compare_ushort(kf);
-		case int_type:
-			return compare_int(kf);
-		case uint_type:
-			return compare_uint(kf);
-		case long_type:
-			return compare_long(kf);
-		case ulong_type:
-			return compare_ulong(kf);
-		case float_type:
-			return compare_float(kf);
-		case double_type:
-			return compare_double(kf);
-		case varchar_type:
-			return compare_varchar(kf);
-		default:
-			return 0;
-		}
-	}
-
-	int compare_int(_key_field *kf) {
-		int v;
-		buffer >> v;
-		int t;
-		kf->buffer >> t;
-		return v > t ? 1 : v == t ? 0 : -1;
-	}
-
-	int compare_varchar(_key_field *kf) {
-		string v;
-		buffer >> v;
-		string t;
-		kf->buffer >> t;
-		return v.compare(t);
-	}
-
-	int compare_bool(_key_field *kf) {
-		bool v;
-		buffer >> v;
-		bool t;
-		kf->buffer >> t;
-		return v > t ? 1 : v == t ? 0 : -1;
-	}
-
-	inline bool operator==(const _key_field & an) {
-		return an.field_name == field_name && type == an.type;
-	}
-
-	inline bool is_variant() {
-		return type >= field_type::char_type;
-	}
+enum page_type {
+	pt_fs_ipage, pt_vs_ipage, pt_vs_lpage, pt_fs_lpage
 };
 
-
-
-struct _key {
-	char * buff;
-	int kv_off = 0;
-	int len;
-
-	list<_key_field> key_fields;
-	inline void ref(char *buff, int len) {
-		this->buff = buff;
-		this->len = len;
-	}
-
-	inline int next_field(_key_field &kf) {
-		int r = sdb::SUCCESS;
-		if (kv_off >= len) {
-			r = sdb::FAILURE;
-		} else {
-			kf.ref(buff + kv_off, len - kv_off);
-			if (kf.is_variant()) {
-				char_buffer tmp;
-				tmp.ref_buff(buff + kv_off, len - kv_off);
-				int l;
-				tmp >> l;
-				kv_off += l + INT_CHARS;
-			} else {
-				kv_off += kf.field_len;
-			}
-		}
-		return r;
-	}
-
-	inline int next_field(_key_field * kf) {
-		int r = sdb::SUCCESS;
-		if (kv_off >= len) {
-			r = sdb::FAILURE;
-		} else {
-			kf->ref(buff + kv_off, len - kv_off);
-			if (kf->is_variant()) {
-				char_buffer tmp;
-				tmp.ref_buff(buff + kv_off, len - kv_off);
-				int l;
-				tmp >> l;
-				kv_off += l + INT_CHARS;
-			} else {
-				kv_off += kf->field_len;
-			}
-		}
-		return r;
-	}
-
-	inline bool equal_fields(const _key & an) {
-		bool equals = true;
-		auto it = key_fields.begin();
-		auto ait = an.key_fields.begin();
-		for (; equals && it != key_fields.end() && ait != an.key_fields.end();
-				++it, ++ait) {
-			equals = it->field_name == ait->field_name && it->type == ait->type;
-		}
-
-		return equals;
-	}
-
-	/*
-	 * the method assume that the field number equals, although a field has null value
-	 */
-	inline int compare(_key & an) {
-		int r = 0;
-		auto it = key_fields.begin();
-		auto ait = an.key_fields.begin();
-		_key_field th, ak;
-		for (; r == 0 && it != key_fields.end() && ait != an.key_fields.end();
-				it++, ait++) {
-			th = *it;
-			ak = *ait;
-			if (next_field(th) == sdb::SUCCESS
-					&& an.next_field(ak) == sdb::SUCCESS) {
-				r = th.compare(ak);
-			}
-		}
-		return r;
-	}
-
-	inline void add_key_field(const _key_field & kf) {
-		for (auto & e : key_fields) {
-			if (e == kf) {
-				return;
-			}
-		}
-		key_fields.push_back(kf);
-	}
-};
-
-struct _val {
-	char * buff;
-	int len;
-
-	void ref(char*buff, int len);
-	void to_data_item(data_item &di);
-	void to_data_item(data_item *pdi);
-	void set_data_item(const data_item & di);
-	void set_data_item(const data_item * pdi);
-};
-
-/*
- * a index node only has store key, left page offset and right page offset
- */
-struct _inode {
+struct _node {
 	struct head {
 		ushort flag;
-		uint left_pg_off;
-		uint right_pg_off;
-		ulong left_pg_seg_id;
-		ulong right_pg_seg_id;
-	}* header;
+	}*header;
+
+	_page * cp; // container page;
 
 	uint offset;
-	char * buff = nullptr;
-	int len = 0;
+	char * buffer;
+	int len;
 
-	_ipage * cp; // container page;
+	virtual void ref(uint off, char * buff, int w_len)=0;
 
-	// inode's left page that contains node's key less than or equals the inode
-	_lpage * left_lpage = nullptr;
-
-	// inode's right page that contains node's key greater than the inode
-	_lpage * right_lpage = nullptr;
-
-	_ipage * left_ipage = nullptr;
-	_ipage * right_ipage = nullptr;
-
-	virtual void ref(uint offset, char *buff, int len) {
-	}
-	virtual int write_key(const _key & k) {
-		return 0;
-	}
-	virtual int write_key(const _key * k) {
-		return 0;
-	}
-	virtual int read_key(_key &k) {
-		return 0;
-	}
-	virtual int read_key(_key *k) {
-		return 0;
+	inline void set_flag(const int& bit) {
+		ushort s = 1 << bit;
+		header->flag |= s;
 	}
 
-	void set_left_lpage(_lpage * p);
-	void set_right_lpage(_lpage *p);
-	void set_left_ipage(_ipage *p);
-	void set_right_ipage(_ipage *p);
+	inline void clean_flag(const int& bit) {
+		ushort s = ~(1 << bit);
+		header->flag &= s;
+	}
+	virtual void remove() {
+		clean_flag(NODE_REMOVE_BIT);
+	}
+
+	void write_key(const _key & k) {
+		memcpy(buffer, k.buff, k.len);
+	}
+
+	void write_key(const _key * k) {
+		memcpy(buffer, k->buff, k->len);
+	}
+	void read_key(_key &k) {
+		k.ref(buffer, k.len);
+	}
+	void read_key(_key *k) {
+		k->ref(buffer, k->len);
+	}
 };
 
-/*
- * fixed size index node
- */
-struct fs_inode: virtual _inode {
-	virtual void ref(uint off, char *buff, int len) {
-		header = (head *) buff;
-		offset = off;
-		this->buff = buff + sizeof(head);
-		this->len = len - sizeof(head);
-	}
-
-	virtual int write_key(const _key & k) {
-		return 0;
-	}
-	virtual int write_key(const _key * k) {
-		return 0;
-	}
-	virtual int read_key(_key &k) {
-		return 0;
-	}
-	virtual int read_key(_key *k) {
-		return 0;
-	}
-};
-//
-//struct vs_inode: _inode {
-//
-//};
-
-struct _ipage: data_block {
+struct _page: data_block {
 	struct head: data_block::head {
-		ushort node_count;
 		uint parent_in_off;
 		uint parent_ipg_off;
 		ulong parent_pg_seg_id;
 	}*header;
 
-	inline virtual void ref(int off, char *buff, short w_len) {
-		offset = off;
-		length = w_len - sizeof(head);
-		header = (head *) buff;
-		header->node_count = 0;
-		buffer = buff + sizeof(head);
-		ref_flag = true;
+	page_type type;
+	bool is_root = false;
+
+	virtual void ref(uint off, char * buff, ushort w_len)=0;
+	virtual int assign_node(_node * n)=0;
+	virtual int read_node(ushort idx, _node *)=0;
+	virtual int remove_node(ushort idx)=0;
+
+	virtual int count()=0;
+
+	virtual inline void init_header() {
+		header->flag = 0;
+		header->blk_magic = block_magic;
+		time(&(header->create_time));
 	}
 
-	virtual int assign_inode(_inode & n) {
+	inline void set_flag(const int& bit) {
+		ushort s = 1 << bit;
+		header->flag |= s;
 	}
-	virtual int read_inode(ushort idx, _inode &n) {
+
+	inline void clean_flag(const int& bit) {
+		ushort s = ~(1 << bit);
+		header->flag &= s;
 	}
-	virtual int remove_inode(ushort idx) {
-	}
-	bool is_root() {
-		return false;
-	}
-	;
+
 	void set_parent(const _inode * n);
 };
 
-// fixed size node page
-struct fsn_ipage: _ipage {
-	struct head: _ipage::head {
+struct fs_page: _page {
+	struct head: _page::head {
+		ushort node_count;
 		ushort node_size;
-	}*header;
+	}*header = nullptr;
 
-	inline virtual void ref(int off, char *buff, short w_len) {
+	virtual inline void ref(uint off, char *buff, ushort w_len) {
 		offset = off;
 		length = w_len - sizeof(head);
 		header = (head *) buff;
@@ -408,54 +147,97 @@ struct fsn_ipage: _ipage {
 		ref_flag = true;
 	}
 
-	virtual int assign_inode(_inode & n);
-	virtual int read_inode(ushort idx, _inode &n);
-	virtual int remove_inode(ushort idx);
+	virtual inline void init_header() {
+		header->flag = 0;
+		header->blk_magic = block_magic;
+		time(&(header->create_time));
+	}
+
+	virtual int assign_node(_node * n);
+	virtual int read_node(ushort idx, _node *);
+	virtual int remove_node(ushort idx);
+
+	int count() {
+		return header->node_count;
+	}
+};
+
+/*
+ * a index node only has store key, left page offset and right page offset
+ */
+struct _inode: virtual _node {
+	struct head: virtual _node::head {
+		uint left_pg_off;
+		uint right_pg_off;
+		ulong left_pg_seg_id;
+		ulong right_pg_seg_id;
+	}* header = nullptr;
+
+	_page * left_page = nullptr;
+	_page * right_page = nullptr;
+
+	void set_left_page(_page * p);
+	void set_right_page(_page *p);
+};
+
+struct fs_inode: virtual _inode {
+	void ref(uint off, char *buff, int len) {
+		header = (head *) buff;
+		offset = off;
+		this->buffer = buff + sizeof(head);
+		this->len = len - sizeof(head);
+	}
+};
+
+// fixed size node page
+struct fs_ipage: virtual fs_page {
 
 };
 
-// variant size node page
-//struct vsn_ipage: _ipage {
-//
-//};
+struct _lpage: virtual _page {
+
+};
 
 // leaf node,
-struct _lnode {
+struct _lnode: virtual _node {
 	struct head {
 		char flag;
 	}*header;
 
 	char * buff;  // include key and value
 	int len;
-	_lpage * cp; // container page
+	inline virtual void write_val(const _val &v) {
+		memcpy(buff + len - VAL_LEN, v.buff, VAL_LEN);
+	}
+	inline void write_val(const _val *v) {
+		memcpy(buff + len - VAL_LEN, v->buff, VAL_LEN);
+	}
+	inline void read_key(_key &k) {
+		k.ref(buff, len - VAL_LEN);
+	}
+	void read_key(_key *k) {
+		k->ref(buff, len - VAL_LEN);
+	}
+	inline void read_val(_val & v) {
+		v.ref(buff + len - VAL_LEN, VAL_LEN);
+	}
+	inline void read_val(_val *v) {
+		v->ref(buff + len - VAL_LEN, VAL_LEN);
+	}
 
-	virtual void ref(char *buff, int len) {
+	virtual void remove() {
+		clean_flag(LNODE_REMOVE_BIT);
 	}
-	virtual void init_header() {
-	}
-	virtual void write_key(const _key & k) {
-	}
-	virtual void write_key(const _key * k) {
-	}
-	virtual void write_val(const _val &v) {
-	}
-	virtual void write_val(const _val *v) {
-	}
-	virtual void read_key(_key &k) {
-	}
-	virtual void read_key(_key *k) {
-	}
-	virtual void read_val(_val & v) {
-	}
-	virtual void read_val(_val *v) {
-	}
-	int sort();
-
 };
 
-//fixed size leaf node
+//fixed size leaf node, include key and value
 struct fs_lnode: _lnode {
-
+	inline virtual void ref(uint off, char *buff, int w_len) {
+		this->offset = off;
+		header = (head *) buff;
+		this->buff = buff + sizeof(head);
+		this->len = w_len - sizeof(head);
+	}
 };
 
 //variant size leaf node
@@ -463,67 +245,66 @@ struct vs_lnode: _lnode {
 
 };
 
-struct _lpage: data_block {
-	struct head: data_block::head {
-		ushort node_count;
-		uint parent_in_off;
-		uint parent_ipg_off;
-		ulong parent_pg_seg_id;
-	}*header;
-
-	_lpage *pre_page;
-	_lpage *next_page;
-
-	inline virtual void ref(int off, char *buff, short w_len) {
-		offset = off;
-		length = w_len - sizeof(head);
-		header = (head *) buff;
-		header->node_count = 0;
-		buffer = buff + sizeof(head);
-		ref_flag = true;
-	}
-
-	virtual int assign_lnode(_lnode & ln) {
-		return 0;
-	}
-	virtual int remove_lnode(ushort idx) {
-		return 0;
-	}
-	virtual int read_lnode(ushort idx, _lnode &ln) {
-		return 0;
-	}
-
-	void set_parent(const _inode * n);
-};
-
 /*
  * fixed size page that only contains fixed size leaf node
  */
-struct fsn_lpage: _lpage {
-	struct head: _lpage::head {
-		ushort node_size;
-	}*header;
-
-	inline virtual void ref(int off, char *buff, short w_len) {
-		offset = off;
-		length = w_len - sizeof(head);
-		header = (head *) buff;
-		header->node_count = 0;
-		buffer = buff + sizeof(head);
-		ref_flag = true;
-	}
-
-	virtual int assign_lnode(_lnode & ln);
-
-	virtual int remove_lnode(ushort idx);
-
-	virtual int read_lnode(ushort idx, _lnode &ln);
+struct fs_lpage: fs_page {
 };
 
 class bpt2 {
+private:
+	ulong obj_id;
+	int key_size;
+	/*
+	 * all key's field is fixed size
+	 */
+	bool fixed_size = true;
+	_key key;
+
+	seg_mgr * smgr;
+	segment * first_seg;
+	_page * root;
+	_lpage *flp, *llp; // first leaf page and last leaf page
+
+	int remove_node(const data_item *di); // a data item represent a index entry
+
+	mutex som_mtx; // structure of modification (page merge, split, borrow) mutex
+
 public:
 	bpt2();
-	virtual ~bpt2();
+
+	/*
+	 * assign a data_item for the node and fill seg_id, blk_off, row_idx to the data_item
+	 * pointer parameter and return sdb::SUCCESS if assign it
+	 */
+	int assign_node(_node *n, data_item *di);
+	int froze(const data_item *di);
+	int add_node(const char * kb, const int &len, const data_item * di);
+	int add_node(_node * n);
+	int remove_node(_node *n);
+	int remove_node(const char * kb, const int &len);
+
+	inline bool is_fixed() {
+		return fixed_size;
+	}
+
+	inline void set_fixed(bool f = false) {
+		fixed_size = f;
+	}
+	virtual ~bpt2() {
+	}
+
+	inline const _key& get_key() const {
+		return key;
+	}
+
+	inline void set_key(const _key& key) {
+		this->key = key;
+	}
+
+	inline void set_seg_mgr( seg_mgr * p) {
+		smgr = p;
+	}
 };
 
 } /* namespace tree */

@@ -75,7 +75,7 @@ enum log_sync_police {
 };
 
 enum dir_entry_type {
-	unknown = -1, start_item, data_item, commit_item, abort_item
+	unknown = -1, t_start_item, t_data_item, t_commit_item, t_abort_item
 };
 
 struct check_point {
@@ -153,12 +153,10 @@ public:
 	 * currently use action instead of log_entry
 	 */
 	struct log_entry {
-		ulong seg_id;
-		uint blk_off;
-		ushort row_idx;
-
+		data_item * di;
+		bool assign_di = false;
 		char flag = 0;
-
+		ushort seq;
 		/*
 		 * writing data and length, include old data
 		 * and new data if the action has.
@@ -176,14 +174,19 @@ public:
 		char * wd = nullptr;
 		int wl = 0;
 
+		int n_len = 0, o_len = 0;
+
 		void create(char *n_buff, int n_len);
 		void update(char * n_buff, int n_len, char * o_buff, int o_len);
 		void remove(char * o_buff, int o_len);
 		void read_from(char_buffer & buff);
 		void write_to(char_buffer & buff);
 
-		int copy_nitem(char * buff);
-		int copy_oitem(char * buff);
+		int copy_nitem(char * & buff);
+		int copy_oitem(char *& buff);
+		int ref_oitem(char * & buff);
+		int ref_nitem(char * & buff);
+
 		~log_entry();
 	};
 
@@ -196,6 +199,7 @@ public:
 
 	int add_start(timestamp ts);
 	int add_action(timestamp ts, const action & a);
+	int add_log_entry(timestamp ts, const log_entry & e);
 	int add_commit(timestamp ts);
 	int add_abort(timestamp ts);
 
@@ -367,7 +371,6 @@ private:
 	string mk_log_name(ulong id);
 	string mk_chk_name(ulong id);
 	string mk_chk_name(const string & pathname);
-
 
 public:
 	int load();

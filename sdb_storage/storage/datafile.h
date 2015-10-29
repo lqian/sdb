@@ -644,19 +644,19 @@ struct data_block {
 		time_t create_time;
 		time_t assign_time;
 		time_t update_time;
-		short flag = 0;
+		ushort flag = 0;
 		int pre_blk_off;
 		int next_blk_off;
 		int checksum;
 	}*header = nullptr;
 
 	bool ref_flag = false;
-	unsigned int offset; /* block offset from start of segment which the block belong to,
+	uint offset; /* block offset from start of segment which the block belong to,
 	 the first data block offset is 0 within a segment */
 
 	char *buffer; /* all data store in the buffer, include ROW DIRECTORY & DATA,
 	 but excludes data block header */
-	short length; /* total length of buffer, excludes header length */
+	ushort length; /* total length of buffer, excludes header length */
 
 	/* update offset start and end  if the block buffer has been modified */
 	//short u_off_start = 0;
@@ -664,7 +664,7 @@ struct data_block {
 	data_block *pre_blk, *next_blk;
 	segment *seg;
 
-	inline virtual void init(int off, short w_len) {
+	inline virtual void init(int off, ushort w_len) {
 		offset = off;
 		length = w_len - block_head_size;
 		buffer = new char[length + block_head_size];
@@ -680,7 +680,7 @@ struct data_block {
 	 * the header start position. the off parameter denotes the data block offset beh-
 	 * hind segment header.
 	 */
-	inline virtual void ref(int off, char *buff, short w_len) {
+	inline virtual void ref(uint off, char *buff, ushort w_len) {
 		offset = off;
 		length = w_len - block_head_size;
 		header = (head *) buff;
@@ -690,11 +690,12 @@ struct data_block {
 		//u_off_end = 0;
 	}
 
-	inline virtual void init_header() {
-		header->flag = 0;
-		header->blk_magic = block_magic;
-		time(&(header->create_time));
-	}
+	virtual void init_header()=0;
+//	{
+//		header->flag = 0;
+//		header->blk_magic = block_magic;
+//		time(&(header->create_time));
+//	}
 
 	inline virtual void set_assign_time(long t) {
 		header->assign_time = t;
