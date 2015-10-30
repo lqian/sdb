@@ -9,6 +9,58 @@
 using namespace sdb::enginee;
 using namespace sdb::common;
 
+void log_entry_test() {
+	log_block lb;
+	lb.assign_block_buffer();
+	timestamp ts = 1L;
+	log_block::log_entry le1;
+	le1.wl = 35;
+	le1.wd = new char[le1.wl];
+	le1.seq = 1;
+
+	log_block::log_entry le2;
+	le2 = le1;
+
+	int idx = 0;
+	ASSERT(lb.add_start(ts) == DIRCTORY_ENTRY_LENGTH * idx++);
+	ASSERT(lb.add_log_entry(ts, le1) == DIRCTORY_ENTRY_LENGTH * idx++);
+	ASSERT(lb.add_log_entry(ts, le2) == DIRCTORY_ENTRY_LENGTH * idx++);
+	ASSERT(lb.add_commit(ts) == DIRCTORY_ENTRY_LENGTH * idx++);
+
+	timestamp rts = 1002L;
+	ASSERT(lb.add_start(rts) == DIRCTORY_ENTRY_LENGTH * idx++);
+	ASSERT(lb.add_abort(rts) == DIRCTORY_ENTRY_LENGTH * idx++);
+
+	ASSERT(lb.count_entry() == idx);
+
+	log_block::dir_entry e;
+	int size = 0;
+	while (lb.has_next()) {
+		lb.next_entry(e);
+		if (e.get_type() == dir_entry_type::t_data_item) {
+			size += e.length;
+		}
+	}
+	ASSERT(size == 70);
+
+	lb.tail();
+	while (lb.has_pre()) {
+		lb.pre_entry(e);
+		if (e.get_type() == dir_entry_type::t_data_item) {
+			size += e.length;
+		}
+	}
+	ASSERT(size == 140);
+
+	log_block::dir_entry e2 = lb.get_entry(3);
+	ASSERT(e2.get_type() == dir_entry_type::t_commit_item);
+	log_block::dir_entry e3 = lb.get_entry(5);
+	ASSERT(e3.get_type() == dir_entry_type::t_abort_item);
+
+}
+/*
+ * @deprecated test, @see log_entry_test
+ */
 void log_block_test() {
 	log_block lb;
 	lb.assign_block_buffer();
@@ -58,6 +110,9 @@ void log_block_test() {
 	ASSERT(e3.get_type() == dir_entry_type::t_abort_item);
 }
 
+/*
+ * @deprecated test, @see log_file_entry_test
+ */
 void log_file_test() {
 
 	string fn = "/tmp/000001.log";
@@ -81,6 +136,59 @@ void log_file_test() {
 	for (int i = 0; i < 60; i++) {
 		a.seq = 2 + i;
 		lf.append(ts, a);
+	}
+	lf.append_commit(ts);
+
+	log_block lb;
+	// scan forward
+	ASSERT(lf.head());
+	int bs = lf.get_block_size();
+	char *buff = new char[bs];
+	while (lf.next_block(buff) == sdb::SUCCESS) {
+		lb.ref_buffer(buff, bs);
+		ASSERT(lb.count_entry() >= 0);
+		cout << "scan forward log entry count:" << lb.count_entry() << endl;
+	}
+
+	// scan backward
+	ASSERT(lf.tail() == sdb::SUCCESS);
+	while (lf.pre_block(buff) == sdb::SUCCESS) {
+		lb.ref_buffer(buff, bs);
+		ASSERT(lb.count_entry() >= 0);
+		cout << "scan backward log entry count:" << lb.count_entry() << endl;
+	}
+
+	lf.inactive();
+	lf.close();
+
+	log_file other;
+	other.open(fn);
+	ASSERT(other.is_active() == false);
+}
+
+void log_entry_file_test() {
+
+	string fn = "/tmp/000001.log";
+	sio::remove_file(fn);
+	log_mgr lmgr;
+	log_file lf(fn);
+	lf.set_log_mgr(&lmgr);
+	ASSERT(lf.open() == sdb::SUCCESS);
+
+	timestamp ts = 100L;
+	lf.append_start(ts);
+
+	log_block::log_entry le;
+	le.wl = 100;
+	le.wd = new char[100];
+	le.wd[0] = 0xFF;
+	le.wd[99] = 0xEE;
+	le.seq = 1;
+	lf.append(ts, le);
+
+	for (int i = 0; i < 60; i++) {
+		le.seq = 2 + i;
+		lf.append(ts, le);
 	}
 	lf.append_commit(ts);
 
@@ -194,10 +302,65 @@ void forward_list_test() {
 
 }
 
+void log_entry_mgr_test() {
+	log_mgr lmg("/tmp/logs");
+	lmg.clean();
+	lmg.set_log_file_max_size(65536);
+	ASSERT(lmg.load() == sdb::SUCCESS);
 
+	data_item di;
+	di.seg_id = 1L;
+	di.blk_off = 1;
+	di.row_idx = 0;
+	timestamp ts = 100L;
+	int len = 35;
+	char * data = new char[len];
+	data[0] = 0xFF;
+	data[99] = 0xBB;
+	log_block::log_entry le;
+	le.di = &di;
+	le.seq = 1;
+	le.create(data, len);
+	lmg.log_start(ts);
+	lmg.log_entry(ts, le);
+	lmg.log_commit(ts);
+
+	log_block::log_entry b(le);
+	b.seq = 2;
+	timestamp rts = 1002L;
+	lmg.log_start(rts);
+	lmg.log_entry(rts, b);
+	lmg.log_abort(rts);
+
+	// test rfind
+	list<log_block::log_entry> entries;
+	ASSERT(lmg.rfind(ts, entries) == FIND_TRANSACTION_START);
+	ASSERT(entries.size() == 1);
+
+	entries.clear();
+	ASSERT(lmg.rfind(rts, entries) == FIND_TRANSACTION_START);
+	ASSERT(entries.size() == 1);
+
+	// test check
+	int start = 10000;
+	for (int i = 0; i < 10000; i++) {
+		ts = start + i;
+		lmg.log_start(ts);
+		lmg.log_entry(ts, le);
+		lmg.log_commit(ts);
+	}
+
+	lmg.chg_currlog_inactive();
+	lmg.check();
+	lmg.close();
+}
 
 void runSuite() {
 	cute::suite s;
+
+	s.push_back(CUTE(log_entry_test));
+	s.push_back(CUTE(log_entry_file_test));
+	s.push_back(CUTE(log_entry_mgr_test));
 
 	s.push_back(CUTE(log_block_test));
 	s.push_back(CUTE(log_file_test));

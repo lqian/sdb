@@ -102,13 +102,22 @@ void log_block::copy_data(const dir_entry &e, char_buffer & buff) {
 	buff.push_back(buffer + e.offset, e.length, false);
 }
 
-void log_block::copy_data(const dir_entry &e, action &a) {
-	if (!a.assign_dif) {
-		a.dif = new data_item_ref;
-		a.assign_dif = true;
+//void log_block::copy_data(const dir_entry &e, action &a) {
+//	if (!a.assign_dif) {
+//		a.dif = new data_item_ref;
+//		a.assign_dif = true;
+//	}
+//	char_buffer buff(buffer + e.offset, e.length, true);
+//	a.read_from(buff);
+//}
+
+void log_block::copy_data(const dir_entry & de, log_entry & le) {
+	if (!le.assign_di) {
+		le.di = new data_item;
+		le.assign_di = true;
 	}
-	char_buffer buff(buffer + e.offset, e.length, true);
-	a.read_from(buff);
+	char_buffer buff(buffer + de.offset, de.length, true);
+	le.read_from(buff);
 }
 
 ulong log_block::get_seg_id(const dir_entry & e) {
@@ -258,6 +267,48 @@ int log_block::log_entry::ref_nitem(char * & buff) {
 	}
 }
 
+log_block::log_entry::log_entry(const log_entry & an) {
+	flag = an.flag;
+	seq = an.seq;
+	assign_di = an.assign_di;
+	n_len = an.n_len;
+	o_len = an.o_len;
+	wl = an.wl;
+	if (assign_di) {
+		di = new data_item;
+		di->seg_id = an.di->seg_id;
+		di->blk_off = an.di->blk_off;
+		di->row_idx = an.di->row_idx;
+	}
+
+	if (wl > 0) {
+		wd = new char[wl];
+		memcpy(wd, an.wd, wl);
+	}
+}
+
+log_block::log_entry & log_block::log_entry::operator =(const log_entry & an) {
+	flag = an.flag;
+	seq = an.seq;
+	assign_di = an.assign_di;
+	n_len = an.n_len;
+	o_len = an.o_len;
+	wl = an.wl;
+	if (assign_di) {
+		di = new data_item;
+		di->seg_id = an.di->seg_id;
+		di->blk_off = an.di->blk_off;
+		di->row_idx = an.di->row_idx;
+	}
+
+	if (wl > 0) {
+		wd = new char[wl];
+		memcpy(wd, an.wd, wl);
+	}
+
+	return *this;
+}
+
 int log_block::log_entry::copy_oitem(char * & buff) {
 	if (flag >> OLD_VALUE_BIT & 1) {
 		char_buffer tmp(wd, wl, true);
@@ -303,52 +354,52 @@ log_block::log_entry::~log_entry() {
 	}
 }
 
-int log_block::add_action(timestamp ts, const action & a) {
-	if (remain() >= a.wl + DIRCTORY_ENTRY_LENGTH) {
+//int log_block::add_action(timestamp ts, const action & a) {
+//	if (remain() >= a.wl + DIRCTORY_ENTRY_LENGTH) {
+//		int weo = _header.writing_entry_off;
+//		dir_entry e;
+//		e.ts = ts;
+//		e.seq = a.seq;
+//		e.length = a.wl;
+//		e.offset = _header.writing_data_off - a.wl;
+//
+//		char_buffer buff(DIRCTORY_ENTRY_LENGTH);
+//		e.write_to(buff);
+//
+//		memcpy(buffer + weo, buff.data(), DIRCTORY_ENTRY_LENGTH);
+//		char * write_buffer = buffer + e.offset;
+//		memcpy(write_buffer, a.wd, a.wl);
+//
+//		_header.writing_entry_off += DIRCTORY_ENTRY_LENGTH;
+//		_header.writing_data_off -= a.wl;
+//		return weo;
+//	} else {
+//		return LOG_BLK_SPACE_NOT_ENOUGH;
+//	}
+//}
+
+int log_block::add_log_entry(timestamp ts, const log_entry & le) {
+	if (remain() >= le.wl + DIRCTORY_ENTRY_LENGTH) {
 		int weo = _header.writing_entry_off;
-		dir_entry e;
-		e.ts = ts;
-		e.seq = a.seq;
-		e.length = a.wl;
-		e.offset = _header.writing_data_off - a.wl;
+		dir_entry de;
+		de.ts = ts;
+		de.seq = le.seq;
+		de.length = le.wl;
+		de.offset = _header.writing_data_off - le.wl;
 
 		char_buffer buff(DIRCTORY_ENTRY_LENGTH);
-		e.write_to(buff);
+		de.write_to(buff);
 
 		memcpy(buffer + weo, buff.data(), DIRCTORY_ENTRY_LENGTH);
-		char * write_buffer = buffer + e.offset;
-		memcpy(write_buffer, a.wd, a.wl);
+		char * write_buffer = buffer + de.offset;
+		memcpy(write_buffer, le.wd, le.wl);
 
 		_header.writing_entry_off += DIRCTORY_ENTRY_LENGTH;
-		_header.writing_data_off -= a.wl;
+		_header.writing_data_off -= le.wl;
 		return weo;
 	} else {
 		return LOG_BLK_SPACE_NOT_ENOUGH;
 	}
-}
-
-int log_block::add_log_entry(timestamp ts, const log_entry & le) {
-	if (remain() >= le.wl + DIRCTORY_ENTRY_LENGTH) {
-			int weo = _header.writing_entry_off;
-			dir_entry de;
-			de.ts = ts;
-			de.seq = le.seq;
-			de.length = le.wl;
-			de.offset = _header.writing_data_off - le.wl;
-
-			char_buffer buff(DIRCTORY_ENTRY_LENGTH);
-			de.write_to(buff);
-
-			memcpy(buffer + weo, buff.data(), DIRCTORY_ENTRY_LENGTH);
-			char * write_buffer = buffer + de.offset;
-			memcpy(write_buffer, le.wd, le.wl);
-
-			_header.writing_entry_off += DIRCTORY_ENTRY_LENGTH;
-			_header.writing_data_off -= le.wl;
-			return weo;
-		} else {
-			return LOG_BLK_SPACE_NOT_ENOUGH;
-		}
 }
 
 int log_block::add_commit(timestamp ts) {
@@ -547,19 +598,41 @@ int log_file::re_open() {
 }
 
 // do not support span blocks currently
-int log_file::append(timestamp ts, const action &a) {
-	int r = last_blk.add_action(ts, a);
+//int log_file::append(timestamp ts, const action &a) {
+//	int r = last_blk.add_action(ts, a);
+//	if (r != LOG_BLK_SPACE_NOT_ENOUGH) {
+//		if (_log_mgr->sync_police == log_sync_police::immeidate) {
+//			flush_last_block();
+//		}
+//	} else if (_header.block_size - DIRCTORY_ENTRY_LENGTH
+//			- LOG_BLOCK_HEADER_LENGTH > a.wl) {
+//		// the data content less than empty block buffer size
+//		flush_last_block();
+//		r = renewal_last_block();
+//		if (r >= 0) {
+//			r = append(ts, a);
+//		}
+//		return r;
+//	} else {
+//		flush_last_block(); // make sure flush last block
+//		return DATA_LENGTH_TOO_LARGE;
+//	}
+//}
+
+// do not support span blocks currently
+int log_file::append(timestamp ts, const log_block::log_entry &e) {
+	int r = last_blk.add_log_entry(ts, e);
 	if (r != LOG_BLK_SPACE_NOT_ENOUGH) {
 		if (_log_mgr->sync_police == log_sync_police::immeidate) {
 			flush_last_block();
 		}
 	} else if (_header.block_size - DIRCTORY_ENTRY_LENGTH
-			- LOG_BLOCK_HEADER_LENGTH > a.wl) {
+			- LOG_BLOCK_HEADER_LENGTH > e.wl) {
 		// the data content less than empty block buffer size
 		flush_last_block();
 		r = renewal_last_block();
 		if (r >= 0) {
-			r = append(ts, a);
+			r = append(ts, e);
 		}
 		return r;
 	} else {
@@ -856,6 +929,36 @@ int log_file::rfind(timestamp ts, list<action> & actions) {
 	return r;
 }
 
+int log_file::rfind(timestamp ts, list<log_block::log_entry> & entries) {
+	int r = NOT_FIND_TRANSACTION;
+	log_block lb;
+	log_block::dir_entry de;
+	// if find the <start ts> return
+	r = tail();
+	if (r) {
+		int bs = _header.block_size;
+		char * buff = new char[bs];
+		while (pre_block(buff)) {
+			lb.ref_buffer(buff, bs);
+			lb.tail();
+			while (lb.has_pre()) {
+				lb.pre_entry(de);
+				if (de.ts == ts) {
+					if (de.get_type() == t_start_item) {
+						return FIND_TRANSACTION_START;
+					} else if (de.get_type() == t_data_item) {
+						log_block::log_entry le;
+						r = CONTINUE_TO_FIND;
+						lb.copy_data(de, le);
+						entries.push_back(le);
+					}
+				}
+			}
+		}
+	}
+	return r;
+}
+
 int log_file::irfind(timestamp ts, list<action> & actions) {
 	int r = NOT_FIND_TRANSACTION;
 	if (!opened) {
@@ -890,6 +993,51 @@ int log_file::irfind(timestamp ts, list<action> & actions) {
 						action a;
 						lb.copy_data(de, a);
 						actions.push_back(a);
+					}
+				}
+			}
+		}
+		delete[] buff;
+	}
+
+	return r;
+
+}
+
+int log_file::irfind(timestamp ts, list<log_block::log_entry> & entries) {
+	int r = NOT_FIND_TRANSACTION;
+	if (!opened) {
+		r = open();
+	}
+	if (!r) {
+		return r;
+	}
+
+	if (active) {
+		return INVALID_OPS_ON_ACTIVE_LOG_FILE;
+	}
+
+	r = tail();
+	if (r) {
+		int bs = _header.block_size;
+		char *buff = new char[bs];
+		log_block lb;
+		log_block::dir_entry de;
+		int lcbo = cutoff_point ? cutoff_point->log_blk_off : 0; // last check block offset
+		while (read_blk_offset >= lcbo && pre_block(buff)) {
+			lb.ref_buffer(buff, bs);
+			lb.tail();
+
+			while (lb.has_pre()) {
+				lb.pre_entry(de);
+				if (de.ts == ts) {
+					if (de.get_type() == t_start_item) {
+						return FIND_TRANSACTION_START;
+					} else if (de.get_type() == t_data_item) {
+						r = CONTINUE_TO_FIND;
+						log_block::log_entry le;
+						lb.copy_data(de, le);
+						entries.push_back(le);
 					}
 				}
 			}
@@ -1192,6 +1340,17 @@ int log_mgr::log_action(timestamp ts, const action & a) {
 	return r;
 }
 
+int log_mgr::log_entry(timestamp ts, const log_block::log_entry & e) {
+	int r = curr_log_file.append(ts, e);
+	if (r == EXCEED_LOGFILE_LIMITATION) {
+		r = renew_log_file();
+		if (r) {
+			return curr_log_file.append(ts, e);
+		}
+	}
+	return r;
+}
+
 int log_mgr::log_commit(timestamp ts) {
 	int r = curr_log_file.append_commit(ts);
 	if (r == EXCEED_LOGFILE_LIMITATION) {
@@ -1228,6 +1387,35 @@ int log_mgr::rfind(timestamp ts, list<action> & actions) {
 				if (sio::exist_file(pathname)) {
 					if (lf.open(pathname)) {
 						r = lf.irfind(ts, actions);
+						lf.close();
+						if (r == FIND_TRANSACTION_START) {
+							return r;
+						}
+					} else {
+						return LOG_STREAM_ERROR;
+					}
+				}
+			}
+		}
+	}
+
+	return r;
+}
+
+int log_mgr::rfind(timestamp ts, list<log_block::log_entry> & entries) {
+	int r = NOT_FIND_TRANSACTION;
+	if (sync_police == log_sync_police::immeidate) {
+		r = curr_log_file.rfind(ts, entries);
+
+		if (r != FIND_TRANSACTION_START) {
+			ulong id = log_file_seq;
+			string pathname;
+			log_file lf;
+			while (--id <= chk_file_seq) {
+				pathname = mk_log_name(id);
+				if (sio::exist_file(pathname)) {
+					if (lf.open(pathname)) {
+						r = lf.irfind(ts, entries);
 						lf.close();
 						if (r == FIND_TRANSACTION_START) {
 							return r;

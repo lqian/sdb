@@ -25,7 +25,7 @@ using namespace std;
 using namespace sdb::common;
 
 enum action_op {
-	WRITE, READ
+	WRITE, UPDATE, READ
 };
 
 enum commit_flag {
@@ -48,38 +48,22 @@ struct data_item_ref : data_item {
 };
 
 struct action {
-	unsigned short seq; // maybe
+	ushort seq; // maybe
 	action_op op;
 	data_item_ref * dif = nullptr;  // data item ref
-	bool assign_dif = false;
-	char flag = 0;
 
-	int n_len=0, o_len=0;
+	char * buff = nullptr;
+	int len;
+	bool ref_flag = false;
 
-	char * wd = nullptr; // action data write buffer, includes data_item_ref  and flag
-	int wl = 0; // action data write length, include data_item_ref and flag
-
-	char * rd = nullptr;
-	int rl = 0;
-
-	/*
-	 * op is write, but the action doesn't have old data, the new data specified
-	 * with two parameters, the method assume that data_item_ref has been assigned
-	 */
-	void create(char * n_buff, int n_len);
-
-	void update(char * n_buff, int n_len, char * o_buff, int o_len);
-
-	void remove(char * o_buff, int o_len);
+	inline void ref(char * buff, int len) {
+		this->buff = buff;
+		this->len = len;
+		this->ref_flag = true;
+	}
 
 	action& operator=(const action & an);
 
-	void read_from(char_buffer & buff);
-	void write_to(char_buffer & buff);
-	int copy_nitem(char * & buff);
-	int copy_oitem(char * & buff);
-	int ref_oitem(char * & buff);
-	int ref_nitem(char * & buff);
 	action() {
 	}
 	action(const action & an);

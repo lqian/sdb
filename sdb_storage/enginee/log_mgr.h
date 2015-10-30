@@ -187,6 +187,10 @@ public:
 		int ref_oitem(char * & buff);
 		int ref_nitem(char * & buff);
 
+		log_entry(){};
+		log_entry(const log_entry & an);
+		log_entry & operator=(const log_entry & an);
+
 		~log_entry();
 	};
 
@@ -198,6 +202,9 @@ public:
 	~log_block();
 
 	int add_start(timestamp ts);
+	/*
+	 * deprecated function, instead of add_log_entry
+	 */
 	int add_action(timestamp ts, const action & a);
 	int add_log_entry(timestamp ts, const log_entry & e);
 	int add_commit(timestamp ts);
@@ -213,8 +220,9 @@ public:
 	dir_entry get_entry(int idx);
 
 	int copy_data(int idx, char_buffer & buff);
-	void copy_data(const dir_entry & e, char_buffer & buff);
-	void copy_data(const dir_entry &e, action & a);
+	void copy_data(const dir_entry &de, char_buffer & buff);
+	void copy_data(const dir_entry &de, action & a);
+	void copy_data(const dir_entry &de, log_entry & le);
 	ulong get_seg_id(const dir_entry & e);
 
 	int count_entry();
@@ -253,9 +261,6 @@ private:
 	log_mgr * _log_mgr = nullptr;
 	check_point * cutoff_point = nullptr;
 
-//	forward_list<check_point> check_list;
-//	set<ulong> check_segs;
-
 	int init_log_file();
 	int renewal_last_block();
 	int flush_last_block();
@@ -270,21 +275,23 @@ private:
 	int check(int blk_off = LOG_FILE_HEADER_LENGTH, int dir_ent_off = 0);
 
 	/*
-	 * from the active log file end-place, find actions for a transaction
+	 * from the active log file end-place, find action/log_entry for a transaction
 	 * specified with ts parameter, and fill them to actions parameter,
-	 * if found all actions for the transaction,
+	 * if found all actions/log_entries for the transaction,
 	 * return FIND_TRANSACTION_START, NOT_FIND_TRANSACTION or CONTINUE_TO_FIND
 	 */
-	int rfind(timestamp ts, list<action> &actions);
+	int rfind(timestamp ts, list<action> &actions);  /* @deprecated */
+	int rfind(timestamp ts, list<log_block::log_entry> &entries);
 
 	/*
-	 * from the inactive log file end-place, find actions for a transaction
+	 * from the inactive log file end-place, find action/log_entry for a transaction
 	 * specified with ts parameter, and fill them to actions parameter,
-	 * if found all actions for the transaction,
+	 * if found all actions/log_entr for the transaction,
 	 * return FIND_TRANSACTION_START, NOT_FIND_TRANSACTION or CONTINUE_TO_FIND
 	 * return INVALID_OPS_ON_ACTIVE_LOG_FILE if invoke the method at the active log file
 	 */
-	int irfind(timestamp ts, list<action>& actinos);
+	int irfind(timestamp ts, list<action>& actinos); /* @deprecated */
+	int irfind(timestamp ts, list<log_block::log_entry> &entries);
 
 public:
 	log_file();
@@ -303,7 +310,8 @@ public:
 	bool is_open();
 
 	int append_start(timestamp ts);
-	int append(timestamp ts, const action& a);
+	int append(timestamp ts, const log_block::log_entry & e);
+	int append(timestamp ts, const action& a); /* @deprecated */
 	int append_commit(timestamp ts);
 	int append_abort(timestamp ts);
 
@@ -381,21 +389,27 @@ public:
 	int flush();
 
 	int log_start(timestamp ts);
+	/* @deprecated, @see log_entry */
 	int log_action(timestamp ts, const action & a);
+	int log_entry(timestamp ts, const log_block::log_entry & e);
 	int log_commit(timestamp ts);
 	int log_abort(timestamp ts);
 
 	/*
 	 * find actions for a transaction in reserved order in case
 	 * that an transaction need to be roll back
+	 * @deprecated, @see rfind(timestamp, list<log_block::log_entry>);
 	 */
 	int rfind(timestamp ts, list<action> & actions);
+
+	int rfind(timestamp ts, list<log_block::log_entry> & entries);
 
 	/*
 	 * redo and undo action depends seg_mgr is loaded
 	 */
 	int redo();
 	int undo();
+
 	int check();
 	int check_from(ulong seq);
 	int chg_currlog_inactive();

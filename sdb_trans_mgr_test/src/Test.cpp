@@ -75,7 +75,7 @@ void trans_write_read() {
 	a.dif = &dif;
 	a.seq = 0;
 	a.op = action_op::WRITE;
-	a.create(n_buff, rl);
+	a.ref(n_buff, rl);
 	t1.add_action(a);
 	t1.execute();
 	ASSERT(t1.status() == trans_status::COMMITTED);
@@ -195,8 +195,8 @@ void trans_skip() {
 	a.dif = &dif;
 	a.op = action_op::WRITE;
 	action b(a);
-	a.create(n_buff, rl);
-	b.create(n_buff2, rl);
+	a.ref(n_buff, rl);
+	b.ref(n_buff2, rl);
 
 	transaction t1, t2;
 	tmgr->assign_trans(&t1);

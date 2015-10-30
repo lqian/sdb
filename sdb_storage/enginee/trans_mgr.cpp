@@ -20,206 +20,37 @@ bool data_item_ref::operator ==(const data_item_ref & an) {
 	return an.seg_id == seg_id && an.blk_off == blk_off && an.row_idx == row_idx;
 }
 
-void action::create(char * buff, int len) {
-	n_len = len;
-	wl = ACTION_HEADER_LENGTH + INT_CHARS + len;
-	wd = new char[wl];
-	char_buffer tmp(wd, wl, true);
-	flag |= (1 << NEW_VALUE_BIT);
-	tmp << dif->seg_id << dif->blk_off << dif->row_idx << flag;
-	tmp.push_back(buff, len, true);
-}
-
-void action::update(char * n_buff, int n_len, char * o_buff, int o_len) {
-	this->n_len = n_len;
-	this->o_len = o_len;
-	wl = ACTION_HEADER_LENGTH + INT_CHARS + INT_CHARS + n_len + o_len;
-	wd = new char[wl];
-	char_buffer tmp(wd, wl, true);
-	flag |= (1 << NEW_VALUE_BIT);
-	flag |= (1 << OLD_VALUE_BIT);
-	tmp << dif->seg_id << dif->blk_off << dif->row_idx << flag;
-	tmp.push_back(n_buff, n_len, true);
-	tmp.push_back(o_buff, o_len, true);
-}
-
-void action::remove(char * o_buff, int o_len) {
-	this->o_len = o_len;
-	wl = ACTION_HEADER_LENGTH + INT_CHARS + o_len;
-	wd = new char[wl];
-	char_buffer tmp(wd, wl, true);
-	char flag = 0;
-	flag |= (1 << OLD_VALUE_BIT);
-	tmp << dif->seg_id << dif->blk_off << dif->row_idx << flag;
-	tmp.push_back(o_buff, o_len, true);
-}
-
-void action::read_from(char_buffer & buff) {
-	int len;
-	buff >> dif->seg_id >> dif->blk_off >> dif->row_idx >> flag >> len;
-	buff.skip(len);
-	if ((flag | 0xC0) == 0xC0) { // update 2^7 + 2^6
-		n_len = len;
-		buff >> o_len;
-		buff.skip(o_len);
-	} else if ((flag | 0x80) == 0x80) {
-		n_len = len;
-	} else if ((flag | 0x40) == 0x40) {
-		o_len = len;
-	}
-
-	wl = buff.header();
-	wd = new char[wl];
-	memcpy(wd, buff.data(), wl);
-}
-
-void action::write_to(char_buffer & buff) {
-	buff << dif->seg_id << dif->blk_off << dif->row_idx << flag;
-	buff.push_back(wd, wl, false);
-}
-
-int action::copy_nitem(char * & buff) {
-	if (flag >> NEW_VALUE_BIT & 1) {
-		char_buffer tmp(wd, wl, true);
-		tmp.skip(ACTION_HEADER_LENGTH);
-		int len = 0;
-		tmp >> len;
-		buff = new char[len];
-		memcpy(buff, tmp.curr(), len);
-		return len;
-	} else {
-		return sdb::FAILURE;
-	}
-}
-
-int action::ref_nitem(char * & buff) {
-	if (flag >> NEW_VALUE_BIT & 1) {
-		char_buffer tmp(wd, wl, true);
-		tmp.skip(ACTION_HEADER_LENGTH);
-		int len = -1;
-		tmp >> len;
-		n_len = len;
-		buff = tmp.curr();
-		return len;
-	} else {
-		return sdb::FAILURE;
-	}
-}
-
-int action::copy_oitem(char * & buff) {
-	if (flag >> OLD_VALUE_BIT & 1) {
-		char_buffer tmp(wd, wl, true);
-		tmp.skip(ACTION_HEADER_LENGTH);
-		int len = 0;
-		if (flag >> NEW_VALUE_BIT & 1) {
-			tmp >> len;
-			tmp.skip(len);
-		}
-		tmp >> len;
-		memcpy(buff, tmp.curr(), len);
-		return len;
-	} else {
-		return sdb::FAILURE;
-	}
-}
-
-int action::ref_oitem(char * & buff) {
-	if (flag >> OLD_VALUE_BIT & 1) {
-		char_buffer tmp(wd, wl, true);
-		tmp.skip(ACTION_HEADER_LENGTH);
-		int len = 0;
-		if (flag >> NEW_VALUE_BIT & 1) {
-			tmp >> len;
-			tmp.skip(len);
-		}
-		tmp >> len;
-		buff = tmp.curr();
-		return len;
-	} else {
-		return sdb::FAILURE;
-	}
-}
-
 action::~action() {
-	if (wd) {
-		delete[] wd;
-	}
-
-	if (rd) {
-		delete[] rd;
-	}
-
-	if (assign_dif && dif) {
-		delete dif;
-		assign_dif = false;
+	if (!ref_flag && buff) {
+		delete[] buff;
 	}
 }
 
 action & action::operator=(const action & an) {
-	seq = an.seq;
-	op = an.op;
-	flag = an.flag;
-	n_len = an.n_len;
-	o_len = an.o_len;
-
-	assign_dif = an.assign_dif;
-	if (assign_dif) {
-		dif = new data_item_ref;
-		dif->seg_id = an.dif->seg_id;
-		dif->blk_off = an.dif->blk_off;
-		dif->row_idx = an.dif->row_idx;
-		dif->cmt_flag = an.dif->cmt_flag;
-		dif->rts = an.dif->rts;
-		dif->wts = an.dif->wts;
-	} else {
-		dif = an.dif;
+	if (&an != this) {
+		seq = an.seq;
+		op = an.op;
+		len = an.len;
+		ref_flag = an.ref_flag;
+		if (!ref_flag) {
+			buff = new char[len];
+			memcpy(buff, an.buff, len);
+		}
 	}
-
-	if (an.wl > 0) {
-		wl = an.wl;
-		wd = new char[wl];
-		memcpy(wd, an.wd, wl);
-	}
-
-	if (an.rl > 0) {
-		rl = an.rl;
-		rd = new char[rl];
-		memcpy(rd, an.rd, rl);
-	}
-
 	return *this;
 }
 
 action::action(const action & an) {
 	seq = an.seq;
 	op = an.op;
-	flag = an.flag;
-	n_len = an.n_len;
-	o_len = an.o_len;
-	assign_dif = an.assign_dif;
-	if (assign_dif) {
-		dif = new data_item_ref;
-		dif->seg_id = an.dif->seg_id;
-		dif->blk_off = an.dif->blk_off;
-		dif->row_idx = an.dif->row_idx;
-		dif->cmt_flag = an.dif->cmt_flag;
-		dif->rts = an.dif->rts;
-		dif->wts = an.dif->wts;
-	} else {
-		dif = an.dif;
+	len = an.len;
+	ref_flag = an.ref_flag;
+
+	if (!ref_flag) {
+		buff = new char[len];
+		memcpy(buff, an.buff, len);
 	}
 
-	if (an.wl > 0) {
-		wl = an.wl;
-		wd = new char[wl];
-		memcpy(wd, an.wd, wl);
-	}
-
-	if (an.rl > 0) {
-		rl = an.rl;
-		rd = new char[rl];
-		memcpy(rd, an.rd, rl);
-	}
 }
 
 void transaction::begin() {
@@ -233,21 +64,23 @@ void transaction::execute() {
 
 	tst = ACTIVE;
 	for (auto & a : actions) {
-		if (a.op == action_op::WRITE) {
+		if (a.op == action_op::WRITE || a.op == action_op::UPDATE) {
 			if (ts > a.dif->wts) {
 				if (a.dif->cmt_flag == trans_leave) {
-					if (lm->log_action(ts, a) >= 0) {
-						if (write(a) < 0) {
-							abort();
-							return;
-						}
-						op_step++;
-					} else {
-						//can not log the action, abort current transaction
+					a.dif->mtx.lock();
+					int r = log_action(a);
+					if (r >= 0) {
+						r = write(a);
+					}
+					a.dif->mtx.unlock();
+					if (r < 0) {
 						abort();
 						return;
+					} else {
+						op_step++;
 					}
-				} else { // the data_item was write by another transaction, but not commit
+				} else {
+					// the data_item was write by another transaction, but not commit
 					abort();
 					return;
 				}
@@ -280,6 +113,23 @@ void transaction::execute() {
 	}
 }
 
+int transaction::log_action(const action & a) {
+	int r = sdb::SUCCESS;
+	if (r >= 0) {
+		log_block::log_entry le;
+		le.di = a.dif;
+		if (a.op == UPDATE) {
+			char_buffer obuff;
+			int r = sm->get_row(a.dif, obuff);
+			le.update(a.buff, a.len, obuff.data(), obuff.capacity());
+		} else {
+			le.create(a.buff, a.len);
+		}
+		r = lm->log_entry(ts, le);
+	}
+
+	return r;
+}
 void transaction::commit() {
 	mtx.lock();
 	cva.wait(mtx, [this]() {return deps.empty();});
@@ -327,21 +177,18 @@ int transaction::read(action & a) {
 	char_buffer buff;
 	r = sm->get_row(a.dif->seg_id, a.dif->blk_off, a.dif->row_idx, buff);
 	a.dif->rts = ts;
-	a.dif->mtx.unlock();
 	if (r == sdb::SUCCESS) {
-		a.rl = buff.capacity();
-		a.rd = new char[a.rl];
-		memcpy(a.rd, buff.data(), a.rl);
+		a.len = buff.capacity();
+		a.buff = new char[a.len];
+		memcpy(a.buff, buff.data(), a.len);
 	}
+	a.dif->mtx.unlock();
 	return r;
 }
 
 int transaction::write(action & a) {
 	int r = sdb::FAILURE;
-	char * nbuff;
-	a.ref_nitem(nbuff);
 
-	a.dif->mtx.lock();
 	a.dif->cmt_flag = commit_flag::trans_on;
 
 	tm->adit_mtx.lock();
@@ -359,36 +206,57 @@ int transaction::write(action & a) {
 	}
 	tm->adit_mtx.unlock();  // unlock adit_mtx
 
-	r = sm->write(a.dif, nbuff, a.n_len);
+	r = sm->write(a.dif, a.buff, a.len);
 	if (r >= 0) {
 		a.dif->wts = ts;
 	}
-	a.dif->mtx.unlock(); // write data, unlock data_item_ref.mtx
 	return r;
 }
 
 void transaction::restore() {
-	auto it = actions.rbegin();
+
+	// action is in ascend order. move to the last executed action
+	auto ait = actions.rbegin();
 	int s = actions.size();
-	while (s > op_step && it != actions.rend()) {
-		it++;
+	while (s > op_step && ait != actions.rend()) {
+		ait++;
 		s--;
 	}
 
-	for (int i = 0; i < op_step; i++, it++) {
-		if (it->op == action_op::WRITE) {
-			if (ts >= it->dif->wts) {
-				char * nbuff;
-				int len = it->ref_oitem(nbuff);
-				it->dif->mtx.lock();
-				sm->write(it->dif->seg_id, it->dif->blk_off, it->dif->row_idx,
-						nbuff, len);
-				it->dif->cmt_flag = trans_leave;
-				it->dif->mtx.unlock();
+	list<log_block::log_entry> entries;  // entry is in descend order
+	if (lm->rfind(ts, entries) == FIND_TRANSACTION_START) {
+		// maybe log_entry successfully but write action failure, align action and log entry
+		//while (ait->seq < eit->seq && eit != entries.end()) {
+		//	eit++;
+		//}
+		//align action and log entry
+		//while (ait->seq < eit->seq && eit != entries.begin()) {
+		//	eit++;
+		//}
+
+		for (auto eit = entries.begin();
+				ait != actions.rend() && eit != entries.begin(); ait++) {
+			if (ait->op == action_op::WRITE) {
+				ait->dif->mtx.lock();
+				if (ts >= ait->dif->wts) {
+					if (ait->seq == eit->seq) {
+
+						char * obuff;
+						int len = eit->ref_oitem(obuff); // get old value from log entry;
+						sm->write(ait->dif, obuff, len);
+						ait->dif->cmt_flag = trans_leave;
+
+						//TODO support logic roll back
+
+						eit++;
+					}
+				}
+				ait->dif->mtx.unlock();
 			}
 		}
+	} else {
+		// cannot find the log, ignore
 	}
-
 	tm->remove_trans(this);
 }
 

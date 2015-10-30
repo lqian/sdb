@@ -170,6 +170,7 @@ private:
 	int read(action & a);
 	int write(action & a);
 	void restore();
+	int log_action(const action &a);
 
 	/*
 	 * this transaction receive commit message from another transaction(t)
