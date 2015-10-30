@@ -899,35 +899,35 @@ void log_file::check_log_block(log_block & lb) {
 	}
 }
 
-int log_file::rfind(timestamp ts, list<action> & actions) {
-	int r = NOT_FIND_TRANSACTION;
-	log_block lb;
-	log_block::dir_entry de;
-	// if find the <start ts> return
-	r = tail();
-	if (r) {
-		int bs = _header.block_size;
-		char * buff = new char[bs];
-		while (pre_block(buff)) {
-			lb.ref_buffer(buff, bs);
-			lb.tail();
-			while (lb.has_pre()) {
-				lb.pre_entry(de);
-				if (de.ts == ts) {
-					if (de.get_type() == t_start_item) {
-						return FIND_TRANSACTION_START;
-					} else if (de.get_type() == t_data_item) {
-						action a;
-						r = CONTINUE_TO_FIND;
-						lb.copy_data(de, a);
-						actions.push_back(a);
-					}
-				}
-			}
-		}
-	}
-	return r;
-}
+//int log_file::rfind(timestamp ts, list<action> & actions) {
+//	int r = NOT_FIND_TRANSACTION;
+//	log_block lb;
+//	log_block::dir_entry de;
+//	// if find the <start ts> return
+//	r = tail();
+//	if (r) {
+//		int bs = _header.block_size;
+//		char * buff = new char[bs];
+//		while (pre_block(buff)) {
+//			lb.ref_buffer(buff, bs);
+//			lb.tail();
+//			while (lb.has_pre()) {
+//				lb.pre_entry(de);
+//				if (de.ts == ts) {
+//					if (de.get_type() == t_start_item) {
+//						return FIND_TRANSACTION_START;
+//					} else if (de.get_type() == t_data_item) {
+//						action a;
+//						r = CONTINUE_TO_FIND;
+//						lb.copy_data(de, a);
+//						actions.push_back(a);
+//					}
+//				}
+//			}
+//		}
+//	}
+//	return r;
+//}
 
 int log_file::rfind(timestamp ts, list<log_block::log_entry> & entries) {
 	int r = NOT_FIND_TRANSACTION;
@@ -1329,16 +1329,16 @@ int log_mgr::log_start(timestamp ts) {
 	return r;
 }
 
-int log_mgr::log_action(timestamp ts, const action & a) {
-	int r = curr_log_file.append(ts, a);
-	if (r == EXCEED_LOGFILE_LIMITATION) {
-		r = renew_log_file();
-		if (r) {
-			return curr_log_file.append(ts, a);
-		}
-	}
-	return r;
-}
+//int log_mgr::log_action(timestamp ts, const action & a) {
+//	int r = curr_log_file.append(ts, a);
+//	if (r == EXCEED_LOGFILE_LIMITATION) {
+//		r = renew_log_file();
+//		if (r) {
+//			return curr_log_file.append(ts, a);
+//		}
+//	}
+//	return r;
+//}
 
 int log_mgr::log_entry(timestamp ts, const log_block::log_entry & e) {
 	int r = curr_log_file.append(ts, e);
@@ -1373,34 +1373,34 @@ int log_mgr::log_abort(timestamp ts) {
 	return r;
 }
 
-int log_mgr::rfind(timestamp ts, list<action> & actions) {
-	int r = NOT_FIND_TRANSACTION;
-	if (sync_police == log_sync_police::immeidate) {
-		r = curr_log_file.rfind(ts, actions);
-
-		if (r != FIND_TRANSACTION_START) {
-			ulong id = log_file_seq;
-			string pathname;
-			log_file lf;
-			while (--id <= chk_file_seq) {
-				pathname = mk_log_name(id);
-				if (sio::exist_file(pathname)) {
-					if (lf.open(pathname)) {
-						r = lf.irfind(ts, actions);
-						lf.close();
-						if (r == FIND_TRANSACTION_START) {
-							return r;
-						}
-					} else {
-						return LOG_STREAM_ERROR;
-					}
-				}
-			}
-		}
-	}
-
-	return r;
-}
+//int log_mgr::rfind(timestamp ts, list<action> & actions) {
+//	int r = NOT_FIND_TRANSACTION;
+//	if (sync_police == log_sync_police::immeidate) {
+//		r = curr_log_file.rfind(ts, actions);
+//
+//		if (r != FIND_TRANSACTION_START) {
+//			ulong id = log_file_seq;
+//			string pathname;
+//			log_file lf;
+//			while (--id <= chk_file_seq) {
+//				pathname = mk_log_name(id);
+//				if (sio::exist_file(pathname)) {
+//					if (lf.open(pathname)) {
+//						r = lf.irfind(ts, actions);
+//						lf.close();
+//						if (r == FIND_TRANSACTION_START) {
+//							return r;
+//						}
+//					} else {
+//						return LOG_STREAM_ERROR;
+//					}
+//				}
+//			}
+//		}
+//	}
+//
+//	return r;
+//}
 
 int log_mgr::rfind(timestamp ts, list<log_block::log_entry> & entries) {
 	int r = NOT_FIND_TRANSACTION;

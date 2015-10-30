@@ -311,7 +311,7 @@ public:
 
 	int append_start(timestamp ts);
 	int append(timestamp ts, const log_block::log_entry & e);
-	int append(timestamp ts, const action& a); /* @deprecated */
+	//int append(timestamp ts, const action& a); /* @deprecated */
 	int append_commit(timestamp ts);
 	int append_abort(timestamp ts);
 
@@ -390,7 +390,7 @@ public:
 
 	int log_start(timestamp ts);
 	/* @deprecated, @see log_entry */
-	int log_action(timestamp ts, const action & a);
+//	int log_action(timestamp ts, const action & a);
 	int log_entry(timestamp ts, const log_block::log_entry & e);
 	int log_commit(timestamp ts);
 	int log_abort(timestamp ts);
@@ -400,7 +400,7 @@ public:
 	 * that an transaction need to be roll back
 	 * @deprecated, @see rfind(timestamp, list<log_block::log_entry>);
 	 */
-	int rfind(timestamp ts, list<action> & actions);
+//	int rfind(timestamp ts, list<action> & actions);
 
 	int rfind(timestamp ts, list<log_block::log_entry> & entries);
 
