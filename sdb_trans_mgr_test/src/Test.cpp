@@ -34,6 +34,7 @@ void before() {
 	smgr->remove_files();
 	smgr->load();
 
+
 	tmgr = &sdb::enginee::LOCAL_TRANS_MGR;
 	tmgr->open();
 
@@ -41,6 +42,7 @@ void before() {
 	smgr->assign_segment(seg);
 	dif.seg_id = seg->get_id();
 	seg->assign_block(blk);
+	std::cout << "assign row and buffer" << std::endl;
 	dif.row_idx = blk.assign_row(rl);
 	dif.blk_off = blk.offset;
 	n_buff = new char[rl];
@@ -89,7 +91,7 @@ void trans_write_read() {
 	t2.execute();
 	ASSERT(t2.status() == trans_status::COMMITTED);
 	auto it = t2.get_actions().begin();
-	ASSERT(it->rl == rl && memcmp(it->rd, n_buff, rl) == 0);
+	ASSERT(it->len == rl && memcmp(it->buff, n_buff, rl) == 0);
 }
 
 void trans_double() {
@@ -105,7 +107,7 @@ void trans_double() {
 	a.dif = &dif;
 	a.seq = 0;
 	a.op = action_op::WRITE;
-	a.create(n_buff1, rl);
+	a.ref(n_buff1, rl);
 	t1.add_action(a);
 
 	char *n_buff2 = new char[rl];
@@ -114,7 +116,8 @@ void trans_double() {
 	}
 
 	action b = a;
-	b.update(n_buff2, rl, n_buff1, rl);
+	b.op = action_op::UPDATE;
+	b.ref(n_buff2, rl);
 	t2.add_action(b);
 	t1.execute();
 	t2.execute();
@@ -142,8 +145,8 @@ void trans_abort() {
 
 	action a;
 	a.dif = &dif;
-	a.op = action_op::WRITE;
-	a.update(n_buff, n_len, o_buff, o_len);
+	a.op = action_op::UPDATE;
+	a.ref(n_buff, n_len);
 
 	transaction t(false);
 	t.add_action(a);
