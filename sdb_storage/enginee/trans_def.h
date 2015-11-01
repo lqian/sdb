@@ -25,7 +25,7 @@ using namespace std;
 using namespace sdb::common;
 
 enum action_op {
-	WRITE, UPDATE, READ
+	READ, WRITE, UPDATE,  DELETE
 };
 
 enum commit_flag {

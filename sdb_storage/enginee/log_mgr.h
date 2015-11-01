@@ -155,7 +155,7 @@ public:
 	struct log_entry {
 		data_item * di;
 		bool assign_di = false;
-		char flag = 0;
+		uchar flag = 0;
 		ushort seq;
 		/*
 		 * writing data and length, include old data

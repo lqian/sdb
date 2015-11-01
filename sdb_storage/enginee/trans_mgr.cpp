@@ -28,13 +28,16 @@ action::~action() {
 
 action & action::operator=(const action & an) {
 	if (&an != this) {
+		dif = an.dif;
 		seq = an.seq;
 		op = an.op;
 		len = an.len;
 		ref_flag = an.ref_flag;
-		if (!ref_flag) {
+		if (!ref_flag && buff) {
 			buff = new char[len];
 			memcpy(buff, an.buff, len);
+		} else {
+			buff = an.buff;
 		}
 	}
 	return *this;
@@ -43,14 +46,16 @@ action & action::operator=(const action & an) {
 action::action(const action & an) {
 	seq = an.seq;
 	op = an.op;
+	dif = an.dif;
 	len = an.len;
 	ref_flag = an.ref_flag;
 
-	if (!ref_flag) {
+	if (!ref_flag && buff) {
 		buff = new char[len];
 		memcpy(buff, an.buff, len);
+	} else {
+		buff = an.buff;
 	}
-
 }
 
 void transaction::begin() {
@@ -60,6 +65,11 @@ void transaction::begin() {
 void transaction::execute() {
 	if (ts == 0) {
 		tm->assign_trans(this);
+	}
+
+	if(lm->log_start(ts)<0) {
+		tst = FAILED;
+		return ;
 	}
 
 	tst = ACTIVE;
@@ -118,6 +128,7 @@ int transaction::log_action(const action & a) {
 	if (r >= 0) {
 		log_block::log_entry le;
 		le.di = a.dif;
+		le.seq = a.seq;
 		if (a.op == UPDATE) {
 			char_buffer obuff;
 			int r = sm->get_row(a.dif, obuff);
@@ -138,7 +149,7 @@ void transaction::commit() {
 	if (tst == PARTIALLY_COMMITTED) {
 		if (lm->log_commit(ts) >= 0) {
 			for (auto it = actions.begin(); it != actions.end(); it++) {
-				if (it->op == action_op::WRITE) {
+				if (it->op >= action_op::WRITE) {
 					it->dif->cmt_flag = commit_flag::trans_leave;
 				}
 			}
@@ -235,8 +246,8 @@ void transaction::restore() {
 		//}
 
 		for (auto eit = entries.begin();
-				ait != actions.rend() && eit != entries.begin(); ait++) {
-			if (ait->op == action_op::WRITE) {
+				ait != actions.rend() && eit != entries.end(); ait++) {
+			if (ait->op >= action_op::UPDATE) {
 				ait->dif->mtx.lock();
 				if (ts >= ait->dif->wts) {
 					if (ait->seq == eit->seq) {

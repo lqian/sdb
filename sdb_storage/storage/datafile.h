@@ -833,7 +833,7 @@ struct mem_data_block: data_block {
 	 * the header start position. the off parameter denotes the data block offset beh-
 	 * hind segment header.
 	 */
-	inline virtual void ref(int off, char *buff, short w_len) {
+	inline virtual void ref(uint off, char *buff, ushort w_len) {
 		offset = off;
 		length = w_len - mem_block_head_size;
 		header = (head *) buff;

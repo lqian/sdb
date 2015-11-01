@@ -387,10 +387,9 @@ int log_block::add_log_entry(timestamp ts, const log_entry & le) {
 		de.length = le.wl;
 		de.offset = _header.writing_data_off - le.wl;
 
-		char_buffer buff(DIRCTORY_ENTRY_LENGTH);
+		char_buffer buff(buffer + weo, DIRCTORY_ENTRY_LENGTH, true);
 		de.write_to(buff);
 
-		memcpy(buffer + weo, buff.data(), DIRCTORY_ENTRY_LENGTH);
 		char * write_buffer = buffer + de.offset;
 		memcpy(write_buffer, le.wd, le.wl);
 
@@ -938,7 +937,7 @@ int log_file::rfind(timestamp ts, list<log_block::log_entry> & entries) {
 	if (r) {
 		int bs = _header.block_size;
 		char * buff = new char[bs];
-		while (pre_block(buff)) {
+		while (pre_block(buff) == sdb::SUCCESS) {
 			lb.ref_buffer(buff, bs);
 			lb.tail();
 			while (lb.has_pre()) {
@@ -950,6 +949,7 @@ int log_file::rfind(timestamp ts, list<log_block::log_entry> & entries) {
 						log_block::log_entry le;
 						r = CONTINUE_TO_FIND;
 						lb.copy_data(de, le);
+						le.seq = de.seq;
 						entries.push_back(le);
 					}
 				}

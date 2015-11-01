@@ -42,7 +42,6 @@ void before() {
 	smgr->assign_segment(seg);
 	dif.seg_id = seg->get_id();
 	seg->assign_block(blk);
-	std::cout << "assign row and buffer" << std::endl;
 	dif.row_idx = blk.assign_row(rl);
 	dif.blk_off = blk.offset;
 	n_buff = new char[rl];
@@ -135,7 +134,7 @@ void trans_abort() {
 	int o_len = 10;
 	char * o_buff = new char[o_len];
 	for (int i = 0; i < o_len; i++) {
-		o_buff[i] = 0xF0 + i;
+		o_buff[i] = 'a' + i;
 	}
 	int n_len = rl * 2;
 	char * n_buff = new char[n_len];
@@ -150,6 +149,7 @@ void trans_abort() {
 
 	transaction t(false);
 	t.add_action(a);
+//	t.execute();
 	tmgr->submit(&t);
 	std::this_thread::sleep_for(std::chrono::seconds(1));
 	ASSERT(t.status() == trans_status::PARTIALLY_COMMITTED);
@@ -162,6 +162,7 @@ void trans_abort() {
 	t.abort();
 	// observe the old value
 	ASSERT(t.status() == trans_status::ABORTED);
+	buff.reset();
 	r = smgr->get_row(dif, buff);
 	ASSERT(buff.size() == o_len && r == sdb::SUCCESS);
 	ASSERT(memcmp(buff.data(), o_buff, rl) == 0);
@@ -171,9 +172,11 @@ void trans_abort() {
  * a transaction is waiting the transaction ahead to commit
  */
 void trans_wait() {
+	n_buff = "0123456789";
 	action a;
 	a.dif = &dif;
 	a.op = action_op::WRITE;
+	a.ref(n_buff, rl);
 
 	transaction t(false), w;
 	t.add_action(a);
