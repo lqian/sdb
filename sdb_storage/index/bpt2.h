@@ -27,6 +27,7 @@ using namespace sdb::common;
 using namespace sdb::enginee;
 using namespace sdb::storage;
 
+const int NODE_DIR_ENTRY_LENGTH = 18;
 const int VAL_LEN = 14;
 
 const int NODE_REMOVE_BIT = 15;
@@ -37,6 +38,8 @@ const int PAGE_REMOVE_BIT = 15;
 const int PAGE_PARENT_BIT = 14;
 
 const int LNODE_REMOVE_BIT = 7;
+
+const int INVALID_SEGMENT_ID = -0x600;
 
 void set_flag(char & c, const int bit);
 void remove_flag(char & c, const int bit);
@@ -77,6 +80,12 @@ struct _node {
 		ushort s = ~(1 << bit);
 		header->flag &= s;
 	}
+
+	inline bool test_flag(const int & bit) {
+		ushort s = 1 << bit;
+		return header->flag & s == s;
+	}
+
 	virtual void remove() {
 		clean_flag(NODE_REMOVE_BIT);
 	}
@@ -132,7 +141,7 @@ struct _page: data_block {
 	void set_parent(const _inode * n);
 };
 
-struct fs_page: _page {
+struct fs_page: virtual _page {
 	struct head: _page::head {
 		ushort node_count;
 		ushort node_size;
@@ -159,6 +168,26 @@ struct fs_page: _page {
 
 	int count() {
 		return header->node_count;
+	}
+};
+
+struct vs_page: virtual _page {
+	struct head: _page::head {
+		uint dir_write_offset;
+		uint data_write_offset;
+	}*header = nullptr;
+	virtual inline void init_header() {
+		header->flag = 0;
+		header->blk_magic = block_magic;
+		time(&(header->create_time));
+	}
+
+	virtual int assign_node(_node * n);
+	virtual int read_node(ushort idx, _node *);
+	virtual int remove_node(ushort idx);
+
+	int count() {
+		return header->dir_write_offset / NODE_DIR_ENTRY_LENGTH;
 	}
 };
 
@@ -189,9 +218,31 @@ struct fs_inode: virtual _inode {
 	}
 };
 
-// fixed size node page
-struct fs_ipage: virtual fs_page {
+struct _ipage: virtual _page {
 
+};
+
+// fixed size node page
+struct fs_ipage: virtual fs_page, virtual _ipage {
+	virtual inline void ref(uint off, char *buff, ushort w_len) {
+		offset = off;
+		length = w_len - sizeof(head);
+		header = (head *) buff;
+		header->node_count = 0;
+		buffer = buff + sizeof(fs_page::head);
+		ref_flag = true;
+	}
+};
+
+struct vs_ipage: virtual vs_page, virtual _ipage {
+	virtual inline void ref(uint off, char *buff, ushort w_len) {
+		offset = off;
+		length = w_len - sizeof(fs_page::head);
+		header = (head *) buff;
+//			header->node_count = 0;
+		buffer = buff + sizeof(fs_page::head);
+		ref_flag = true;
+	}
 };
 
 struct _lpage: virtual _page {
@@ -261,17 +312,16 @@ private:
 	bool fixed_size = true;
 	_key key;
 
-	seg_mgr * smgr;
+	seg_mgr * sm;
 	segment * first_seg;
 	_page * root;
 	_lpage *flp, *llp; // first leaf page and last leaf page
 
+	bool loaded = false;
+
 	int remove_node(const data_item *di); // a data item represent a index entry
 
 	mutex som_mtx; // structure of modification (page merge, split, borrow) mutex
-
-public:
-	bpt2();
 
 	/*
 	 * assign a data_item for the node and fill seg_id, blk_off, row_idx to the data_item
@@ -279,10 +329,20 @@ public:
 	 */
 	int assign_node(_node *n, data_item *di);
 	int froze(const data_item *di);
-	int add_node(const char * kb, const int &len, const data_item * di);
-	int add_node(_node * n);
+
+public:
+	bpt2();
+	bpt2(ulong obj_id);
+	virtual ~bpt2();
+
+	int load();
+
+	int load(segment * fs, _page * r);
+
+	int load(ulong first_seg_id, uint root_blk_off);
+
+	int add_node(_lnode * n);
 	int remove_node(_node *n);
-	int remove_node(const char * kb, const int &len);
 
 	inline bool is_fixed() {
 		return fixed_size;
@@ -290,8 +350,6 @@ public:
 
 	inline void set_fixed(bool f = false) {
 		fixed_size = f;
-	}
-	virtual ~bpt2() {
 	}
 
 	inline const _key& get_key() const {
@@ -302,8 +360,8 @@ public:
 		this->key = key;
 	}
 
-	inline void set_seg_mgr( seg_mgr * p) {
-		smgr = p;
+	inline void set_seg_mgr(seg_mgr * p) {
+		sm = p;
 	}
 };
 

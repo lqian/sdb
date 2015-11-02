@@ -127,11 +127,58 @@ int fs_page::remove_node(ushort idx) {
 	return r;
 }
 
-
-bpt2::bpt2() {
-	// TODO Auto-generated constructor stub
+int vs_page::assign_node(_node * n) {
+	return 0;
+}
+int vs_page::read_node(ushort idx, _node *) {
+	return 0;
+}
+int vs_page::remove_node(ushort idx) {
+	return 0;
 }
 
+bpt2::bpt2() {
+	sm = &LOCAL_SEG_MGR;
+}
+
+bpt2::bpt2(ulong obj_id) {
+	this->obj_id = obj_id;
+	sm = &LOCAL_SEG_MGR;
+}
+
+bpt2::~bpt2() {
+	if (loaded) {
+		delete root;
+	}
+}
+
+int bpt2::load() {
+	return load(first_seg, root);
+}
+
+int bpt2::load(ulong first_seg_id, uint root_blk_off) {
+	int r = sdb::SUCCESS;
+	first_seg = sm->find_segment(first_seg_id);
+	if (first_seg) {
+		root = fixed_size ? (_page *) new fs_ipage : (_page *) new vs_ipage;
+		root->offset = root_blk_off;
+		r = first_seg->read_block(root);
+	} else {
+		r = INVALID_SEGMENT_ID;
+	}
+
+	if (r == sdb::SUCCESS) {
+		loaded = true;
+	}
+
+	return r;
+}
+
+int bpt2::load(segment *fs, _page *r) {
+	first_seg = fs;
+//	root = r;
+	loaded = true;
+}
 
 } /* namespace tree */
 } /* namespace sdb */
