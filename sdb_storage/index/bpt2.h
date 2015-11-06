@@ -28,7 +28,13 @@
  *  call leaf page, abb _lpage.
  *
  * 2) an index node has left page that all node key is less than parent index node key
- * and right page that all node key is equal or greater than the page index node key.
+ *  or right page that all node key is equal or greater than the page index node key.
+ * 	in the index page, only the last index node has both left page and right page. it previous
+ * 	index node only has left page. where is
+ * 		in[i] < i[n+1],
+ * 		k[i] ={k1, k2,, kn} belong i[i]->left_page,
+ * 		k[i+1] = {k1, k2, kn} belong i[i+1]->left_page
+ * 	so, any element k < k', where k in k[i], k' in k[i+1], k < i[n], k' >= i[n], k'< i[n+1]
  */
 
 namespace sdb {
@@ -38,6 +44,7 @@ using namespace sdb::common;
 using namespace sdb::enginee;
 using namespace sdb::storage;
 
+const int VS_PAGE_DIR_ENTRY_LENGTH = 3;
 const int NODE_DIR_ENTRY_LENGTH = 18;
 const int VAL_LEN = 14;
 
@@ -46,26 +53,22 @@ const int NODE_LEFT_PAGE_BIT = 14;
 const int NODE_RIGHT_PAGE_BIT = 13;
 
 const int PAGE_REMOVE_BIT = 15;
-const int PAGE_PARENT_BIT = 14;
-const int PAGE_LEAF_BIT = 13;
+const int PAGE_HAS_PARENT_BIT = 14;
+const int PAGE_HAS_LEAF_BIT = 13;
 const int PAGE_FULL_BIT = 12;
 
 const int LNODE_REMOVE_BIT = 7;
 
-const int INVALID_SEGMENT_ID = -0x600;
-
-void set_flag(char & c, const int bit);
-void remove_flag(char & c, const int bit);
-
-void set_flag(ushort &s, const int bit);
-void remove_flag(ushort &s, const int bit);
-void set_flag(short &s, const int bit);
-void remove_flag(short &s, const int bit);
+const int INVALID_INDEX_SEGMENT_ID = -0x600;
 
 struct _page;
 struct _ipage;
 struct _lpage;
+struct fs_page;
+struct vs_page;
+struct _node;
 struct _inode;
+struct _lnode;
 
 enum key_test {
 	key_invalid_test = 0,
@@ -79,6 +82,22 @@ enum key_test {
 enum page_type {
 	pt_fs_ipage, pt_vs_ipage, pt_vs_lpage, pt_fs_lpage
 };
+
+void set_flag(char & c, const int bit);
+void remove_flag(char & c, const int bit);
+
+void set_flag(ushort &s, const int bit);
+void remove_flag(ushort &s, const int bit);
+void set_flag(short &s, const int bit);
+void remove_flag(short &s, const int bit);
+
+key_test test(_page *p, _key &k, _node &in);
+
+_page * new_page(_page * sibling, bool fixed_size = true);
+_lpage * new_lpage(bool fixed_size = true);
+_ipage * new_ipage(bool fixed_size = true);
+_lnode * new_lnode(bool fixed_size = true);
+_inode * new_inode(bool fixed_size = true);
 
 struct _node {
 	struct head {
@@ -127,195 +146,29 @@ struct _node {
 	}
 };
 
-struct _page: data_block {
-	struct head: data_block::head {
-		uint parent_in_off;
-		uint parent_ipg_off;
-		ulong parent_pg_seg_id;
-		ushort active_node_count = 0;
-	}*header;
-
-	page_type type;
-	bool is_root = false;
-
-	virtual void ref(uint off, char * buff, ushort w_len)=0;
-	virtual int assign_node(_node * n)=0;
-	virtual int read_node(ushort idx, _node *)=0;
-	virtual int remove_node(ushort idx)=0;
-	virtual void sort_nodes()=0;
-	virtual void clean_nodes()=0;
-
-	/*
-	 * return the node count in the page, include deleted and active node
-	 */
-	virtual int count()=0;
-
-	virtual inline void init_header() {
-		header->flag = 0;
-		header->blk_magic = block_magic;
-		time(&(header->create_time));
-	}
-
-	inline void set_flag(const int& bit) {
-		ushort s = 1 << bit;
-		header->flag |= s;
-	}
-
-	inline void clean_flag(const int& bit) {
-		ushort s = ~(1 << bit);
-		header->flag &= s;
-	}
-
-	void set_parent(const _inode * n);
-
-	inline bool is_full() {
-		return test_flag(PAGE_FULL_BIT);
-	}
-};
-
-struct fs_page: virtual _page {
-	struct head: _page::head {
-		ushort node_count;
-		ushort node_size;
-	}*header = nullptr;
-
-	virtual void ref(uint off, char *buff, ushort w_len)=0;
-
-	virtual inline void init_header() {
-		header->flag = 0;
-		header->blk_magic = block_magic;
-		time(&(header->create_time));
-	}
-
-	virtual int assign_node(_node * n);
-	virtual int read_node(ushort idx, _node *);
-	virtual int remove_node(ushort idx);
-
-	inline int count() {
-		return header->node_count;
-	}
-};
-
-struct vs_page: virtual _page {
-	struct head: _page::head {
-		uint writing_entry_off;
-		uint writing_data_off;
-	}*header = nullptr;
-
-	virtual inline void init_header() {
-		header->flag = 0;
-		header->blk_magic = block_magic;
-		time(&(header->create_time));
-	}
-
-	virtual int assign_node(_node * n);
-	virtual int read_node(ushort idx, _node *);
-	virtual int remove_node(ushort idx);
-
-	inline int count() {
-		return header->writing_entry_off / NODE_DIR_ENTRY_LENGTH;
-	}
-};
-
-/*
- * a index node only has store key, left page offset and right page offset
- */
-struct _inode: virtual _node {
-	struct head: virtual _node::head {
-		uint left_pg_off;
-		uint right_pg_off;
-		ulong left_pg_seg_id;
-		ulong right_pg_seg_id;
-	}* header = nullptr;
-
-	_page * left_page = nullptr;
-	_page * right_page = nullptr;
-
-	void set_left_page(_page * p);
-	void set_right_page(_page *p);
-};
-
-struct fs_inode: virtual _inode {
-	void ref(uint off, char *buff, ushort len) {
-		header = (head *) buff;
-		offset = off;
-		this->buffer = buff + sizeof(head);
-		this->len = len - sizeof(head);
-	}
-};
-
-struct vs_inode: virtual _inode {
-	void ref(uint off, char *buff, ushort len);
-};
-
-struct _ipage: virtual _page {
-	key_test test(_key & k, _inode & in);
-};
-
-// fixed size node page
-struct fs_ipage: fs_page, virtual _ipage {
-	virtual inline void ref(uint off, char *buff, ushort w_len) {
-		offset = off;
-		length = w_len - sizeof(head);
-		header = (head *) buff;
-		header->node_count = 0;
-		header->active_node_count = 0;
-		buffer = buff + sizeof(head);
-		ref_flag = true;
-	}
-
-	void sort_nodes();
-
-	virtual void clean_nodes();
-};
-
-struct vs_ipage: virtual vs_page, virtual _ipage {
-	virtual inline void ref(uint off, char *buff, ushort w_len) {
-		offset = off;
-		length = w_len - sizeof(head);
-		header = (head *) buff;
-		buffer = buff + sizeof(head);
-		ref_flag = true;
-	}
-
-	void sort_nodes();
-	virtual void clean_nodes();
-};
-
-struct _lpage: virtual _page {
-	virtual void ref(uint off, char * buff, ushort w_len)=0;
-	virtual int assign_node(_node * n) =0;
-	virtual int read_node(ushort idx, _node *)=0;
-	virtual int remove_node(ushort idx) =0;
-	virtual int count() =0;
-	virtual void clean_nodes()=0;
-};
-
 // leaf node,
 struct _lnode: virtual _node {
 	struct head {
 		char flag;
 	}*header;
 
-	char * buff;  // include key and value
-	int len;
 	inline void write_val(const _val &v) {
-		memcpy(buff + len - VAL_LEN, v.buff, VAL_LEN);
+		memcpy(buffer + len - VAL_LEN, v.buff, VAL_LEN);
 	}
 	inline void write_val(const _val *v) {
-		memcpy(buff + len - VAL_LEN, v->buff, VAL_LEN);
+		memcpy(buffer + len - VAL_LEN, v->buff, VAL_LEN);
 	}
 	inline void read_key(_key &k) {
-		k.ref(buff, len - VAL_LEN);
+		k.ref(buffer, len - VAL_LEN);
 	}
 	void read_key(_key *k) {
-		k->ref(buff, len - VAL_LEN);
+		k->ref(buffer, len - VAL_LEN);
 	}
 	inline void read_val(_val & v) {
-		v.ref(buff + len - VAL_LEN, VAL_LEN);
+		v.ref(buffer + len - VAL_LEN, VAL_LEN);
 	}
 	inline void read_val(_val *v) {
-		v->ref(buff + len - VAL_LEN, VAL_LEN);
+		v->ref(buffer + len - VAL_LEN, VAL_LEN);
 	}
 
 	virtual void remove() {
@@ -328,43 +181,236 @@ struct fs_lnode: _lnode {
 	inline virtual void ref(uint off, char *buff, ushort w_len) {
 		this->offset = off;
 		header = (head *) buff;
-		this->buff = buff + sizeof(head);
+		this->buffer = buff + sizeof(head);
 		this->len = w_len - sizeof(head);
 	}
 };
 
 //variant size leaf node
 struct vs_lnode: _lnode {
-	inline virtual void ref(uint off, char *buff, ushort w_len);
+	inline virtual void ref(uint off, char *buff, ushort w_len) {
+		this->offset = off;
+		header = (head *) buff;
+		this->buffer = buff + sizeof(head);
+		this->len = w_len - sizeof(head);
+	}
+};
+
+/*
+ * a index node only has store key, left page offset and right page offset
+ */
+struct _inode: virtual _node {
+	struct head: _node::head {
+		uint left_pg_off;
+		uint right_pg_off;
+		ulong left_pg_seg_id;
+		ulong right_pg_seg_id;
+	}* header = nullptr;
+
+	_page * left_page = nullptr;
+	_page * right_page = nullptr;
+
+	virtual void ref(uint off, char * buff, ushort w_len) {
+		this->offset = off;
+		header = (head *) buff;
+		this->buffer = buff + sizeof(head);
+		this->len = w_len - sizeof(head);
+
+	}
+	void set_left_page(_page * p);
+	void set_right_page(_page *p);
+};
+
+struct fs_inode: virtual _inode {
+	void ref(uint off, char *buff, ushort len) {
+		header = (head *) buff;
+		offset = off;
+		this->buffer = buff + sizeof(head);
+		this->len = len - sizeof(head);
+	}
+
+};
+
+struct vs_inode: virtual _inode {
+	void ref(uint off, char *buff, ushort len) {
+
+	}
+};
+
+struct _page: virtual data_block {
+	struct head: data_block::head {
+		uint parent_in_idx;
+		uint parent_ipg_off;
+		ulong parent_pg_seg_id;
+		ushort active_node_count = 0;
+	}*header;
+
+	page_type type;
+
+	virtual int assign_node(_node * n)=0;
+	virtual int read_node(ushort idx, _node *in)=0;
+	virtual int remove_node(ushort idx)=0;
+	virtual void sort_nodes()=0;
+	virtual void clean_nodes()=0;
+
+	/*
+	 * return the node count in the page, include deleted and active node
+	 */
+	virtual int count()=0;
+
+	virtual inline void clean_flag(const int& bit) {
+		ushort s = ~(1 << bit);
+		header->flag &= s;
+	}
+
+	virtual void set_parent(const _inode * n);
+
+	virtual inline bool is_full() {
+		return test_flag(PAGE_FULL_BIT);
+	}
+
+	virtual inline bool has_leaf() {
+		return test_flag(PAGE_HAS_LEAF_BIT);
+	}
+
+	virtual inline bool has_parent() {
+		return test_flag(PAGE_HAS_PARENT_BIT);
+	}
+};
+
+struct fs_page: virtual _page {
+	struct head: _page::head {
+		ushort node_count;
+		ushort node_size;
+	}*header = nullptr;
+
+	int assign_node(fs_page * p, _node *);
+	int read_node(fs_page *p, ushort idx, _node *in);
+	int remove_node(fs_page *p, ushort idx);
+	void clean_node(fs_page *p);
+	void sort_nodes(fs_page *p);
+	void init_header(fs_page *p);
+};
+
+struct vs_page: virtual _page {
+	struct head: _page::head {
+		uint writing_entry_off;
+		uint writing_data_off;
+	}*header = nullptr;
+
+	int assign_node(vs_page * p, _node *);
+	int read_node(vs_page *p, ushort idx, _node *in);
+	int remove_node(vs_page *p, ushort idx);
+	void clean_node(vs_page *p);
+	void sort_nodes(vs_page *p);
+	void init_header(vs_page *p);
+};
+
+struct _ipage: virtual _page {
+
+};
+
+// fixed size node page
+struct fs_ipage: fs_page, virtual _ipage {
+	virtual void ref(uint off, char*buff, ushort w_len) {
+		offset = off;
+		length = w_len - sizeof(head);
+		header = (head *) buff;
+		buffer = buff + sizeof(head);
+		ref_flag = true;
+	}
+
+	virtual void init_header() {
+		fs_page::init_header(this);
+	}
+
+	virtual int assign_node(_node * n) {
+		return fs_page::assign_node(this, n);
+	}
+	virtual int read_node(ushort idx, _node *in) {
+		return fs_page::read_node(this, idx, in);
+	}
+	virtual int remove_node(ushort idx) {
+		return fs_page::remove_node(this, idx);
+	}
+	virtual void sort_nodes() {
+		return fs_page::sort_nodes(this);
+	}
+	virtual void clean_nodes() {
+		return fs_page::clean_node(this);
+	}
+
+	virtual int count() {
+		return header->node_count;
+	}
+};
+
+struct vs_ipage: vs_page, _ipage {
+	virtual inline void ref(uint off, char *buff, ushort w_len) {
+		offset = off;
+		length = w_len - sizeof(head);
+		header = (head *) buff;
+		buffer = buff + sizeof(head);
+		ref_flag = true;
+	}
+
+	void init_header() {
+		vs_page::init_header(this);
+	}
+
+	virtual int assign_node(_node * n) {
+		return vs_page::assign_node(this, n);
+	}
+	virtual int read_node(ushort idx, _node *in) {
+		return vs_page::read_node(this, idx, in);
+	}
+	virtual int remove_node(ushort idx) {
+		return vs_page::remove_node(this, idx);
+	}
+	virtual void sort_nodes() {
+		return vs_page::sort_nodes(this);
+	}
+	virtual void clean_nodes() {
+		return vs_page::clean_node(this);
+	}
+
+	virtual int count() {
+		return header->writing_entry_off / VS_PAGE_DIR_ENTRY_LENGTH;
+	}
+
+};
+
+struct _lpage: virtual _page {
+
 };
 
 /*
  * fixed size page that only contains fixed size leaf node
  */
 struct fs_lpage: virtual fs_page, virtual _lpage {
-	virtual void ref(uint off, char * buff, ushort w_len);
-	virtual int assign_node(_node * n);
-	virtual int read_node(ushort idx, _node *);
-	virtual int remove_node(ushort idx);
-	virtual int count();
-	virtual void sort_nodes();
-	virtual void clean_nodes();
+	void init_header() {
+		fs_page::init_header(this);
+	}
+	void ref(uint off, char * buff, ushort w_len);
+	int assign_node(_node * n);
+	int read_node(ushort idx, _node *);
+	int remove_node(ushort idx);
+	int count();
+	void sort_nodes();
+	void clean_nodes();
 };
 
-struct vs_lpage: virtual vs_page, virtual _lpage {
-	virtual void ref(uint off, char * buff, ushort w_len);
-	virtual int assign_node(_node * n);
-	virtual int read_node(ushort idx, _node *);
-	virtual int remove_node(ushort idx);
-	virtual void sort_nodes();
-
-	/*
-	 * return the node count in the page, include deleted and active node
-	 */
-	virtual int count();
-
-	virtual void clean_nodes();
-
+struct vs_lpage: vs_page, _lpage {
+	void init_header() {
+		vs_page::init_header(this);
+	}
+	void ref(uint off, char * buff, ushort w_len);
+	int assign_node(_node * n);
+	int read_node(ushort idx, _node *);
+	int remove_node(ushort idx);
+	int count();
+	void sort_nodes();
+	void clean_nodes();
 };
 
 class bpt2 {
@@ -388,11 +434,6 @@ private:
 
 	mutex som_mtx; // structure of modification (page merge, split, borrow) mutex
 
-	void create_lpage(_lpage *&p);
-	void create_ipage(_ipage *&p);
-	void craete_inode(_inode *&in);
-	void create_lnode(_lnode *&ln);
-
 	int assign_lpage(segment * seg, _lpage * & p);
 	int assign_ipage(segment *seg, _ipage * & p);
 
@@ -401,6 +442,9 @@ private:
 
 	int fetch_left_page(_inode *in, _page * p);
 	int fetch_right_page(_inode *in, _page * p);
+	int fetch_next_page(_page *p, _page *nxt);
+	int fetch_pre_page(_page *p, _page *pre);
+
 	int fetch_parent_inode(_page * p, _inode * in);
 	int fetch_parent_page(_page *p, _page *pp);
 
@@ -409,7 +453,7 @@ private:
 	 */
 	void split_2(_page * p, _page * half);
 	int find_page(_page *p, const _key &k, _lpage * lp, key_test & kt);
-	int add_node(_page *p, _lnode *ln);
+	int insert(_page *p, _key * k, _val * v = nullptr);
 
 public:
 
@@ -425,7 +469,8 @@ public:
 
 	int create(ulong first_seg_id);
 
-	int add_node(_lnode * n);
+	int insert(_key & k, _val &v);
+
 	int remove_node(_node *n);
 
 	inline bool is_fixed() {

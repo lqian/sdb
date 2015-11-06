@@ -39,6 +39,55 @@ void remove_flag(short &s, const int bit) {
 	s &= v;
 }
 
+key_test test(_page *p, _key &k, _node & in) {
+	_key ik;
+	int i = 0;
+	int nc = p->count();
+	for (; i < nc; i++) {
+		p->read_node(i, &in);
+		if (in.test_flag(NODE_REMOVE_BIT)) {
+			continue;
+		}
+		in.read_key(ik);
+		int c = k.compare(ik);
+		if (c == 0) {
+			return key_test::key_equal;
+		} else if (c < 0) {
+			return key_test::key_less;
+		} else if (c > 0) {
+			continue;
+		}
+	}
+
+	if (i == nc) {
+		return key_test::key_greater;
+	}
+}
+
+_page *new_page(_page * sibling, bool fixed_size) {
+	if (sibling->test_flag(PAGE_HAS_LEAF_BIT)) {
+		return fixed_size ?  (_page *) new fs_lpage : new vs_lpage;
+	} else {
+		return fixed_size ? (_page *) new fs_ipage : new vs_ipage;
+	}
+}
+
+_ipage * new_ipage(bool fixed_size) {
+	return fixed_size ? (_ipage *) new fs_ipage : new vs_ipage;
+}
+
+_lpage * new_lpage(bool fixed_size) {
+	return fixed_size ? (_lpage *) new fs_lpage : new vs_lpage;
+}
+
+_lnode * new_lnode(bool fixed_size) {
+	return fixed_size ? (_lnode *) new fs_lnode : new vs_lnode;
+}
+
+_inode * new_inode(bool fixed_size) {
+	return fixed_size ? (_inode *) new fs_inode : new vs_inode;
+}
+
 void _val::ref(char *buff, int len) {
 	this->buff = buff;
 	this->len = len;
@@ -82,100 +131,173 @@ void _inode::set_right_page(_page *p) {
 }
 
 void _page::set_parent(const _inode * n) {
-	header->parent_in_off = n->offset;
+	header->parent_in_idx = n->offset;
 	header->parent_ipg_off = n->cp->offset;
 	header->parent_pg_seg_id = n->cp->seg->get_id();
-	sdb::index::set_flag(header->flag, PAGE_PARENT_BIT);
+	set_flag(PAGE_HAS_PARENT_BIT);
 }
 
-int fs_page::assign_node(_node *n) {
-	int r = header->node_count;
-	int ns = header->node_size;
-	int off = header->node_count * ns;
-	if (off + ns <= length) {
-		n->ref(off, buffer + off, ns);
-		header->node_count++;
-		header->active_node_count++;
+int fs_page::assign_node(fs_page *p, _node *n) {
+	int r = p->header->node_count;
+	int ns = p->header->node_size;
+	int off = p->header->node_count * ns;
+	if (off + ns <= p->length) {
+		n->ref(off, p->buffer + off, ns);
+		p->header->node_count++;
+		p->header->active_node_count++;
 	} else {
-		set_flag(PAGE_FULL_BIT);
+		p->set_flag(PAGE_FULL_BIT);
 		r = sdb::FAILURE;
 	}
 	return r;
 }
 
-int fs_page::read_node(ushort idx, _node *n) {
-	int r = header->node_count;
-	int ns = header->node_size;
-	int off = header->node_count * ns;
-	if (off <= length) {
-		n->ref(offset, buffer + off, ns);
+int fs_page::read_node(fs_page *p, ushort idx, _node *n) {
+	int r = p->header->node_count;
+	int ns = p->header->node_size;
+	int off = p->header->node_count * ns;
+	if (off <= p->length) {
+		n->ref(off, p->buffer + off, ns);
 	} else {
 		r = sdb::FAILURE;
 	}
 	return r;
 }
 
-int fs_page::remove_node(ushort idx) {
-	int r = header->node_count;
-	int ns = header->node_size;
-	int off = header->node_count * ns;
-	if (off <= length) {
+int fs_page::remove_node(fs_page *p, ushort idx) {
+	int r = p->header->node_count;
+	int ns = p->header->node_size;
+	int off = p->header->node_count * ns;
+	if (off <= p->length) {
 		fs_inode n;
-		n.ref(off, buffer + off, ns);
+		n.ref(off, p->buffer + off, ns);
 		n.remove();
-		header->active_node_count--;
+		p->header->active_node_count--;
 	} else {
 		r = sdb::FAILURE;
 	}
 	return r;
 }
 
-int vs_page::assign_node(_node * n) {
-	int weo = header->writing_entry_off;
-	int wdo = header->writing_data_off;
-	if (weo + n->len + NODE_DIR_ENTRY_LENGTH < wdo) {
-		header->writing_entry_off += NODE_DIR_ENTRY_LENGTH;
-		header->writing_data_off -= n->len;
-		n->ref(weo, buffer + weo, n->len);
-		header->active_node_count++;
-		return weo;
+void fs_page::clean_node(fs_page *p) {
+	p->header->node_count = 0;
+	p->header->active_node_count = 0;
+}
+
+void fs_page::sort_nodes(fs_page *p) {
+
+}
+
+void fs_page::init_header(fs_page *p) {
+
+}
+/*
+ * for variant node, its length must be clear
+ */
+int vs_page::assign_node(vs_page *p, _node * n) {
+	int weo = p->header->writing_entry_off;
+	int wdo = p->header->writing_data_off;
+	int r = wdo;
+	if (weo + n->len + VS_PAGE_DIR_ENTRY_LENGTH > wdo) {
+		p->set_flag(PAGE_FULL_BIT);
+		return sdb::FAILURE;
 	} else {
-		set_flag(PAGE_FULL_BIT);
-		return -1;
+		// write node's offset to directory
+		ushort off = wdo + n->len;
+		char_buffer cb(p->buffer + weo, VS_PAGE_DIR_ENTRY_LENGTH, true);
+		char c = 0;
+		cb << off << c;
+
+		//ref buffer for the node
+		p->header->writing_data_off -= n->len;
+		wdo += p->header->writing_entry_off += VS_PAGE_DIR_ENTRY_LENGTH;
+		p->header->active_node_count++;
+		n->ref(off, p->buffer + off, n->len);
+		return weo;
 	}
-}
-int vs_page::read_node(ushort idx, _node *) {
-	int weo = idx * NODE_DIR_ENTRY_LENGTH;
-	char_buffer buff(buffer + weo, NODE_DIR_ENTRY_LENGTH, true);
-	return 0;
-}
-int vs_page::remove_node(ushort idx) {
-	header->active_node_count--;
-	return 0;
 }
 
-key_test _ipage::test(_key &k, _inode & in) {
-	_key ik;
-	int i = 0;
-	for (; i < count(); i++) {
-		read_node(i, &in);
-		if (in.test_flag(NODE_REMOVE_BIT)) {
-			continue;
+int vs_page::read_node(vs_page *p, ushort idx, _node * n) {
+	int dir_len = VS_PAGE_DIR_ENTRY_LENGTH;
+	if (idx * dir_len < p->header->writing_entry_off) {
+		int weo = idx * dir_len;
+		char_buffer cb(p->buffer + weo, dir_len, true);
+		ushort off;
+		char c;
+		cb >> off >> c;
+		int len;
+		if (idx == 0) {
+			len = p->length - off;
+		} else {
+			cb.reset();
+			cb.ref_buff(p->buffer + weo + dir_len, dir_len);
+			ushort off2;
+			cb >> off2;
+			len = off - off2;
 		}
-		in.read_key(ik);
-		int c = k.compare(ik);
-		if (c == 0) {
-			return key_test::key_equal;
-		} else if (c < 0) {
-			return key_test::key_less;
-		} else if (c > 0) {
-			continue;
-		}
+		n->ref(off, p->buffer + off, len);
+	} else {
+		return sdb::FAILURE;
 	}
+}
 
-	if (i == count()) {
-		return key_test::key_greater;
+int vs_page::remove_node(vs_page *p, ushort idx) {
+	int r = sdb::SUCCESS;
+	_node *n =
+			p->test_flag(PAGE_HAS_LEAF_BIT) ?
+					(_node*) new fs_lnode : new vs_inode;
+	if (read_node(p, idx, n) >= 0) {
+		n->remove();
+	} else {
+		r = sdb::FAILURE;
 	}
+	delete n;
+	return r;
+}
+
+void vs_page::clean_node(vs_page *p) {
+	p->header->writing_entry_off = 0;
+	p->header->writing_data_off = p->length;
+}
+
+void vs_page::init_header(vs_page *p ) {
+
+}
+
+void vs_page::sort_nodes(vs_page *p) {
+
+}
+
+void fs_lpage::ref(uint off, char* buff, ushort w_len) {
+	offset = off;
+	length = w_len - sizeof(head);
+	header = (head *) buff;
+	buffer = buff + sizeof(head);
+	ref_flag = true;
+}
+
+int fs_lpage::assign_node(_node* n) {
+	return fs_page::assign_node(this, n);
+}
+
+int fs_lpage::read_node(ushort idx, _node* in) {
+	return fs_page::read_node(this, idx, in);
+}
+
+int fs_lpage::remove_node(ushort idx) {
+	return fs_page::remove_node(this, idx);
+}
+
+int fs_lpage::count() {
+	return header->node_count;
+}
+
+void fs_lpage::clean_nodes() {
+	return fs_page::clean_node(this);
+}
+
+void fs_lpage::sort_nodes() {
+	return fs_page::sort_nodes(this);
 }
 
 bpt2::bpt2() {
@@ -199,29 +321,21 @@ int bpt2::load(ulong first_seg_id, ulong last_seg_id, uint root_blk_off) {
 	if (first_seg) {
 		mem_data_block blk;
 		blk.offset = root_blk_off;
-		if (blk.test_flag(PAGE_LEAF_BIT)) {
-			if (fixed_size) {
-				root = new fs_ipage;
-			} else {
-				root = new vs_ipage;
-			}
+		if (blk.test_flag(PAGE_HAS_LEAF_BIT)) {
+			root = new_lpage(fixed_size);
 		} else {
-			if (fixed_size) {
-				root = new fs_lpage;
-			} else {
-				root = new vs_lpage;
-			}
+			root = new_ipage(fixed_size);
 		}
 		root->offset = root_blk_off;
 		r = first_seg->read_block(root);
 
 	} else {
-		r = INVALID_SEGMENT_ID;
+		r = INVALID_INDEX_SEGMENT_ID;
 	}
 
 	last_seg = sm->find_segment(last_seg_id);
 	if (last_seg == nullptr) {
-		r = INVALID_SEGMENT_ID;
+		r = INVALID_INDEX_SEGMENT_ID;
 	}
 
 	if (r == sdb::SUCCESS) {
@@ -236,111 +350,105 @@ int bpt2::create(ulong first_seg_id) {
 	first_seg = sm->find_segment(first_seg_id);
 	if (first_seg) {
 		last_seg = first_seg;
-		if (fixed_size) {
-			root = new fs_lpage;
-		} else {
-			root = new vs_lpage;
-		}
+		root = new_lpage(fixed_size);
 		first_seg->assign_block(root);
 	} else {
-		r = INVALID_SEGMENT_ID;
+		r = INVALID_INDEX_SEGMENT_ID;
 	}
 	return r;
 }
 
-int bpt2::add_node(_lnode *n) {
-	if (root->test_flag(PAGE_LEAF_BIT)) {
-	} else {
-		add_node(root, n);
-	}
-}
-
-int bpt2::add_node(_page *lp, _lnode*n) {
-	_lnode *ln;
-	create_lnode(ln);
+int bpt2::insert(_page *lp, _key *k, _val *v) {
+	int r = sdb::SUCCESS;
+	_lnode *ln = new_lnode(fixed_size);
 	lp->assign_node(ln);
-	_key k;
-	_val v;
-	n->read_key(k);
-	n->read_val(v);
 	ln->write_key(k);
-	ln->write_val(v);
+	if (v != nullptr) {
+		ln->write_val(v);
+	}
 
+	if (lp->test_flag(PAGE_HAS_LEAF_BIT)) {
+		lp->sort_nodes();
+	}
 
 	if (lp->is_full()) {
-		if (lp->test_flag(PAGE_PARENT_BIT)) {
-			_inode *pn;
-			_ipage *pp;
-			craete_inode(pn);
-			create_ipage(pp);
+		_lpage *half;
+		_inode *in = new_inode(fixed_size);
+		_key mk;
+		assign_lpage(half);
+		split_2(lp, half);
 
-			fetch_parent_inode(lp, pn);
+		// set lp's next page as half's next page
+		if (lp->test_flag(NEXT_BLK_BIT)) {
+			_page *nxt = new_page(lp, fixed_size);
+			fetch_next_page(lp, nxt);
+			half->set_next_blk(nxt);
+			delete nxt;
+		}
+		lp->set_next_blk(half);
+		half->set_pre_block(lp);
+
+		if (lp->test_flag(PAGE_HAS_PARENT_BIT)) {
+			_inode *pn = new_inode(fixed_size);
+			_ipage *pp = new_ipage(fixed_size);
+
 			fetch_parent_page(lp, pp);
+			pp->read_node(lp->header->parent_in_idx, pn);
+
+			// set the right page as null of old parent node
+			pn->clean_flag(NODE_RIGHT_PAGE_BIT);
+
+			in->set_left_page(lp);
+
+//			if (in->has_right_sibling) {
+//				in->right_sibling->set_left_page(half)
+//			}
+//			else
+
+			in->set_right_page(half);
+			in->read_key(mk);
+			r = insert(pp, &mk);
 			delete pn;
 			delete pp;
 		} else { // the root is leaf page
-			_lpage *half;
-			_inode *in;
-			_key & m;
-			assign_lpage(half);
-			split_2(lp, half);
-
 			_ipage * n_root;
 			assign_ipage(n_root);
-			craete_inode(in);
 			n_root->assign_node(in);
 
 			// the first key of right half page to parent page
 			half->read_node(0, ln);
-			ln->read_key(m);
-			in->write_key(m);
+			ln->read_key(mk);
+			in->write_key(mk);
 
-			delete left, right, root;
-			delete in;
+			in->set_left_page(lp);
+			in->set_right_page(half);
+			n_root->set_flag(PAGE_HAS_LEAF_BIT);
+
+			delete half;
+			delete root;
 			root = n_root;
 		}
 		//split, add_to parent
 		// parent split
+		delete in;
 	}
 
 	delete ln;
+
+	return r;
 }
 
 void bpt2::split_2(_page * p, _page *half) {
 	p->sort_nodes();
 }
 
-void bpt2::create_ipage(_ipage *&p) {
-	p = fixed_size ? new fs_ipage : new vs_ipage;
-}
-
-void bpt2::create_lpage(_lpage *&p) {
-	p = fixed_size ? new fs_lpage : new vs_lpage;
-}
-
-void bpt2::craete_inode(_inode * &in) {
-	in = fixed_size ? new fs_inode : new vs_inode;
-}
-
-void bpt2::create_lnode(_lnode * & ln) {
-	ln = fixed_size ? new fs_lnode : new vs_lnode;
-}
-
 int bpt2::assign_lpage(segment *seg, _lpage *&lp) {
-	if (fixed_size) {
-		lp = new fs_lpage;
-	} else {
-		lp = new vs_lpage;
-	}
+	lp = new_lpage(fixed_size);
 	return seg->assign_block(lp);
 }
 
 int bpt2::assign_ipage(segment *seg, _ipage *&ip) {
-	if (fixed_size) {
-		ip = new fs_ipage;
-	} else {
-		ip = new vs_ipage;
-	}
+	ip = new_ipage(fixed_size);
 	return seg->assign_block(ip);
 }
 
@@ -381,10 +489,44 @@ int bpt2::fetch_right_page(_inode *in, _page *p) {
 			in->set_right_page(p);
 			r = sdb::SUCCESS;
 		} else {
-			r = INVALID_SEGMENT_ID;
+			r = INVALID_INDEX_SEGMENT_ID;
 		}
 	} else {
 		r = sdb::FAILURE;
+	}
+	return r;
+}
+
+int bpt2::fetch_pre_page(_page *p, _page *pre) {
+	int r = sdb::SUCCESS;
+	if (p->test_flag(PRE_BLK_BIT)) {
+		segment *seg = sm->find_segment(p->header->parent_pg_seg_id);
+		if (seg) {
+			pre->offset = p->header->pre_blk_off;
+			seg->read_block(pre);
+			p->set_pre_block(pre);
+		} else {
+			r = INVALID_INDEX_SEGMENT_ID;
+		}
+	} else {
+		r = NO_PRE_BLK;
+	}
+	return r;
+}
+
+int bpt2::fetch_next_page(_page *p, _page * nxt) {
+	int r = sdb::SUCCESS;
+	if (p->test_flag(PRE_BLK_BIT)) {
+		segment *seg = sm->find_segment(p->header->parent_pg_seg_id);
+		if (seg) {
+			nxt->offset = p->header->next_blk_off;
+			seg->read_block(nxt);
+			p->set_next_blk(nxt);
+		} else {
+			r = INVALID_INDEX_SEGMENT_ID;
+		}
+	} else {
+		r = NO_PRE_BLK;
 	}
 	return r;
 }
@@ -401,7 +543,7 @@ int bpt2::fetch_left_page(_inode *in, _page * p) {
 			in->set_left_page(p);
 			r = sdb::SUCCESS;
 		} else {
-			r = INVALID_SEGMENT_ID;
+			r = INVALID_INDEX_SEGMENT_ID;
 		}
 	} else {
 		r = sdb::FAILURE;
@@ -409,5 +551,58 @@ int bpt2::fetch_left_page(_inode *in, _page * p) {
 
 	return r;
 }
+
+int bpt2::fetch_parent_inode(_page *p, _inode *in) {
+
+}
+
+int bpt2::fetch_parent_page(_page *p, _page *pp) {
+	int r = sdb::SUCCESS;
+		if (p->test_flag(PRE_BLK_BIT)) {
+			segment *seg = sm->find_segment(p->header->parent_pg_seg_id);
+			if (seg) {
+				pp->offset = p->header->parent_ipg_off;
+				r = seg->read_block(pp);
+			} else {
+				r = INVALID_INDEX_SEGMENT_ID;
+			}
+		} else {
+			r = NO_PRE_BLK;
+		}
+		return r;
+}
+
 } /* namespace tree */
 } /* namespace sdb */
+
+void sdb::index::vs_lpage::ref(uint off, char* buff, ushort w_len) {
+	offset = off;
+	header = (head *)buff;
+	buffer = buff + sizeof(head);
+	length = w_len - sizeof(head);
+	ref_flag = true;
+}
+
+int sdb::index::vs_lpage::assign_node(_node* n) {
+	return vs_page::assign_node(this, n);
+}
+
+int sdb::index::vs_lpage::read_node(ushort idx, _node* n) {
+	return vs_page::read_node(this, idx, n);
+}
+
+int sdb::index::vs_lpage::remove_node(ushort idx) {
+	return vs_page::remove_node(this, idx);
+}
+
+void sdb::index::vs_lpage::sort_nodes() {
+	return vs_page::sort_nodes(this);
+}
+
+int sdb::index::vs_lpage::count() {
+	return header->writing_entry_off / VS_PAGE_DIR_ENTRY_LENGTH;
+}
+
+void sdb::index::vs_lpage::clean_nodes() {
+	return vs_page::clean_node(this);
+}

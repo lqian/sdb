@@ -18,7 +18,7 @@ void key_field_test() {
 	ASSERT(k1.compare(k2) == -1);
 }
 
-void key_test() {
+void key_value_test() {
 
 	_key_field kf1;
 	kf1.type = int_type;
@@ -56,19 +56,19 @@ void index_component_test() {
 	fip.header->node_size = key_len + sizeof(fs_inode::head);
 	flp.header->node_size = key_len + val_len + sizeof(fs_lnode::head);
 
-	fs_lnode ln;
-	fs_inode in;
-	fip.assign_node(&in);
-	flp.assign_node(&ln);
+	_lnode *ln = new_lnode();
+	_inode * in = new_inode();
+	fip.assign_node(in);
+	flp.assign_node(ln);
 
-	ASSERT(in.len == key_len && ln.len == key_len + val_len);
+	ASSERT(in->len == key_len && ln->len == key_len + val_len);
 }
 
 void runSuite() {
 	cute::suite s;
 	//TODO add your test here
 	s.push_back(CUTE(key_field_test));
-	s.push_back(CUTE(key_test));
+	s.push_back(CUTE(key_value_test));
 	s.push_back(CUTE(index_component_test));
 	cute::ide_listener lis;
 	cute::makeRunner(lis)(s, "The bpt2 index test Suite");

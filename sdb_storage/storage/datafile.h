@@ -701,7 +701,7 @@ struct data_block {
 		header->assign_time = t;
 	}
 
-	inline void set_pre_block(data_block * p) {
+	virtual inline void set_pre_block(data_block * p) {
 		pre_blk = p;
 		p->next_blk = this;
 		header->pre_blk_off = p->offset;
@@ -724,7 +724,7 @@ struct data_block {
 		}
 	}
 
-	inline void set_next_blk(data_block *p) {
+	virtual inline void set_next_blk(data_block *p) {
 		next_blk = p;
 		p->pre_blk = this;
 		header->next_blk_off = p->offset;
