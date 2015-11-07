@@ -83,6 +83,7 @@ enum page_type {
 	pt_fs_ipage, pt_vs_ipage, pt_vs_lpage, pt_fs_lpage
 };
 
+bool test_flag(ushort &s, const int bit);
 void set_flag(char & c, const int bit);
 void remove_flag(char & c, const int bit);
 
@@ -112,17 +113,17 @@ struct _node {
 
 	virtual void ref(uint off, char * buff, ushort w_len)=0;
 
-	inline void set_flag(const int& bit) {
+	virtual inline void set_flag(const int& bit) {
 		ushort s = 1 << bit;
 		header->flag |= s;
 	}
 
-	inline void clean_flag(const int& bit) {
+	virtual inline void clean_flag(const int& bit) {
 		ushort s = ~(1 << bit);
 		header->flag &= s;
 	}
 
-	inline bool test_flag(const int & bit) {
+	virtual inline bool test_flag(const int & bit) {
 		ushort s = 1 << bit;
 		return (header->flag & s) == s;
 	}
@@ -148,10 +149,6 @@ struct _node {
 
 // leaf node,
 struct _lnode: virtual _node {
-	struct head {
-		char flag;
-	}*header;
-
 	inline void write_val(const _val &v) {
 		memcpy(buffer + len - VAL_LEN, v.buff, VAL_LEN);
 	}
@@ -199,8 +196,8 @@ struct vs_lnode: _lnode {
 /*
  * a index node only has store key, left page offset and right page offset
  */
-struct _inode: virtual _node {
-	struct head: _node::head {
+struct _inode:  _node {
+	struct head:  _node::head {
 		uint left_pg_off;
 		uint right_pg_off;
 		ulong left_pg_seg_id;
@@ -217,6 +214,26 @@ struct _inode: virtual _node {
 		this->len = w_len - sizeof(head);
 
 	}
+
+	virtual inline void set_flag(const int& bit) {
+		ushort s = 1 << bit;
+		header->flag |= s;
+	}
+
+	virtual inline void clean_flag(const int& bit) {
+		ushort s = ~(1 << bit);
+		header->flag &= s;
+	}
+
+	virtual inline bool test_flag(const int & bit) {
+		ushort s = 1 << bit;
+		return (header->flag & s) == s;
+	}
+
+	virtual void remove() {
+		clean_flag(NODE_REMOVE_BIT);
+	}
+
 	void set_left_page(_page * p);
 	void set_right_page(_page *p);
 };
@@ -250,7 +267,7 @@ struct _page: virtual data_block {
 	virtual int assign_node(_node * n)=0;
 	virtual int read_node(ushort idx, _node *in)=0;
 	virtual int remove_node(ushort idx)=0;
-	virtual void sort_nodes()=0;
+	virtual void sort_nodes(list<_key_field>key_fields, bool ascend = true)=0;
 	virtual void clean_nodes()=0;
 
 	/*
@@ -288,8 +305,21 @@ struct fs_page: virtual _page {
 	int read_node(fs_page *p, ushort idx, _node *in);
 	int remove_node(fs_page *p, ushort idx);
 	void clean_node(fs_page *p);
-	void sort_nodes(fs_page *p);
+	void sort_nodes(list<_key_field>key_fields, fs_page *p, bool ascend = true);
 	void init_header(fs_page *p);
+
+	inline virtual void set_flag(int bit) {
+		header->flag |= (1 << bit);
+	}
+
+	inline virtual void remove_flag(int bit) {
+		header->flag &= ~(1 << bit);
+	}
+
+	inline virtual bool test_flag(int b) {
+		return (header->flag >> b & 1) == 1;
+	}
+
 };
 
 struct vs_page: virtual _page {
@@ -302,7 +332,7 @@ struct vs_page: virtual _page {
 	int read_node(vs_page *p, ushort idx, _node *in);
 	int remove_node(vs_page *p, ushort idx);
 	void clean_node(vs_page *p);
-	void sort_nodes(vs_page *p);
+	void sort_nodes(list<_key_field>key_fields, vs_page *p, bool ascend = true);
 	void init_header(vs_page *p);
 };
 
@@ -321,7 +351,7 @@ struct fs_ipage: fs_page, virtual _ipage {
 	}
 
 	virtual void init_header() {
-		fs_page::init_header(this);
+		sdb::index::set_flag(fs_page::header->flag, PAGE_HAS_LEAF_BIT);
 	}
 
 	virtual int assign_node(_node * n) {
@@ -333,8 +363,8 @@ struct fs_ipage: fs_page, virtual _ipage {
 	virtual int remove_node(ushort idx) {
 		return fs_page::remove_node(this, idx);
 	}
-	virtual void sort_nodes() {
-		return fs_page::sort_nodes(this);
+	virtual void sort_nodes(list<_key_field> key_fields, bool ascend = true) {
+		return fs_page::sort_nodes(key_fields, this, ascend);
 	}
 	virtual void clean_nodes() {
 		return fs_page::clean_node(this);
@@ -367,8 +397,8 @@ struct vs_ipage: vs_page, _ipage {
 	virtual int remove_node(ushort idx) {
 		return vs_page::remove_node(this, idx);
 	}
-	virtual void sort_nodes() {
-		return vs_page::sort_nodes(this);
+	virtual void sort_nodes(list<_key_field>key_fields, bool ascend = true) {
+		return vs_page::sort_nodes(key_fields, this, ascend);
 	}
 	virtual void clean_nodes() {
 		return vs_page::clean_node(this);
@@ -396,7 +426,7 @@ struct fs_lpage: virtual fs_page, virtual _lpage {
 	int read_node(ushort idx, _node *);
 	int remove_node(ushort idx);
 	int count();
-	void sort_nodes();
+	void sort_nodes(list<_key_field> key_fields, bool ascend = true);
 	void clean_nodes();
 };
 
@@ -409,7 +439,7 @@ struct vs_lpage: vs_page, _lpage {
 	int read_node(ushort idx, _node *);
 	int remove_node(ushort idx);
 	int count();
-	void sort_nodes();
+	void sort_nodes(list<_key_field> key_fields, bool ascend = true);
 	void clean_nodes();
 };
 

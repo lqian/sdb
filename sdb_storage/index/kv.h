@@ -37,11 +37,11 @@ struct _key_field {
 		buffer.ref_buff(buff, len);
 	}
 
-	int compare(_key_field & kf) {
+	inline int compare(_key_field & kf) {
 		return compare(&kf);
 	}
 
-	int compare_short(sdb::index::_key_field* kf) {
+	inline int compare_short(sdb::index::_key_field* kf) {
 		short v;
 		buffer >> v;
 		short t;
@@ -49,7 +49,7 @@ struct _key_field {
 		return v > t ? 1 : v == t ? 0 : -1;
 	}
 
-	int compare_ushort(sdb::index::_key_field* kf) {
+	inline int compare_ushort(sdb::index::_key_field* kf) {
 		ushort v;
 		buffer >> v;
 		ushort t;
@@ -57,7 +57,7 @@ struct _key_field {
 		return v > t ? 1 : v == t ? 0 : -1;
 	}
 
-	int compare_uint(sdb::index::_key_field* kf) {
+	inline int compare_uint(sdb::index::_key_field* kf) {
 		uint v;
 		buffer >> v;
 		uint t;
@@ -65,7 +65,7 @@ struct _key_field {
 		return v > t ? 1 : v == t ? 0 : -1;
 	}
 
-	int compare_long(sdb::index::_key_field*& kf) {
+	inline int compare_long(sdb::index::_key_field*& kf) {
 		long v;
 		buffer >> v;
 		long t;
@@ -73,7 +73,7 @@ struct _key_field {
 		return v > t ? 1 : v == t ? 0 : -1;
 	}
 
-	int compare_ulong(sdb::index::_key_field* kf) {
+	inline int compare_ulong(sdb::index::_key_field* kf) {
 		ulong v;
 		buffer >> v;
 		ulong t;
@@ -81,7 +81,7 @@ struct _key_field {
 		return v > t ? 1 : v == t ? 0 : -1;
 	}
 
-	int compare_float(sdb::index::_key_field* kf) {
+	inline int compare_float(sdb::index::_key_field* kf) {
 		float v;
 		buffer >> v;
 		float t;
@@ -89,7 +89,7 @@ struct _key_field {
 		return v > t ? 1 : v == t ? 0 : -1;
 	}
 
-	int compare_double(sdb::index::_key_field* kf) {
+	inline int compare_double(sdb::index::_key_field* kf) {
 		double v;
 		buffer >> v;
 		double t;
@@ -97,7 +97,7 @@ struct _key_field {
 		return v > t ? 1 : v == t ? 0 : -1;
 	}
 
-	int compare(_key_field * kf) {
+	inline int compare(_key_field * kf) {
 		switch (type) {
 		case bool_type:
 			return compare_bool(kf);
@@ -124,7 +124,7 @@ struct _key_field {
 		}
 	}
 
-	int compare_int(_key_field *kf) {
+	inline int compare_int(_key_field *kf) {
 		int v;
 		buffer >> v;
 		int t;
@@ -132,7 +132,7 @@ struct _key_field {
 		return v > t ? 1 : v == t ? 0 : -1;
 	}
 
-	int compare_varchar(_key_field *kf) {
+	inline int compare_varchar(_key_field *kf) {
 		string v;
 		buffer >> v;
 		string t;
@@ -140,7 +140,7 @@ struct _key_field {
 		return v.compare(t);
 	}
 
-	int compare_bool(_key_field *kf) {
+	inline int compare_bool(_key_field *kf) {
 		bool v;
 		buffer >> v;
 		bool t;
@@ -148,6 +148,41 @@ struct _key_field {
 		return v > t ? 1 : v == t ? 0 : -1;
 	}
 
+	inline void write_bool(bool v) {
+		buffer << v;
+	}
+
+	inline void write_short(short v) {
+		buffer << v;
+	}
+
+	inline void write_ushort(ushort v) {
+		buffer << v;
+	}
+
+	inline void write_int(int v) {
+		buffer << v;
+	}
+
+	inline void write_uint(uint v) {
+		buffer << v;
+	}
+
+	inline void write_long(long v) {
+		buffer << v;
+	}
+	inline void write_ulong(ulong v) {
+		buffer << v;
+	}
+	inline void write_float(float v) {
+		buffer << v;
+	}
+	inline void write_double(double v) {
+		buffer << v;
+	}
+	inline void write_varchar(char *buff, int len) {
+		buffer.push_back(buff, len, true);
+	}
 	inline bool operator==(const _key_field & an) {
 		return an.field_name == field_name && type == an.type;
 	}

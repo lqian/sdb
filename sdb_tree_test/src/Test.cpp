@@ -40,7 +40,6 @@ void key_value_test() {
 	k2.ref(buff2.data(), buff2.size());
 
 	ASSERT(k1.compare(k2) == -1);
-
 }
 
 void index_component_test() {
@@ -62,6 +61,25 @@ void index_component_test() {
 	flp.assign_node(ln);
 
 	ASSERT(in->len == key_len && ln->len == key_len + val_len);
+
+	char_buffer cb(4);
+	_key k;
+
+	_key_field kf;
+	kf.field_len = 4;
+	kf.type = field_type::int_type;
+	k.add_key_field(kf);
+
+	fip.clean_nodes();
+	for (int i = 0; i < 10; i++) {
+		fip.assign_node(in);
+		cb.reset();
+		cb << (0xff - i);
+		k.ref(cb.data(), cb.capacity());
+		in->write_key(k);
+	}
+
+	fip.sort_nodes(k.key_fields);
 }
 
 void runSuite() {
