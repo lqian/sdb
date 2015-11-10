@@ -92,7 +92,7 @@ void remove_flag(ushort &s, const int bit);
 void set_flag(short &s, const int bit);
 void remove_flag(short &s, const int bit);
 
-key_test test(_page *p, _key &k, _node &in);
+key_test test(_page *p, _key &k, _inode *n);
 
 _page * new_page(_page * sibling, bool fixed_size = true);
 _lpage * new_lpage(bool fixed_size = true);

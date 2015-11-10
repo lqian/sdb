@@ -74,22 +74,25 @@ void index_component_test() {
 	fip.clean_nodes();
 	for (int i = 0; i < nc; i++) {
 		fip.assign_node(in);
-		int v = 0xff - i;
+		int v = i * 2;
 		cb.reset() << v;
 		k.ref(cb.data(), cb.size());
 		in->write_key(k);
 	}
 
-	fip.sort_nodes(k.key_fields);
+	cb.reset();
+	cb << 4;
+	k.ref(cb.data(), cb.size());
 
-	for (int i = 0; i < nc; i++) {
-		fip.read_node(i, in);
-		in->read_key(k);
-		cb.ref_buff(k.buff, k.len);
-		int v;
-		cb >> v;
-		std::cout << v << std::endl;
-	}
+	fip.sort_nodes(k.key_fields);
+	key_test kt = sdb::index::test(&fip, k, in);
+	ASSERT(kt == key_equal);
+
+	cb.reset();
+	cb << 7;
+	k.ref(cb.data(), cb.size());
+	kt = sdb::index::test(&fip, k, in);
+	ASSERT(kt == key_within_page);
 }
 
 void runSuite() {

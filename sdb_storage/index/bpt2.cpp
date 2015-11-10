@@ -44,29 +44,47 @@ void remove_flag(short &s, const int bit) {
 	s &= v;
 }
 
-key_test test(_page *p, _key &k, _node & in) {
-	_key ik;
-	int i = 0;
-	int nc = p->count();
-	for (; i < nc; i++) {
-		p->read_node(i, &in);
-		if (in.test_flag(NODE_REMOVE_BIT)) {
-			continue;
-		}
-		in.read_key(ik);
-		int c = k.compare(ik);
-		if (c == 0) {
-			return key_test::key_equal;
-		} else if (c < 0) {
-			return key_test::key_less;
-		} else if (c > 0) {
-			continue;
+key_test test(_page *p, _key &k, _inode *n) {
+	_key ik = k;
+	key_test t = not_defenition;
+	int c = p->count();
+	int m = (p->count() + 1) / 2;
+	int l = c;
+	while (m >= 0 && m < c) {
+		p->read_node(m, n);
+		if (n->test_flag(NODE_REMOVE_BIT)) {
+			l = ++m;
+		} else {
+			n->read_key(ik);
+			k.kv_off = 0;
+			int r = k.compare(ik);
+			if (r == 0) {
+				return key_equal;
+			} else if (r > 0 && m == r - 1) {
+				return key_greater;
+			} else if (r < 0 && m == 0) {
+				return key_less;
+			} else if (m - l == 1 || m - l == -1) {
+				if (r > 0 && t == key_less) {
+					p->read_node(m > l ? m : l, n);
+				} else if (r < 0 && t == key_greater) {
+					p->read_node(m, n);
+				}
+				return key_within_page;
+			} else {
+				if (r < 0) {
+					int om = m;
+					m /= 2;
+					l = om;
+					t = key_less;
+				} else {
+					m = (m + l) / 2;
+					t = key_greater;
+				}
+			}
 		}
 	}
-
-	if (i == nc) {
-		return key_test::key_greater;
-	}
+	return t;
 }
 
 _page *new_page(_page * sibling, bool fixed_size) {
@@ -250,13 +268,13 @@ int vs_page::assign_node(vs_page *p, _node * n) {
 		p->set_flag(PAGE_FULL_BIT);
 		return sdb::FAILURE;
 	} else {
-		// write node's offset to directory
+// write node's offset to directory
 		ushort off = wdo + n->len;
 		char_buffer cb(p->buffer + weo, VS_PAGE_DIR_ENTRY_LENGTH, true);
 		char c = 0;
 		cb << off << c;
 
-		//ref buffer for the node
+//ref buffer for the node
 		p->header->writing_data_off -= n->len;
 		wdo += p->header->writing_entry_off += VS_PAGE_DIR_ENTRY_LENGTH;
 		p->header->active_node_count++;
@@ -416,7 +434,7 @@ int bpt2::insert(_page *lp, _key *k, _val *v) {
 	}
 
 	if (lp->test_flag(PAGE_HAS_LEAF_BIT)) {
-		// lp->sort_nodes();
+// lp->sort_nodes();
 	}
 
 	if (lp->is_full()) {
@@ -426,7 +444,7 @@ int bpt2::insert(_page *lp, _key *k, _val *v) {
 		assign_lpage(half);
 		split_2(lp, half);
 
-		// set lp's next page as half's next page
+// set lp's next page as half's next page
 		if (lp->test_flag(NEXT_BLK_BIT)) {
 			_page *nxt = new_page(lp, fixed_size);
 			fetch_next_page(lp, nxt);
@@ -476,8 +494,8 @@ int bpt2::insert(_page *lp, _key *k, _val *v) {
 			delete root;
 			root = n_root;
 		}
-		//split, add_to parent
-		// parent split
+//split, add_to parent
+// parent split
 		delete in;
 	}
 
