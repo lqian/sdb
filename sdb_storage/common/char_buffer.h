@@ -35,7 +35,8 @@ private:
 
 public:
 
-	char_buffer() : ref(true){
+	char_buffer() :
+			ref(true) {
 	}
 
 	char_buffer(const char * buff, int size) {
@@ -94,6 +95,7 @@ public:
 		cap = size;
 		this->b_size = size;
 		buffer = buff;
+		pop_pos = 0;
 	}
 
 	~char_buffer() {
@@ -147,17 +149,17 @@ public:
 		buffer = new_buffer;
 	}
 
-	char_buffer * rewind() {
+	char_buffer & rewind() {
 		push_pos = 0;
 		pop_pos = 0;
-		return this;
+		return *this;
 	}
 
-	char_buffer * reset() {
+	char_buffer & reset() {
 		push_pos = 0;
 		pop_pos = 0;
 		b_size = 0;
-		return this;
+		return *this;
 	}
 
 	/**
@@ -245,7 +247,6 @@ public:
 		return this;
 	}
 
-
 	char_buffer * push_back(const double& val) {
 		if (!ref) {
 			ensure_capacity(DOUBLE_CHARS);
@@ -253,7 +254,6 @@ public:
 		push_chars(to_chars(val), DOUBLE_CHARS);
 		return this;
 	}
-
 
 	char_buffer * push_back(const std::string & str) {
 		int size = str.size();
@@ -461,12 +461,10 @@ public:
 		return buff;
 	}
 
-
 	friend char_buffer& operator<<(char_buffer & buff, const double & val) {
 		buff.push_back(val);
 		return buff;
 	}
-
 
 	friend char_buffer& operator<<(char_buffer & buff,
 			const std::string & val) {
@@ -490,14 +488,10 @@ public:
 		return buff;
 	}
 
-
-
 	friend char_buffer& operator>>(char_buffer & buff, double & val) {
 		val = buff.pop_double();
 		return buff;
 	}
-
-
 
 	friend char_buffer& operator>>(char_buffer & buff, unsigned char & val) {
 		val = buff.pop_uchar();

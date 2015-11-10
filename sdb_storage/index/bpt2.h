@@ -141,9 +141,11 @@ struct _node {
 	}
 	void read_key(_key &k) {
 		k.ref(buffer, k.len);
+		k.kv_off = 0;
 	}
 	void read_key(_key *k) {
 		k->ref(buffer, k->len);
+		k->kv_off = 0;
 	}
 };
 
@@ -157,9 +159,11 @@ struct _lnode: virtual _node {
 	}
 	inline void read_key(_key &k) {
 		k.ref(buffer, len - VAL_LEN);
+		k.kv_off = 0;
 	}
 	void read_key(_key *k) {
 		k->ref(buffer, len - VAL_LEN);
+		k->kv_off = 0;
 	}
 	inline void read_val(_val & v) {
 		v.ref(buffer + len - VAL_LEN, VAL_LEN);
@@ -196,8 +200,8 @@ struct vs_lnode: _lnode {
 /*
  * a index node only has store key, left page offset and right page offset
  */
-struct _inode:  _node {
-	struct head:  _node::head {
+struct _inode: _node {
+	struct head: _node::head {
 		uint left_pg_off;
 		uint right_pg_off;
 		ulong left_pg_seg_id;
@@ -267,7 +271,7 @@ struct _page: virtual data_block {
 	virtual int assign_node(_node * n)=0;
 	virtual int read_node(ushort idx, _node *in)=0;
 	virtual int remove_node(ushort idx)=0;
-	virtual void sort_nodes(list<_key_field>key_fields, bool ascend = true)=0;
+	virtual void sort_nodes(list<_key_field> key_fields, bool ascend = true)=0;
 	virtual void clean_nodes()=0;
 
 	/*
@@ -305,7 +309,8 @@ struct fs_page: virtual _page {
 	int read_node(fs_page *p, ushort idx, _node *in);
 	int remove_node(fs_page *p, ushort idx);
 	void clean_node(fs_page *p);
-	void sort_nodes(list<_key_field>key_fields, fs_page *p, bool ascend = true);
+	void sort_nodes(list<_key_field> key_fields, fs_page *p,
+			bool ascend = true);
 	void init_header(fs_page *p);
 
 	inline virtual void set_flag(int bit) {
@@ -332,7 +337,8 @@ struct vs_page: virtual _page {
 	int read_node(vs_page *p, ushort idx, _node *in);
 	int remove_node(vs_page *p, ushort idx);
 	void clean_node(vs_page *p);
-	void sort_nodes(list<_key_field>key_fields, vs_page *p, bool ascend = true);
+	void sort_nodes(list<_key_field> key_fields, vs_page *p,
+			bool ascend = true);
 	void init_header(vs_page *p);
 };
 
@@ -397,7 +403,7 @@ struct vs_ipage: vs_page, _ipage {
 	virtual int remove_node(ushort idx) {
 		return vs_page::remove_node(this, idx);
 	}
-	virtual void sort_nodes(list<_key_field>key_fields, bool ascend = true) {
+	virtual void sort_nodes(list<_key_field> key_fields, bool ascend = true) {
 		return vs_page::sort_nodes(key_fields, this, ascend);
 	}
 	virtual void clean_nodes() {

@@ -70,16 +70,26 @@ void index_component_test() {
 	kf.type = field_type::int_type;
 	k.add_key_field(kf);
 
+	int nc = 10;
 	fip.clean_nodes();
-	for (int i = 0; i < 10; i++) {
+	for (int i = 0; i < nc; i++) {
 		fip.assign_node(in);
-		cb.reset();
-		cb << (0xff - i);
-		k.ref(cb.data(), cb.capacity());
+		int v = 0xff - i;
+		cb.reset() << v;
+		k.ref(cb.data(), cb.size());
 		in->write_key(k);
 	}
 
 	fip.sort_nodes(k.key_fields);
+
+	for (int i = 0; i < nc; i++) {
+		fip.read_node(i, in);
+		in->read_key(k);
+		cb.ref_buff(k.buff, k.len);
+		int v;
+		cb >> v;
+		std::cout << v << std::endl;
+	}
 }
 
 void runSuite() {
