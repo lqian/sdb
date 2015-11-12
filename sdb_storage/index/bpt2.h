@@ -272,6 +272,8 @@ struct _page: virtual data_block {
 	virtual int read_node(ushort idx, _node *in)=0;
 	virtual int remove_node(ushort idx)=0;
 	virtual void sort_nodes(list<_key_field> key_fields, bool ascend = true)=0;
+	virtual int insert_node(list<_key_field> key_fields, _node *n, bool ascend =
+			true)=0;
 	virtual void clean_nodes()=0;
 
 	/*
@@ -311,6 +313,8 @@ struct fs_page: virtual _page {
 	void clean_node(fs_page *p);
 	void sort_nodes(list<_key_field> key_fields, fs_page *p,
 			bool ascend = true);
+	int insert_node(list<_key_field> key_fields, fs_page *p, _node *n,
+			bool ascend = true);
 	void init_header(fs_page *p);
 
 	inline virtual void set_flag(int bit) {
@@ -338,6 +342,8 @@ struct vs_page: virtual _page {
 	int remove_node(vs_page *p, ushort idx);
 	void clean_node(vs_page *p);
 	void sort_nodes(list<_key_field> key_fields, vs_page *p,
+			bool ascend = true);
+	int insert_node(list<_key_field> key_fields, vs_page *p, _node *n,
 			bool ascend = true);
 	void init_header(vs_page *p);
 };
@@ -371,6 +377,10 @@ struct fs_ipage: fs_page, virtual _ipage {
 	}
 	virtual void sort_nodes(list<_key_field> key_fields, bool ascend = true) {
 		return fs_page::sort_nodes(key_fields, this, ascend);
+	}
+	virtual int insert_node(list<_key_field> key_fields, _node *n, bool ascend =
+			true) {
+		return fs_page::insert_node(key_fields, this, n, ascend);
 	}
 	virtual void clean_nodes() {
 		return fs_page::clean_node(this);
@@ -406,6 +416,11 @@ struct vs_ipage: vs_page, _ipage {
 	virtual void sort_nodes(list<_key_field> key_fields, bool ascend = true) {
 		return vs_page::sort_nodes(key_fields, this, ascend);
 	}
+	virtual int insert_node(list<_key_field> key_fields, _node *n, bool ascend =
+			true) {
+		return vs_page::insert_node(key_fields, this, n, ascend);
+	}
+
 	virtual void clean_nodes() {
 		return vs_page::clean_node(this);
 	}
@@ -433,6 +448,10 @@ struct fs_lpage: virtual fs_page, virtual _lpage {
 	int remove_node(ushort idx);
 	int count();
 	void sort_nodes(list<_key_field> key_fields, bool ascend = true);
+	virtual int insert_node(list<_key_field> key_fields, _node *n, bool ascend =
+			true) {
+		return fs_page::insert_node(key_fields, this, n, ascend);
+	}
 	void clean_nodes();
 };
 
@@ -446,6 +465,10 @@ struct vs_lpage: vs_page, _lpage {
 	int remove_node(ushort idx);
 	int count();
 	void sort_nodes(list<_key_field> key_fields, bool ascend = true);
+	virtual int insert_node(list<_key_field> key_fields, _node *n, bool ascend =
+			true) {
+		return vs_page::insert_node(key_fields, this, n, ascend);
+	}
 	void clean_nodes();
 };
 
@@ -458,6 +481,7 @@ private:
 	 */
 	bool fixed_size = true;
 	_key key;
+	bool ascend = true;
 
 	seg_mgr * sm;
 	segment * first_seg;

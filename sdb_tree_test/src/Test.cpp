@@ -84,7 +84,7 @@ void index_component_test() {
 	cb << 4;
 	k.ref(cb.data(), cb.size());
 
-	fip.sort_nodes(k.key_fields);
+	fip.sort_nodes(k.fields);
 	key_test kt = sdb::index::test(&fip, k, in);
 	ASSERT(kt == key_equal);
 

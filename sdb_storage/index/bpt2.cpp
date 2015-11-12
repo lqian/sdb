@@ -12,7 +12,7 @@ namespace index {
 
 bool test_flag(ushort &s, const int bit) {
 	ushort v = 1 << bit;
-	return s & v == v;
+	return (s & v) == v;
 }
 
 void set_flag(char & c, const int bit) {
@@ -212,21 +212,23 @@ void fs_page::clean_node(fs_page *p) {
 
 void fs_page::sort_nodes(list<_key_field> key_fields, fs_page *p, bool ascend) {
 	_node * a, *b;
-//	if (sdb::index::test_flag(p->header->flag, PAGE_HAS_LEAF_BIT)) {
+	int hs;
 	if (p->test_flag(PAGE_HAS_LEAF_BIT)) {
 		a = new_inode();
 		b = new_inode();
+		hs = sizeof(fs_inode::head);
 	} else {
 		a = new_lnode();
 		b = new_lnode();
+		hs = sizeof(fs_lnode::head);
 	}
 
 	int c;
 	_key ka, kb;
-	ka.key_fields = key_fields;
-	kb.key_fields = key_fields;
+	ka.fields = key_fields;
+	kb.fields = key_fields;
 	ushort ns = p->header->node_size;
-	int hs = sizeof(fs_inode::head);
+
 	ka.len = ns - hs;
 	kb.len = ns - hs;
 	char * tmp = new char[ns];
@@ -252,6 +254,60 @@ void fs_page::sort_nodes(list<_key_field> key_fields, fs_page *p, bool ascend) {
 		}
 	}
 	delete[] tmp;
+	delete a;
+	delete b;
+}
+/*
+ * assume that the page is sorted, the inserting node buffer include key or value
+ */
+int fs_page::insert_node(list<_key_field> key_fields, fs_page *p, _node *n,
+		bool ascend) {
+	int idx = -1;
+
+	int nc = p->header->node_count;
+	int ns = p->header->node_size;
+	if (ns * (nc + 1) < length) {
+		_node * a;
+		int hs;
+		if (p->test_flag(PAGE_HAS_LEAF_BIT)) {
+			a = new_inode();
+			hs = sizeof(fs_inode::head);
+		} else {
+			a = new_lnode();
+			hs = sizeof(fs_lnode::head);
+		}
+
+		_key ka, kn;
+		ka.fields = key_fields;
+		kn.fields = key_fields;
+		n->read_key(kn);
+
+		for (int i = 0; i < nc; i++) {
+			read_node(p, i, a);
+			if (a->test_flag(NODE_REMOVE_BIT))
+				continue;
+
+			a->read_key(ka);
+			int c = ka.compare(kn);
+			if (c == 0 || (c < 0 && ascend) || (c > 0 && !ascend)) {
+
+				int off = ns * i;
+				int len = (nc - i) * ns;
+				char * src = buffer + off;
+				char * dest = src + ns;
+				memmove(dest, src, len);
+				memcpy(a->buffer - hs, n->buffer - hs, ns);
+
+				p->header->node_count++;
+				p->header->active_node_count++;
+				idx = i;
+				break;
+			}
+		}
+		delete a;
+	}
+
+	return idx;
 }
 
 void fs_page::init_header(fs_page *p) {
@@ -263,18 +319,17 @@ void fs_page::init_header(fs_page *p) {
 int vs_page::assign_node(vs_page *p, _node * n) {
 	int weo = p->header->writing_entry_off;
 	int wdo = p->header->writing_data_off;
-	int r = wdo;
 	if (weo + n->len + VS_PAGE_DIR_ENTRY_LENGTH > wdo) {
 		p->set_flag(PAGE_FULL_BIT);
 		return sdb::FAILURE;
 	} else {
-// write node's offset to directory
+		// write node's offset to directory
 		ushort off = wdo + n->len;
 		char_buffer cb(p->buffer + weo, VS_PAGE_DIR_ENTRY_LENGTH, true);
 		char c = 0;
 		cb << off << c;
 
-//ref buffer for the node
+		//ref buffer for the node
 		p->header->writing_data_off -= n->len;
 		wdo += p->header->writing_entry_off += VS_PAGE_DIR_ENTRY_LENGTH;
 		p->header->active_node_count++;
@@ -332,6 +387,69 @@ void vs_page::init_header(vs_page *p) {
 
 void vs_page::sort_nodes(list<_key_field> key_fields, vs_page *p, bool ascend) {
 
+}
+
+int vs_page::insert_node(list<_key_field> key_fields, vs_page *p, _node *n,
+		bool ascend) {
+	int idx = -1;
+	int hs;
+	_node * a;
+	if (p->test_flag(PAGE_HAS_LEAF_BIT)) {
+		hs = sizeof(vs_inode::head);
+		a = new_inode();
+	} else {
+		hs = sizeof(vs_lnode::head);
+		a = new_lnode();
+	}
+
+	int weo = p->header->writing_entry_off;
+	int wdo = p->header->writing_data_off;
+	if (wdo - weo > VS_PAGE_DIR_ENTRY_LENGTH + hs + n->len) {
+		_key ka, kn;
+		for (int i = 0; i < p->count(); i++) {
+			read_node(p, i, a);
+			if (a->test_flag(NODE_REMOVE_BIT)) {
+				continue;
+			}
+
+			a->read_key(ka);
+			n->read_key(kn);
+			int c = ka.compare(kn);
+			if (c == 0 || (c < 0 && ascend) || (c > 0 && !ascend)) {
+				//insert dir entry
+				int def = VS_PAGE_DIR_ENTRY_LENGTH * i;
+				char * src = buffer + def;
+				char * dest = src + VS_PAGE_DIR_ENTRY_LENGTH;
+				int rest = p->count() - i;
+				int in_len = rest * VS_PAGE_DIR_ENTRY_LENGTH;
+				memmove(dest, src, in_len);
+
+
+				// align the offset
+				char_buffer tmp;
+				char f;
+				ushort off;
+				for (int i=0; i<rest; i++) {
+					tmp.ref_buff(dest, VS_PAGE_DIR_ENTRY_LENGTH);
+					tmp>>f>>off;
+					off -= n->len;
+					tmp.skip(SHORT_CHARS);
+					tmp << off;
+				}
+
+				// insert data entry
+				src = buffer + a->offset;
+				dest = src + n->len;
+				in_len = wdo - a->offset;
+				memmove(dest, src, in_len);
+				memcpy(src, n->buffer, n->len);
+				idx = i;
+				break;
+			}
+		}
+	}
+	delete a;
+	return idx;
 }
 
 void fs_lpage::ref(uint off, char* buff, ushort w_len) {
@@ -424,70 +542,70 @@ int bpt2::create(ulong first_seg_id) {
 	return r;
 }
 
-int bpt2::insert(_page *lp, _key *k, _val *v) {
+int bpt2::insert(_page *p, _key *k, _val *v) {
 	int r = sdb::SUCCESS;
 	_lnode *ln = new_lnode(fixed_size);
-	lp->assign_node(ln);
+	p->assign_node(ln);
 	ln->write_key(k);
 	if (v != nullptr) {
 		ln->write_val(v);
 	}
 
-	if (lp->test_flag(PAGE_HAS_LEAF_BIT)) {
-// lp->sort_nodes();
+	if (p->test_flag(PAGE_HAS_LEAF_BIT)) {
+		p->sort_nodes(key.fields, ascend);
 	}
 
-	if (lp->is_full()) {
+	if (p->is_full()) {
 		_lpage *half;
-		_inode *in = new_inode(fixed_size);
+		_inode *nin = new_inode(fixed_size);  // the new index node
 		_key mk;
 		assign_lpage(half);
-		split_2(lp, half);
+		split_2(p, half);
 
-// set lp's next page as half's next page
-		if (lp->test_flag(NEXT_BLK_BIT)) {
-			_page *nxt = new_page(lp, fixed_size);
-			fetch_next_page(lp, nxt);
+		// set lp's next page as half's next page
+		if (p->test_flag(NEXT_BLK_BIT)) {
+			_page *nxt = new_page(p, fixed_size);
+			fetch_next_page(p, nxt);
 			half->set_next_blk(nxt);
 			delete nxt;
 		}
-		lp->set_next_blk(half);
-		half->set_pre_block(lp);
+		p->set_next_blk(half);
+		half->set_pre_block(p);
 
-		if (lp->test_flag(PAGE_HAS_PARENT_BIT)) {
+		if (p->test_flag(PAGE_HAS_PARENT_BIT)) {
 			_inode *pn = new_inode(fixed_size);
 			_ipage *pp = new_ipage(fixed_size);
 
-			fetch_parent_page(lp, pp);
-			pp->read_node(lp->header->parent_in_idx, pn);
+			fetch_parent_page(p, pp);
+			pp->read_node(p->header->parent_in_idx, pn);
 
 			// set the right page as null of old parent node
 			pn->clean_flag(NODE_RIGHT_PAGE_BIT);
 
-			in->set_left_page(lp);
+			nin->set_left_page(p);
 
 //			if (in->has_right_sibling) {
 //				in->right_sibling->set_left_page(half)
 //			}
 //			else
 
-			in->set_right_page(half);
-			in->read_key(mk);
-			r = insert(pp, &mk);
+			nin->set_right_page(half);
+			nin->read_key(mk);
+			r = insert(pp, &mk); //?????
 			delete pn;
 			delete pp;
 		} else { // the root is leaf page
 			_ipage * n_root;
 			assign_ipage(n_root);
-			n_root->assign_node(in);
+			n_root->assign_node(nin);
 
 			// the first key of right half page to parent page
 			half->read_node(0, ln);
 			ln->read_key(mk);
-			in->write_key(mk);
+			nin->write_key(mk);
 
-			in->set_left_page(lp);
-			in->set_right_page(half);
+			nin->set_left_page(p);
+			nin->set_right_page(half);
 			n_root->set_flag(PAGE_HAS_LEAF_BIT);
 
 			delete half;
@@ -496,7 +614,7 @@ int bpt2::insert(_page *lp, _key *k, _val *v) {
 		}
 //split, add_to parent
 // parent split
-		delete in;
+		delete nin;
 	}
 
 	delete ln;
