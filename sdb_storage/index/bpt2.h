@@ -92,7 +92,7 @@ void remove_flag(ushort &s, const int bit);
 void set_flag(short &s, const int bit);
 void remove_flag(short &s, const int bit);
 
-key_test test(_page *p, _key &k, _inode *n);
+key_test test(_page *p, _key &k, _node *n);
 
 _page * new_page(_page * sibling, bool fixed_size = true);
 _lpage * new_lpage(bool fixed_size = true);
@@ -140,13 +140,15 @@ struct _node {
 		memcpy(buffer, k->buff, k->len);
 	}
 	void read_key(_key &k) {
-		k.ref(buffer, k.len);
+		k.ref(buffer, len);
 		k.kv_off = 0;
 	}
 	void read_key(_key *k) {
 		k->ref(buffer, k->len);
 		k->kv_off = 0;
 	}
+
+	virtual ~_node () {}
 };
 
 // leaf node,
@@ -316,6 +318,8 @@ struct fs_page: virtual _page {
 	int insert_node(list<_key_field> key_fields, fs_page *p, _node *n,
 			bool ascend = true);
 	void init_header(fs_page *p);
+
+	void move_nodes(ushort from_idx, ushort dest_idx);
 
 	inline virtual void set_flag(int bit) {
 		header->flag |= (1 << bit);

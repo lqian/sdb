@@ -85,14 +85,28 @@ void index_component_test() {
 	k.ref(cb.data(), cb.size());
 
 	fip.sort_nodes(k.fields);
-	key_test kt = sdb::index::test(&fip, k, in);
+	key_test kt = sdb::index::test(&fip, k, (_node *) in);
 	ASSERT(kt == key_equal);
 
 	cb.reset();
 	cb << 7;
 	k.ref(cb.data(), cb.size());
-	kt = sdb::index::test(&fip, k, in);
-	ASSERT(kt == key_within_page);
+	kt = sdb::index::test(&fip, k, (_node *) in);
+	ASSERT(kt == key_within_page && in->offset == fip.header->node_size * 4);
+
+	// the page nodes: 0 2 4 6 8 10 12 14 16 18 before insert a the new 7 node
+	_node * nn = new_inode();
+	char *buff = new char[4];
+	nn->ref(0,buff,4);
+	nn->write_key(k);
+	fip.insert_node(k.fields, nn, true);
+
+	_node * rn = new_inode();
+	fip.read_node(4, rn);
+	_key rk;
+	rk.fields = k.fields;
+	rn->read_key(rk);
+	ASSERT(rk.compare(k)==0);
 }
 
 void runSuite() {

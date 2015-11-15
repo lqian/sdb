@@ -44,7 +44,7 @@ void remove_flag(short &s, const int bit) {
 	s &= v;
 }
 
-key_test test(_page *p, _key &k, _inode *n) {
+key_test test(_page *p, _key &k, _node *n) {
 	_key ik = k;
 	key_test t = not_defenition;
 	int c = p->count();
@@ -244,9 +244,8 @@ void fs_page::sort_nodes(list<_key_field> key_fields, fs_page *p, bool ascend) {
 
 			a->read_key(ka);
 			b->read_key(kb);
-
 			c = ka.compare(kb);
-			if ((ascend && c < 0) || (!ascend && c > 0)) {
+			if (c == 0 || (ascend && c < 0) || (!ascend && c > 0)) {
 				memcpy(tmp, a->buffer - hs, ns);
 				memcpy(a->buffer - hs, b->buffer - hs, ns);
 				memcpy(b->buffer - hs, tmp, ns);
@@ -259,55 +258,54 @@ void fs_page::sort_nodes(list<_key_field> key_fields, fs_page *p, bool ascend) {
 }
 /*
  * assume that the page is sorted, the inserting node buffer include key or value
+ * do not check the page's space
  */
 int fs_page::insert_node(list<_key_field> key_fields, fs_page *p, _node *n,
 		bool ascend) {
-	int idx = -1;
-
 	int nc = p->header->node_count;
 	int ns = p->header->node_size;
-	if (ns * (nc + 1) < length) {
-		_node * a;
-		int hs;
-		if (p->test_flag(PAGE_HAS_LEAF_BIT)) {
-			a = new_inode();
-			hs = sizeof(fs_inode::head);
-		} else {
-			a = new_lnode();
-			hs = sizeof(fs_lnode::head);
-		}
+	_key nk;
+	n->read_key(nk);
+	nk.fields = key_fields;
 
-		_key ka, kn;
-		ka.fields = key_fields;
-		kn.fields = key_fields;
-		n->read_key(kn);
-
-		for (int i = 0; i < nc; i++) {
-			read_node(p, i, a);
-			if (a->test_flag(NODE_REMOVE_BIT))
-				continue;
-
-			a->read_key(ka);
-			int c = ka.compare(kn);
-			if (c == 0 || (c < 0 && ascend) || (c > 0 && !ascend)) {
-
-				int off = ns * i;
-				int len = (nc - i) * ns;
-				char * src = buffer + off;
-				char * dest = src + ns;
-				memmove(dest, src, len);
-				memcpy(a->buffer - hs, n->buffer - hs, ns);
-
-				p->header->node_count++;
-				p->header->active_node_count++;
-				idx = i;
-				break;
-			}
-		}
-		delete a;
+	int hs;
+	_node *tn;
+	if (p->test_flag(PAGE_HAS_LEAF_BIT)) {
+		tn = new_inode();
+		hs = sizeof(fs_inode::head);
+	} else {
+		tn = new_lnode();
+		hs = sizeof(fs_lnode::head);
 	}
 
+	key_test kt = sdb::index::test(p, nk, tn);
+	int idx = -1;
+	if (kt == key_equal || kt == key_within_page) {
+		idx = tn->offset / p->header->node_size;
+		move_nodes(idx, idx+1);
+	} else if (kt == key_greater) {
+		idx = p->header->node_count;
+		assign_node(this, tn);
+	} else if (kt == key_less) {
+		idx = 0;
+		move_nodes(0, 1);
+	}
+
+	memcpy(tn->buffer - hs, n->buffer - hs, ns);
+	p->header->node_count++;
+	p->header->active_node_count++;
+	delete tn;
+
 	return idx;
+}
+
+void fs_page::move_nodes(ushort f, ushort d) {
+	ushort nc = header->node_count;
+	int ns = header->node_size;
+	int len = (nc - f) * ns;
+	char * src = buffer + f * ns;
+	char * dest = buffer + d * ns;
+	memmove(dest, src, len);
 }
 
 void fs_page::init_header(fs_page *p) {
@@ -424,14 +422,13 @@ int vs_page::insert_node(list<_key_field> key_fields, vs_page *p, _node *n,
 				int in_len = rest * VS_PAGE_DIR_ENTRY_LENGTH;
 				memmove(dest, src, in_len);
 
-
 				// align the offset
 				char_buffer tmp;
 				char f;
 				ushort off;
-				for (int i=0; i<rest; i++) {
+				for (int i = 0; i < rest; i++) {
 					tmp.ref_buff(dest, VS_PAGE_DIR_ENTRY_LENGTH);
-					tmp>>f>>off;
+					tmp >> f >> off;
 					off -= n->len;
 					tmp.skip(SHORT_CHARS);
 					tmp << off;
