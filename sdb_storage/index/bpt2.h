@@ -349,6 +349,8 @@ struct vs_page: virtual _page {
 			bool ascend = true);
 	int insert_node(list<_key_field> key_fields, vs_page *p, _node *n,
 			bool ascend = true);
+	int find_dir_ent_idx(ushort off);
+	void move_node(ushort fe, ushort len, ushort de);
 	void init_header(vs_page *p);
 };
 

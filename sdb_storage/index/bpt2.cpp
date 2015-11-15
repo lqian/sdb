@@ -399,6 +399,30 @@ int vs_page::insert_node(list<_key_field> key_fields, vs_page *p, _node *n,
 		hs = sizeof(vs_lnode::head);
 		a = new_lnode();
 	}
+	_key kn;
+	kn.fields = key_fields;
+	n->read(kn);
+	key_test kt = sdb::index::test(p, kn, a);
+
+	if (kt==key_equal || kt==key_within_page) {
+		idx = find_dir_ent_idx(a->offset);
+		move_node(idx, p->count() - idx, idx+1);
+	}
+	else if (kt == key_greater) {
+		off = p->header->node_count;
+		p->assign_node(a);
+		memcpy(a->buffer -hs, n->buffer - hs, n->len + hs);
+	}
+	else if (kt == key_less) {
+		off = 0;
+		move_node(0, p->count(), 1);
+	}
+	if (idx != p->count()) {
+
+	}
+
+
+	return off;
 
 	int weo = p->header->writing_entry_off;
 	int wdo = p->header->writing_data_off;
@@ -447,6 +471,26 @@ int vs_page::insert_node(list<_key_field> key_fields, vs_page *p, _node *n,
 	}
 	delete a;
 	return idx;
+}
+
+void vs_page::move_node(ushort fe, ushort len, ushort de) {
+	//insert dir entry
+	int def = VS_PAGE_DIR_ENTRY_LENGTH * fe;
+	char * src = buffer + def;
+	char * dest = src + VS_PAGE_DIR_ENTRY_LENGTH;
+	int in_len = len * VS_PAGE_DIR_ENTRY_LENGTH;
+	// align the offset
+	char_buffer tmp;
+	ushort off;
+	for (int i = 0; i < len; i++) {
+		tmp.ref_buff(dest, VS_PAGE_DIR_ENTRY_LENGTH);
+		tmp.skip(CHAR_CHARS);
+		tmp >> off;
+		off -= n->len;
+		tmp.skip(-SHORT_CHARS);
+		tmp << off;
+	}
+	memmove(dest, src, in_len);
 }
 
 void fs_lpage::ref(uint off, char* buff, ushort w_len) {
