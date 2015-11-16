@@ -148,7 +148,8 @@ struct _node {
 		k->kv_off = 0;
 	}
 
-	virtual ~_node () {}
+	virtual ~_node() {
+	}
 };
 
 // leaf node,
@@ -256,7 +257,9 @@ struct fs_inode: virtual _inode {
 
 struct vs_inode: virtual _inode {
 	void ref(uint off, char *buff, ushort len) {
-
+		offset = off;
+		buffer = buff;
+		this->len = len;
 	}
 };
 
@@ -350,8 +353,20 @@ struct vs_page: virtual _page {
 	int insert_node(list<_key_field> key_fields, vs_page *p, _node *n,
 			bool ascend = true);
 	int find_dir_ent_idx(ushort off);
-	void move_node(ushort fe, ushort len, ushort de);
+	void move_dir_entry(ushort es, ushort ec, ushort ed, ushort n_len);
 	void init_header(vs_page *p);
+
+	inline virtual void set_flag(int bit) {
+		header->flag |= (1 << bit);
+	}
+
+	inline virtual void remove_flag(int bit) {
+		header->flag &= ~(1 << bit);
+	}
+
+	inline virtual bool test_flag(int b) {
+		return (header->flag >> b & 1) == 1;
+	}
 };
 
 struct _ipage: virtual _page {

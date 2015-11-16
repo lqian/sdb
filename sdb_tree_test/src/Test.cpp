@@ -97,7 +97,7 @@ void index_component_test() {
 	// the page nodes: 0 2 4 6 8 10 12 14 16 18 before insert a the new 7 node
 	_node * nn = new_inode();
 	char *buff = new char[4];
-	nn->ref(0,buff,4);
+	nn->ref(0, buff, 4);
 	nn->write_key(k);
 	fip.insert_node(k.fields, nn, true);
 
@@ -106,7 +106,34 @@ void index_component_test() {
 	_key rk;
 	rk.fields = k.fields;
 	rn->read_key(rk);
-	ASSERT(rk.compare(k)==0);
+	ASSERT(rk.compare(k) == 0);
+}
+
+void vs_page_insert_test() {
+
+	_key_field kf;
+	kf.field_len = 4;
+	kf.type = field_type::int_type;
+
+	segment seg(1L);
+	seg.set_length(M_64);
+	seg.assign_content_buffer();
+
+	vs_ipage p;
+
+	seg.assign_block(&p);
+	vs_inode n;
+	_key k;
+	k.add_key_field(kf);
+	char_buffer cb(4);
+	for (int i = 0; i < 10; i++) {
+		cb.reset();
+		int r = rand() % 100;
+		cb << r;
+		k.ref(cb.data(), 4);
+		n.ref(0, k.buff, 4);
+		p.insert_node(k.fields, &n);
+	}
 }
 
 void runSuite() {
@@ -115,6 +142,7 @@ void runSuite() {
 	s.push_back(CUTE(key_field_test));
 	s.push_back(CUTE(key_value_test));
 	s.push_back(CUTE(index_component_test));
+	s.push_back(CUTE(vs_page_insert_test));
 	cute::ide_listener lis;
 	cute::makeRunner(lis)(s, "The bpt2 index test Suite");
 }

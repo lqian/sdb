@@ -48,7 +48,7 @@ key_test test(_page *p, _key &k, _node *n) {
 	_key ik = k;
 	key_test t = not_defenition;
 	int c = p->count();
-	int m = (p->count() + 1) / 2;
+	int m = (p->count()) / 2;
 	int l = c;
 	while (m >= 0 && m < c) {
 		p->read_node(m, n);
@@ -282,7 +282,7 @@ int fs_page::insert_node(list<_key_field> key_fields, fs_page *p, _node *n,
 	int idx = -1;
 	if (kt == key_equal || kt == key_within_page) {
 		idx = tn->offset / p->header->node_size;
-		move_nodes(idx, idx+1);
+		move_nodes(idx, idx + 1);
 	} else if (kt == key_greater) {
 		idx = p->header->node_count;
 		assign_node(this, tn);
@@ -309,7 +309,6 @@ void fs_page::move_nodes(ushort f, ushort d) {
 }
 
 void fs_page::init_header(fs_page *p) {
-	std::cout << "" << std::endl;
 }
 /*
  * for variant node, its length must be clear
@@ -322,14 +321,14 @@ int vs_page::assign_node(vs_page *p, _node * n) {
 		return sdb::FAILURE;
 	} else {
 		// write node's offset to directory
-		ushort off = wdo + n->len;
+		ushort off = wdo - n->len;
 		char_buffer cb(p->buffer + weo, VS_PAGE_DIR_ENTRY_LENGTH, true);
 		char c = 0;
-		cb << off << c;
+		cb << c << off;
 
 		//ref buffer for the node
-		p->header->writing_data_off -= n->len;
-		wdo += p->header->writing_entry_off += VS_PAGE_DIR_ENTRY_LENGTH;
+		p->header->writing_data_off = off;
+		p->header->writing_entry_off += VS_PAGE_DIR_ENTRY_LENGTH;
 		p->header->active_node_count++;
 		n->ref(off, p->buffer + off, n->len);
 		return weo;
@@ -343,7 +342,7 @@ int vs_page::read_node(vs_page *p, ushort idx, _node * n) {
 		char_buffer cb(p->buffer + weo, dir_len, true);
 		ushort off;
 		char c;
-		cb >> off >> c;
+		cb >> c >> off;
 		int len;
 		if (idx == 0) {
 			len = p->length - off;
@@ -380,7 +379,9 @@ void vs_page::clean_node(vs_page *p) {
 }
 
 void vs_page::init_header(vs_page *p) {
-
+	if (p->header->writing_data_off == 0) {
+		p->header->writing_data_off = p->length;
+	}
 }
 
 void vs_page::sort_nodes(list<_key_field> key_fields, vs_page *p, bool ascend) {
@@ -401,96 +402,81 @@ int vs_page::insert_node(list<_key_field> key_fields, vs_page *p, _node *n,
 	}
 	_key kn;
 	kn.fields = key_fields;
-	n->read(kn);
+	n->read_key(kn);
 	key_test kt = sdb::index::test(p, kn, a);
 
-	if (kt==key_equal || kt==key_within_page) {
-		idx = find_dir_ent_idx(a->offset);
-		move_node(idx, p->count() - idx, idx+1);
-	}
-	else if (kt == key_greater) {
-		off = p->header->node_count;
-		p->assign_node(a);
-		memcpy(a->buffer -hs, n->buffer - hs, n->len + hs);
-	}
-	else if (kt == key_less) {
-		off = 0;
-		move_node(0, p->count(), 1);
-	}
-	if (idx != p->count()) {
-
-	}
-
-
-	return off;
-
-	int weo = p->header->writing_entry_off;
 	int wdo = p->header->writing_data_off;
-	if (wdo - weo > VS_PAGE_DIR_ENTRY_LENGTH + hs + n->len) {
-		_key ka, kn;
-		for (int i = 0; i < p->count(); i++) {
-			read_node(p, i, a);
-			if (a->test_flag(NODE_REMOVE_BIT)) {
-				continue;
-			}
-
-			a->read_key(ka);
-			n->read_key(kn);
-			int c = ka.compare(kn);
-			if (c == 0 || (c < 0 && ascend) || (c > 0 && !ascend)) {
-				//insert dir entry
-				int def = VS_PAGE_DIR_ENTRY_LENGTH * i;
-				char * src = buffer + def;
-				char * dest = src + VS_PAGE_DIR_ENTRY_LENGTH;
-				int rest = p->count() - i;
-				int in_len = rest * VS_PAGE_DIR_ENTRY_LENGTH;
-				memmove(dest, src, in_len);
-
-				// align the offset
-				char_buffer tmp;
-				char f;
-				ushort off;
-				for (int i = 0; i < rest; i++) {
-					tmp.ref_buff(dest, VS_PAGE_DIR_ENTRY_LENGTH);
-					tmp >> f >> off;
-					off -= n->len;
-					tmp.skip(SHORT_CHARS);
-					tmp << off;
-				}
-
-				// insert data entry
-				src = buffer + a->offset;
-				dest = src + n->len;
-				in_len = wdo - a->offset;
-				memmove(dest, src, in_len);
-				memcpy(src, n->buffer, n->len);
-				idx = i;
-				break;
-			}
-		}
+	char * src;
+	ushort len;
+	if (kt == key_equal || kt == key_within_page) {
+		idx = find_dir_ent_idx(a->offset);
+		move_dir_entry(idx, p->count() - idx, idx + 1, n->len);
+		src = p->buffer + a->offset;
+		len = a->offset - wdo;
+	} else if (kt == key_greater || kt == not_defenition) {
+		idx = p->count();
+		assign_node(p, a);
+	} else if (kt == key_less) {
+		idx = 0;
+		move_dir_entry(0, p->count(), 1, n->len);
+		src = p->buffer;
+		len = p->length - wdo;
 	}
+
+	if (idx != -1) {
+		if (kt != key_greater && kt != not_defenition) {
+			char * dest = src - n->len;
+			memmove(src, dest, len);  //move data entry
+			p->header->active_node_count++;
+			p->header->writing_entry_off += VS_PAGE_DIR_ENTRY_LENGTH;
+			p->header->writing_data_off += (n->len + hs);
+		}
+		// copy the node's buffer to the old position, without fill node header data
+		memcpy(a->buffer, n->buffer, n->len);
+		read_node(p, idx, n);
+	}
+
 	delete a;
 	return idx;
 }
 
-void vs_page::move_node(ushort fe, ushort len, ushort de) {
+void vs_page::move_dir_entry(ushort es, ushort ec, ushort ed, ushort n_len) {
 	//insert dir entry
-	int def = VS_PAGE_DIR_ENTRY_LENGTH * fe;
+	int def = VS_PAGE_DIR_ENTRY_LENGTH * es;
 	char * src = buffer + def;
 	char * dest = src + VS_PAGE_DIR_ENTRY_LENGTH;
-	int in_len = len * VS_PAGE_DIR_ENTRY_LENGTH;
+	int in_len = ec * VS_PAGE_DIR_ENTRY_LENGTH;
+	memmove(dest, src, in_len);
+
 	// align the offset
 	char_buffer tmp;
 	ushort off;
-	for (int i = 0; i < len; i++) {
-		tmp.ref_buff(dest, VS_PAGE_DIR_ENTRY_LENGTH);
-		tmp.skip(CHAR_CHARS);
+	for (int i = 0; i < ec; i++) {
+		tmp.ref_buff(dest + i * VS_PAGE_DIR_ENTRY_LENGTH + CHAR_LEN,
+				SHORT_CHARS);
 		tmp >> off;
-		off -= n->len;
-		tmp.skip(-SHORT_CHARS);
+		off -= n_len;
+		tmp.reset();
 		tmp << off;
 	}
-	memmove(dest, src, in_len);
+
+}
+
+int vs_page::find_dir_ent_idx(ushort off) {
+	int idx = -1;
+	int pos = 0;
+	char_buffer cb;
+	ushort v;
+	while (pos < header->writing_entry_off) {
+		cb.ref_buff(buffer + pos + CHAR_LEN, SHORT_CHARS);
+		cb >> v;
+		if (v == off) {
+			idx = pos / VS_PAGE_DIR_ENTRY_LENGTH;
+		}
+		pos += VS_PAGE_DIR_ENTRY_LENGTH;
+	}
+
+	return idx;
 }
 
 void fs_lpage::ref(uint off, char* buff, ushort w_len) {
