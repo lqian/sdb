@@ -10,11 +10,15 @@
 
 #include "../common/char_buffer.h"
 #include <mutex>
+#include <list>
 
 const short NEW_VALUE_BIT = 7;
 const short OLD_VALUE_BIT = 6;
 
 const int ACTION_HEADER_LENGTH = 15;
+
+struct row_item;
+typedef row_item * row_item_ref;
 
 typedef unsigned long timestamp;
 
@@ -25,32 +29,62 @@ using namespace std;
 using namespace sdb::common;
 
 enum action_op {
-	READ, WRITE, UPDATE,  DELETE
+	READ, WRITE, UPDATE, DELETE
 };
 
 enum commit_flag {
 	trans_leave, trans_on
 };
 
-struct data_item {
+/*
+ * CAUTION: currently only support read_committed
+ */
+enum isolation {
+	SERIALIZABLE, REPEAT_READ, READ_COMMITTED, READ_UNCOMMITTED
+};
+
+/*
+ * 1) Active – the initial state; the transaction stays in this state while it is executing
+ *
+ * 2) Aborted – after the transaction has been rolled back and the database restored to its state prior to the start of the transaction.
+ *
+ * 3) Committed – after successful completion.
+ *
+ * 4) Partially committed – after the final statement has been executed.
+ *
+ * 5) Failed -- after the discovery that normal execution can no longer proceed.
+ *
+ */
+enum trans_status {
+	INITIAL,
+	ACTIVE,
+	ABORTED,
+	READY_ABORTED,
+	COMMITTED,
+	PARTIALLY_COMMITTED,
+	FAILED,
+	PRE_ASSIGN
+};
+
+struct row_item {
 	ulong seg_id;
 	uint blk_off;
 	ushort row_idx;
+
+	bool operator ==(const row_item & ri) {
+		return this == &ri
+				|| (seg_id == ri.seg_id && blk_off == ri.blk_off
+						&& row_idx == ri.row_idx);
+	}
 };
 
-struct data_item_ref : data_item {
-	timestamp wts = 0; // write timestamp
-	timestamp rts = 0; // read timestamp
-	char cmt_flag = 0;
-
-	mutex mtx;
-	bool operator==(const data_item_ref & an);
-};
-
+/*
+ * action in transaction represents operation on row items
+ */
 struct action {
-	ushort seq; // maybe
+	unsigned long aid;
 	action_op op;
-	data_item_ref * dif = nullptr;  // data item ref
+	std::list<row_item> row_items;
 
 	char * buff = nullptr;
 	int len;
@@ -62,10 +96,10 @@ struct action {
 		this->ref_flag = true;
 	}
 
-	action& operator=(const action & an);
-
 	action() {
 	}
+
+	action& operator=(const action & an);
 	action(const action & an);
 	~action();
 };
