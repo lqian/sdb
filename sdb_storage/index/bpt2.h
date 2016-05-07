@@ -335,7 +335,6 @@ struct fs_page: virtual _page {
 	inline virtual bool test_flag(int b) {
 		return (header->flag >> b & 1) == 1;
 	}
-
 };
 
 struct vs_page: virtual _page {
@@ -511,7 +510,7 @@ private:
 
 	bool loaded = false;
 
-	int remove_node(const data_item *di); // a data item represent a index entry
+	int remove_node(const row_item *di); // a data item represent a index entry
 
 	mutex som_mtx; // structure of modification (page merge, split, borrow) mutex
 

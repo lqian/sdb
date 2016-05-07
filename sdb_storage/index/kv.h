@@ -277,10 +277,10 @@ struct _val {
 	int len;
 
 	void ref(char*buff, int len);
-	void to_data_item(data_item &di);
-	void to_data_item(data_item *pdi);
-	void set_data_item(const data_item & di);
-	void set_data_item(const data_item * pdi);
+	void to_data_item(row_item &di);
+	void to_data_item(row_item *pdi);
+	void set_data_item(const row_item & di);
+	void set_data_item(const row_item * pdi);
 };
 }
 }

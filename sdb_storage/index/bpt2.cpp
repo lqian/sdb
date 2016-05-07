@@ -119,22 +119,22 @@ void _val::ref(char *buff, int len) {
 	this->len = len;
 }
 
-void _val::set_data_item(const data_item &di) {
+void _val::set_data_item(const row_item &di) {
 	char_buffer tmp(buff, len, true);
 	tmp << di.seg_id << di.blk_off << di.row_idx;
 }
 
-void _val::set_data_item(const data_item *di) {
+void _val::set_data_item(const row_item *di) {
 	char_buffer tmp(buff, len, true);
 	tmp << di->seg_id << di->blk_off << di->row_idx;
 }
 
-void _val::to_data_item(data_item &di) {
+void _val::to_data_item(row_item &di) {
 	char_buffer tmp(buff, len, true);
 	tmp >> di.seg_id >> di.blk_off >> di.row_idx;
 }
 
-void _val::to_data_item(data_item *di) {
+void _val::to_data_item(row_item *di) {
 	char_buffer tmp(buff, len, true);
 	tmp >> di->seg_id >> di->blk_off >> di->row_idx;
 }
