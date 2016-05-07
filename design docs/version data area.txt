@@ -1,0 +1,16 @@
+row_item = {seg_id, blk_off, row_idx}
+ver_item = {timestamp, len, char *}
+在版本数据区域内，vers_data_area，以row_item为key，以一个list<ver_item>为value，其中ver_item列表中按照timestamp顺序排列, 用红黑树保存row_item和list<ver_item>
+
+当ver_item被写入segment时，如果它的row_item发生变化，用新的row_item替换vers_data_area中原row_item
+
+当事务终止时，从vers_data_area中删除事务中所有row_item的相应的版本
+
+版本数据管理内置一个后台线程，定期把vers_data_area和当前活动的最早事务的时间戳最接近的ver_item写入segment，从ver_data_area中删除比当前活动事务最早的时间戳小的所有ver_item
+
+读取一个row_item版本时，如果vers_data_area没有事务所需要的row_item，从segment中读取。
+
+写一个版本时，首先写入到row_item的版本到vers_data_area
+
+
+

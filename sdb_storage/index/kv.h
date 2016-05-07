@@ -200,7 +200,7 @@ struct _key {
 	 */
 	int len;
 
-	list<_key_field> key_fields;
+	list<_key_field> fields;
 
 	inline void ref(char *buff, int len) {
 		this->buff = buff;
@@ -233,9 +233,9 @@ struct _key {
 
 	inline bool equal_fields(const _key & an) {
 		bool equals = true;
-		auto it = key_fields.begin();
-		auto ait = an.key_fields.begin();
-		for (; equals && it != key_fields.end() && ait != an.key_fields.end();
+		auto it = fields.begin();
+		auto ait = an.fields.begin();
+		for (; equals && it != fields.end() && ait != an.fields.end();
 				++it, ++ait) {
 			equals = it->field_name == ait->field_name && it->type == ait->type;
 		}
@@ -247,10 +247,10 @@ struct _key {
 	 */
 	inline int compare(_key & an) {
 		int r = 0;
-		auto it = key_fields.begin();
-		auto ait = an.key_fields.begin();
+		auto it = fields.begin();
+		auto ait = an.fields.begin();
 		_key_field th, ak;
-		for (; r == 0 && it != key_fields.end() && ait != an.key_fields.end();
+		for (; r == 0 && it != fields.end() && ait != an.fields.end();
 				it++, ait++) {
 			th = *it;
 			ak = *ait;
@@ -263,12 +263,12 @@ struct _key {
 	}
 
 	inline void add_key_field(const _key_field & kf) {
-		for (auto & e : key_fields) {
+		for (auto & e : fields) {
 			if (e == kf) {
 				return;
 			}
 		}
-		key_fields.push_back(kf);
+		fields.push_back(kf);
 	}
 };
 
