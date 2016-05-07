@@ -90,7 +90,7 @@ int seg_mgr::get_row(ulong seg_id, uint blk_off, int idx, char_buffer & buff) {
 	return r;
 }
 
-int seg_mgr::get_row(const data_item_ref * dif, char_buffer & buff) {
+int seg_mgr::get_row(const row_item * dif, char_buffer & buff) {
 	int r = sdb::FAILURE;
 	segment * seg = find_segment(dif->seg_id);
 	if (seg) {
@@ -104,7 +104,7 @@ int seg_mgr::get_row(const data_item_ref * dif, char_buffer & buff) {
 	return r;
 }
 
-int seg_mgr::get_row(const data_item_ref & dif, char_buffer & buff) {
+int seg_mgr::get_row(const row_item & dif, char_buffer & buff) {
 	return get_row(&dif, buff);
 }
 
@@ -123,8 +123,7 @@ int seg_mgr::write(ulong seg_id, uint blk_off, int row_idx, const char * buff,
 
 	return r;
 }
-
-int seg_mgr::write(const data_item_ref *dif, const char * buff,
+int seg_mgr::write(const row_item *dif, const char * buff,
 		const int & len) {
 	int r = sdb::FAILURE;
 	segment * seg = find_segment(dif->seg_id);

@@ -71,74 +71,43 @@ enum sdb_table_status {
 	sdb_table_other_failure
 };
 
-//class sdb {
-//
-//private:
-//	// sdb files store in directory
-//	std::string dir;
-//
-//	// sdb name, a directory only has one sdb instance
-//	std::string name;
-//
-//	std::string full_path;
-//
-//	std::string charset; // not support current 2014-12-12
-//
-//	sdb_status status;
-//
-//	std::string db_meta_file;
-//
-//public:
-//	sdb() {
-//	}
-//	explicit sdb(const char *dir, const char * name);
-//	explicit sdb(const std::string & dir, const std::string &name);
-//	explicit sdb(const sdb& other) :
-//			dir(other.dir), name(other.name), charset(other.charset), status(
-//					other.status) {
-//		full_path = dir + "/" + name;
-//	}
-//	virtual ~ sdb();
-//
-//	bool exists();
-//	bool init();
-//	bool open(const bool & read_only);
-//	bool close();
-//	const sdb_status& get_status();
-//	void change_status(sdb_status & status);
-//
-//	bool exist_table(std::string &table_name);
-//
-//	bool exist_table(const char * table_name);
-//
-//	const std::string get_name() {
-//		return name;
-//	}
-//
-//	const std::string get_dir() {
-//		return dir;
-//	}
-//
-//	const std::string & get_full_path() const {
-//		return full_path;
-//	}
-//
-//	bool equals(const sdb & other) {
-//		return (other.dir == dir) && (name == other.name);
-//	}
-//
-//	bool operator==(const sdb & b) {
-//		return equals(b);
-//	}
-//
-//	void operator=(const sdb & other) {
-//		this->dir = other.dir;
-//		this->name = other.name;
-//		this->charset = other.charset;
-//		this->full_path = other.full_path;
-//		this->status = other.status;
-//	}
-//};
+
+/*################################################
+ *
+ * define for datafile and segment mgr
+ *
+ ################################################*/
+
+const int ASSIGN_DATA_FILE_FAILURE = -0x400;
+const int ASSIGN_SEGMENT_FAILURE = -0x401;
+const int ASSIGN_BLOCK_FAILURE = -0x402;
+const int SEGMENG_NOT_EXISTED = -0x403;
+
+
+/*################################################
+ *
+ * define for log mgr
+ *
+ ################################################*/
+const int NOT_FIND_TRANSACTION = -1;
+const int FIND_TRANSACTION_START = 1;
+const int CONTINUE_TO_FIND = 2;
+
+const int LOG_BLK_SPACE_NOT_ENOUGH = -0X500;
+const int OUTOF_ENTRY_INDEX = -0X501;
+const int DATA_LENGTH_TOO_LARGE = -0X502;
+const int INIT_LOG_FILE_FAILURE = -0x503;
+const int LOG_STREAM_ERROR = -0X504;
+const int LOCKED_LOG_MGR_PATH = -0X505;
+const int LOCK_STREAM_ERROR = -0X506;
+const int OUT_LOCK_LOGMGR_FAILURE = -0X507;
+const int LOG_FILE_IS_ACTIVE = -0X508;
+const int INVALID_OPS_ON_ACTIVE_LOG_FILE = -0X509;
+const int MISSING_LAST_CHECK_POINT = -0X50A;
+const int CHECKPOINT_STREAM_ERROR = -0X50B;
+const int EXCEED_LOGFILE_LIMITATION = -0X50C;
+const int NO_LOG_FILE_CHECK = -0X50D;
+
 }
 }
 

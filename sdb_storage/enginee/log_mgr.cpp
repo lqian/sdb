@@ -113,7 +113,7 @@ void log_block::copy_data(const dir_entry &e, char_buffer & buff) {
 
 void log_block::copy_data(const dir_entry & de, log_entry & le) {
 	if (!le.assign_di) {
-		le.di = new data_item;
+		le.di = new row_item;
 		le.assign_di = true;
 	}
 	char_buffer buff(buffer + de.offset, de.length, true);
@@ -275,7 +275,7 @@ log_block::log_entry::log_entry(const log_entry & an) {
 	o_len = an.o_len;
 	wl = an.wl;
 	if (assign_di) {
-		di = new data_item;
+		di = new row_item;
 		di->seg_id = an.di->seg_id;
 		di->blk_off = an.di->blk_off;
 		di->row_idx = an.di->row_idx;
@@ -295,7 +295,7 @@ log_block::log_entry & log_block::log_entry::operator =(const log_entry & an) {
 	o_len = an.o_len;
 	wl = an.wl;
 	if (assign_di) {
-		di = new data_item;
+		di = new row_item;
 		di->seg_id = an.di->seg_id;
 		di->blk_off = an.di->blk_off;
 		di->row_idx = an.di->row_idx;

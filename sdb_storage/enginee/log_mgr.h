@@ -18,6 +18,7 @@
 #include <list>
 #include <string>
 
+#include "sdb.h"
 #include "trans_def.h"
 #include "../sdb_def.h"
 #include "../common/char_buffer.h"
@@ -45,26 +46,10 @@ const int START_DEFINE = 0xfffffffd;
 const int LOG_FILE_MAGIC = 0x7FA9C83D;
 const int LOG_BLOCK_MAGIC = 0xF79A8CD3;
 
-const int NOT_FIND_TRANSACTION = -1;
-const int FIND_TRANSACTION_START = 1;
-const int CONTINUE_TO_FIND = 2;
-
-const int LOG_BLK_SPACE_NOT_ENOUGH = -0X500;
-const int OUTOF_ENTRY_INDEX = -0X501;
-const int DATA_LENGTH_TOO_LARGE = -0X502;
-const int INIT_LOG_FILE_FAILURE = -0x503;
-const int LOG_STREAM_ERROR = -0X504;
-const int LOCKED_LOG_MGR_PATH = -0X505;
-const int LOCK_STREAM_ERROR = -0X506;
-const int OUT_LOCK_LOGMGR_FAILURE = -0X507;
-const int LOG_FILE_IS_ACTIVE = -0X508;
-const int INVALID_OPS_ON_ACTIVE_LOG_FILE = -0X509;
-const int MISSING_LAST_CHECK_POINT = -0X50A;
-const int CHECKPOINT_STREAM_ERROR = -0X50B;
-const int EXCEED_LOGFILE_LIMITATION = -0X50C;
-const int NO_LOG_FILE_CHECK = -0X50D;
 
 class log_mgr;
+
+
 
 enum log_status {
 	initialized = 0, active, opened, closed
@@ -153,7 +138,7 @@ public:
 	 * currently use action instead of log_entry
 	 */
 	struct log_entry {
-		data_item * di;
+		row_item * di;
 		bool assign_di = false;
 		uchar flag = 0;
 		ushort seq;

@@ -19,10 +19,6 @@ namespace sdb {
 namespace enginee {
 using namespace sdb::common;
 
-const int ASSIGN_DATA_FILE_FAILURE = -0x400;
-const int ASSIGN_SEGMENT_FAILURE = -0x401;
-const int ASSIGN_BLOCK_FAILURE = -0x402;
-const int SEGMENG_NOT_EXISTED = -0x403;
 
 using namespace std;
 using namespace sdb::storage;
@@ -62,19 +58,20 @@ public:
 
 	int get_row(ulong seg_id, uint blk_off, int idx, char_buffer & buff);
 
-	int get_row(const data_item_ref & dif, char_buffer & buff);
+	int get_row(const row_item & dif, char_buffer & buff);
 
-	int get_row(const data_item_ref * dif, char_buffer & buff);
+	int get_row(const row_item * dif, char_buffer & buff);
 
 	/*
 	 * write a exist row_idx with buffer and its length
 	 */
 	int write(ulong seg_id, uint blk_off, int idx, const char * buff, const int& len);
 
+
 	/*
 	 * write a data_item with buffer and length, return success if write else false
 	 */
-	int write(const data_item_ref *dif, const char * buff, const int & len);
+	int write(const row_item *dif, const char * buff, const int & len);
 
 	inline void set_swap_police(swap_policy & sp) {
 		this->sp = sp;

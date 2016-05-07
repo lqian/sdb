@@ -76,8 +76,54 @@ struct row_item {
 				|| (seg_id == ri.seg_id && blk_off == ri.blk_off
 						&& row_idx == ri.row_idx);
 	}
+
+	bool operator <(const row_item & ri) {
+		if (this != &ri) {
+			return (seg_id < ri.seg_id)
+					|| (seg_id == ri.seg_id && blk_off < ri.blk_off)
+					|| (seg_id == ri.seg_id && blk_off == ri.blk_off
+							&& row_idx < ri.row_idx);
+		} else {
+			return false;
+		}
+	}
 };
 
+struct ver_item {
+	ulong ts;
+	int len;
+	char * buff;
+
+	row_item * p_row_item;
+
+	inline bool operator ==(const ver_item & vi) {
+		return this == &vi
+				|| (ts == vi.ts && len == vi.len && p_row_item == vi.p_row_item);
+	}
+
+	inline bool free() {
+		if (len > 0) {
+			delete[] buff;
+			len = 0;
+			return true;
+		}
+		return false;
+	}
+
+	~ver_item() {
+	}
+};
+
+struct row_item_comp {
+	bool operator()(const row_item & a, const row_item & b) const {
+		return (a.seg_id < b.seg_id)
+				|| (a.seg_id == b.seg_id && a.blk_off < b.blk_off)
+				|| (a.seg_id == b.seg_id && a.blk_off == b.blk_off
+						&& a.row_idx < b.row_idx);
+	}
+};
+
+typedef std::list<ver_item> * ver_item_list;
 /*
  * action in transaction represents operation on row items
  */
