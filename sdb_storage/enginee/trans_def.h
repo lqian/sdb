@@ -128,7 +128,7 @@ typedef std::list<ver_item> * ver_item_list;
  * action in transaction represents operation on row items
  */
 struct action {
-	unsigned long aid;
+	timestamp aid;
 	action_op op;
 	std::list<row_item> row_items;
 
@@ -148,6 +148,17 @@ struct action {
 	action& operator=(const action & an);
 	action(const action & an);
 	~action();
+};
+
+struct trans {
+
+	timestamp tid;
+
+	list<action> actions;
+
+	timestamp cid;
+
+	trans_status status;
 };
 
 }
