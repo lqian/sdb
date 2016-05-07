@@ -131,6 +131,7 @@ struct action {
 	timestamp aid;
 	action_op op;
 	std::list<row_item> row_items;
+	trans * ref_trans;
 
 	char * buff = nullptr;
 	int len;

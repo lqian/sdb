@@ -1,7 +1,8 @@
 mvcc trans mgr design draft
 1，假设多版本并发控制事务管理器trans_mgr具有一个全局的，单向递增的事务时间戳生成器ts_chrono, 向ts_chrono发送一次请求，ts_chronor返回比上一个ts大的时间戳
 
-2，事务trans具有多个action，每个action包含对row_item的操作和计算逻辑函数，并且在事务内，action时顺序的，每个action执行时，向ts_chrono请求一个新的ts
+2，事务trans具有多个action，每个action包含对row_item的操作（读或者写，且只有这两种操作），并且在事务内，action时顺序的，每个action执行时，向ts_chrono请求一个新的ts
+   action有一个指针指向其所属于的trans
 
 3，事务在commit时，须向ts_chrono请求commit timestamp,并且写入事务的cid字段
 
