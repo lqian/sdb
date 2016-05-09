@@ -5,8 +5,8 @@
  *      Author: linkqian
  */
 
-#ifndef THREADPOOL_H_
-#define THREADPOOL_H_
+#ifndef THREAD_POOL_H_
+#define THREAD_POOL_H_
 
 #include <iostream>
 #include <functional>
@@ -22,7 +22,7 @@
 namespace sdb {
 namespace common {
 
-class ThreadPool;
+class thread_pool;
 /*
  * represent a action object to be put thread pool
  */
@@ -38,7 +38,7 @@ public:
  */
 class TaskQueue {
 private:
-	friend class ThreadPool;
+	friend class thread_pool;
 
 	std::mutex mutex;
 	std::condition_variable_any condition;
@@ -85,7 +85,7 @@ public:
 
 };
 
-class ThreadPool {
+class thread_pool {
 
 private:
 	friend class Worker;
@@ -102,10 +102,10 @@ private:
 	void execute();
 
 public:
-	ThreadPool(){}
-	ThreadPool(int __coreSize, int __maxTask);
-	ThreadPool(int __coreSize, int __maxTask, long __timeout);
-	~ThreadPool();
+	thread_pool(){}
+	thread_pool(int __coreSize, int __maxTask);
+	thread_pool(int __coreSize, int __maxTask, long __timeout);
+	~thread_pool();
 	void init_thread_workers();
 	void push_back(Runnable & r);
 	void push_back(Runnable * r);
@@ -139,4 +139,4 @@ public:
 } /* namespace common */
 } /* namespace sdb */
 
-#endif /* THREADPOOL_H_ */
+#endif /* THREAD_POOL_H_ */

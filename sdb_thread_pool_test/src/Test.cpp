@@ -1,8 +1,8 @@
+#include <thread_pool.h>
 #include "cute.h"
 #include "ide_listener.h"
 #include "cute_runner.h"
 #include <cstdlib>
-#include "ThreadPool.h"
 #include <functional>
 #include <atomic>
 #include <map>
@@ -62,7 +62,7 @@ void test_task_queue() {
 }
 
 void test_thread_pool() {
-	sdb::common::ThreadPool tp(4, 100);
+	sdb::common::thread_pool tp(4, 100);
 
 	for (int i = 0; i < 1200; i++) {
 		CounterRunner runner;

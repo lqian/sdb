@@ -5,17 +5,17 @@
  *      Author: linkqian
  */
 
-#include "ThreadPool.h"
+#include "thread_pool.h"
 
 namespace sdb {
 namespace common {
 
 using namespace std;
 
-void ThreadPool::await_terminate() {
+void thread_pool::await_terminate() {
 	await_terminate(false);
 }
-void ThreadPool::await_terminate(bool force) {
+void thread_pool::await_terminate(bool force) {
 	if (!force) {
 		//waiting for all task to be executed
 		taskQueue.wait_empty();
@@ -39,32 +39,32 @@ void ThreadPool::await_terminate(bool force) {
 	terminated = true;
 }
 
-void ThreadPool::insert(Runnable & r) {
+void thread_pool::insert(Runnable & r) {
 	function<void()> f = bind(&Runnable::run, &r);
 	taskQueue.insert(f);
 }
 
-bool ThreadPool::insert(Runnable &r, long ms) {
+bool thread_pool::insert(Runnable &r, long ms) {
 	function<void()> f = bind(&Runnable::run, &r);
 	return taskQueue.insert(f, chrono::milliseconds(ms));
 }
 
-void ThreadPool::push_back(Runnable &r) {
+void thread_pool::push_back(Runnable &r) {
 	function<void()> f = bind(&Runnable::run, &r);
 	taskQueue.push_back(f);
 }
 
-void ThreadPool::push_back(Runnable * r) {
+void thread_pool::push_back(Runnable * r) {
 	function<void()> f = bind(&Runnable::run, r);
 	taskQueue.push_back(f);
 }
 
-bool ThreadPool::push_back(Runnable &r, long ms) {
+bool thread_pool::push_back(Runnable &r, long ms) {
 	function<void()> f = bind(&Runnable::run, &r);
 	return taskQueue.push_back(f, chrono::milliseconds(ms));
 }
 
-bool ThreadPool::push_back(Runnable *r, long ms) {
+bool thread_pool::push_back(Runnable *r, long ms) {
 	function<void()> f = bind(&Runnable::run, r);
 	return taskQueue.push_back(f, chrono::milliseconds(ms));
 }
@@ -189,20 +189,20 @@ void TaskQueue::push_back(function<void()> &f) {
 	mutex.unlock();
 }
 
-void ThreadPool::init_thread_workers() {
+void thread_pool::init_thread_workers() {
 	for (int i = 0; i < coreSize; i++) {
-		threads.push_back(std::thread(&ThreadPool::execute, this));
+		threads.push_back(std::thread(&thread_pool::execute, this));
 	}
 }
 
-ThreadPool::ThreadPool(int __coreSize, int __maxTask) :
+thread_pool::thread_pool(int __coreSize, int __maxTask) :
 		terminated(false), stopping(false), taskQueue(__maxTask), threads(
 				__coreSize), lockTimeout(0L) {
 	coreSize = __coreSize;
 	init_thread_workers();
 }
 
-ThreadPool::ThreadPool(int __coreSize, int __maxTask, long __timeout) :
+thread_pool::thread_pool(int __coreSize, int __maxTask, long __timeout) :
 		terminated(false), stopping(false), taskQueue(__maxTask), lockTimeout(
 				__timeout) {
 	coreSize = __coreSize;
@@ -210,7 +210,7 @@ ThreadPool::ThreadPool(int __coreSize, int __maxTask, long __timeout) :
 	init_thread_workers();
 }
 
-void ThreadPool::execute() {
+void thread_pool::execute() {
 	while (!stopping) {
 		function<void()> exec_runnable;
 		if (lockTimeout <= 0) {
@@ -226,7 +226,7 @@ void ThreadPool::execute() {
 	}
 }
 
-ThreadPool::~ThreadPool() {
+thread_pool::~thread_pool() {
 	if (!terminated) {
 		await_terminate();
 	}

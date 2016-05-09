@@ -9,16 +9,26 @@
 #define TRANS_DEF_H
 
 #include "../common/char_buffer.h"
+#include "../sdb_def.h"
 #include <mutex>
 #include <list>
+#include <ctime>
 
 const short NEW_VALUE_BIT = 7;
 const short OLD_VALUE_BIT = 6;
 
 const int ACTION_HEADER_LENGTH = 15;
 
+const int NON_TRANSACTINAL_TIMESTAMP(0);
+
+
 struct row_item;
-typedef row_item * row_item_ref;
+struct action;
+struct trans;
+typedef row_item * row_item_ptr;
+
+typedef action * action_ptr;
+
 
 typedef unsigned long timestamp;
 
@@ -114,6 +124,9 @@ struct ver_item {
 	}
 };
 
+typedef ver_item * ver_item_ptr;
+typedef std::list<ver_item> * ver_item_list;
+
 struct row_item_comp {
 	bool operator()(const row_item & a, const row_item & b) const {
 		return (a.seg_id < b.seg_id)
@@ -123,14 +136,14 @@ struct row_item_comp {
 	}
 };
 
-typedef std::list<ver_item> * ver_item_list;
+
 /*
  * action in transaction represents operation on row items
  */
 struct action {
 	timestamp aid;
 	action_op op;
-	std::list<row_item> row_items;
+	std::list<row_item_ptr> * row_items_ptr;
 	trans * ref_trans;
 
 	char * buff = nullptr;
@@ -155,12 +168,53 @@ struct trans {
 
 	timestamp tid;
 
-	list<action> actions;
+	bool ar; // auto restart
 
 	timestamp cid;
 
 	trans_status status;
+
+	list<action_ptr> * actions_ptr;
+
+	~trans();
 };
+
+class ts_chrono {
+private:
+	timestamp ts;
+	mutex ts_mtx;
+public:
+	ts_chrono() {
+		renew_ts();
+	}
+
+	inline int set_ts(timestamp ts) {
+		int r = sdb::SUCCESS;
+		ts_mtx.lock();
+		if (ts > this->ts) {
+			this->ts = ts;
+		} else {
+			r = sdb::FAILURE;
+		}
+		ts_mtx.unlock();
+		return r;
+	}
+
+	inline timestamp next_ts() {
+		ts_mtx.lock();
+		ts++;
+		ts_mtx.unlock();
+		return ts;
+	}
+
+	inline void renew_ts() {
+		long curr;
+		time(&curr);
+		ts = curr << 4;
+	}
+};
+
+static ts_chrono TS_CHRONO;
 
 }
 }

@@ -1,12 +1,17 @@
 mvcc trans mgr design draft
+
 1，假设多版本并发控制事务管理器trans_mgr具有一个全局的，单向递增的事务时间戳生成器ts_chrono, 向ts_chrono发送一次请求，ts_chronor返回比上一个ts大的时间戳
 
 2，事务trans具有多个action，每个action包含对row_item的操作（读或者写，且只有这两种操作），并且在事务内，action时顺序的，每个action执行时，向ts_chrono请求一个新的ts
    action有一个指针指向其所属于的trans
+   
+3，trasn_mgr内部有一个活动的事务列表，active transaction table，att按照事务的时间戳从小到大排列活动的事务。   
 
-3，事务在commit时，须向ts_chrono请求commit timestamp,并且写入事务的cid字段
+4，事务在commit时，须向ts_chrono请求commit timestamp,并且写入事务的cid字段，把事务设置为partially committed状态，用log_mgr把此事务的commit日志写入日志文件，把此事务设置为commited状态，并且从att中移除此日志。
 
-4，trans_mgr支持 read_committed, repeat_read, searilizable隔离级别，不支持read_uncommitted,默认repeat_read隔离级别
+5，trans_mgr支持 read_committed, repeat_read, searilizable隔离级别，不支持read_uncommitted, 默认repeat_read隔离级别
 
-5，trans_mgr内置线程池trans_mgr_thread_pool，trans被提交到trans_mgr的事务队列中trans_queue，有一个事务派发线程从trans_queue中取trans，变换成可被执行的线程池函数，提交到trans_mgr_thread_pool被执行。
+6，trans_mgr内置线程池trans_mgr_thread_pool，trans被提交到trans_mgr的事务队列中trans_queue，有一个事务派发线程从trans_queue中取trans，变换成可被执行的线程池函数，提交到trans_mgr_thread_pool被执行。
+
+7, trans_mgr的回收线程定期调用ver_mgr.gc函数时，传入att中最小的时间戳，回收老的版本
 

@@ -44,6 +44,8 @@ private:
 
 	seg_mgr * _seg_mgr = & sdb::enginee::LOCAL_SEG_MGR;
 
+
+
 public:
 	ver_mgr(const ulong & max = VER_MGR_DEFAULT_VER_DATA_SIZE);
 	virtual ~ver_mgr();
@@ -55,6 +57,8 @@ public:
 	int add_ver(const row_item & ri, const ver_item & vi);
 
 	int del_ver(const row_item & ri, const ulong & ts);
+
+	int read_ver(const row_item * ri, const timestamp & ts);
 
 	/*
 	 * two old version data is garbage for multiple version concurrency control.
@@ -76,17 +80,6 @@ public:
 };
 
 static ver_mgr LOCAL_VER_MGR;
-
-/*
- *
- */
-class ver_gc_thread {
-private:
-	ulong interval;
-
-public:
-	int gc();
-};
 
 } /* namespace enginee */
 } /* namespace sdb */
