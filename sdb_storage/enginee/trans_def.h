@@ -26,7 +26,6 @@ struct row_item;
 struct action;
 struct trans;
 typedef row_item * row_item_ptr;
-
 typedef action * action_ptr;
 
 
@@ -124,8 +123,6 @@ struct ver_item {
 	}
 };
 
-typedef ver_item * ver_item_ptr;
-typedef std::list<ver_item> * ver_item_list;
 
 struct row_item_comp {
 	bool operator()(const row_item & a, const row_item & b) const {
@@ -145,23 +142,6 @@ struct action {
 	action_op op;
 	std::list<row_item_ptr> * row_items_ptr;
 	trans * ref_trans;
-
-	char * buff = nullptr;
-	int len;
-	bool ref_flag = false;
-
-	inline void ref(char * buff, int len) {
-		this->buff = buff;
-		this->len = len;
-		this->ref_flag = true;
-	}
-
-	action() {
-	}
-
-	action& operator=(const action & an);
-	action(const action & an);
-	~action();
 };
 
 struct trans {

@@ -17,20 +17,20 @@ ver_mgr::ver_mgr(const ulong & max) {
 /**
  * ver_item list is order descent by timestamp
  */
-int ver_mgr::add_ver(const row_item &  ri, const ver_item & vi) {
+int ver_mgr::add_ver(const row_item &  ri,  ver_item * vi) {
 	ver_mtx.lock();
-	if (this->ver_data_size + vi.len > max_ver_data_size) {
+	if (this->ver_data_size + vi->len > max_ver_data_size) {
 		return EXCEED_MAX_VER_DATA_SIZE;
 	}
 	auto it = ver_data.find(ri);
 	if (it != ver_data.end()) {
-		ver_item_list vil = it->second;
+		list<ver_item *> * vil = it->second;
 		auto vit = vil->begin();
 		for (; vit != vil->end(); ++vit) {
-			ver_item v = *vit;
-			if (vi.ts > v.ts) {
+			ver_item * v = *vit;
+			if (vi->ts > v->ts) {
 				break;
-			} else if (*vit == vi) {
+			} else if (v->ts == vi->ts) {
 				return VER_ITEM_EXISTED;
 			}
 			// vi.ts < v.ts, continue to move the iterator point
@@ -39,17 +39,17 @@ int ver_mgr::add_ver(const row_item &  ri, const ver_item & vi) {
 		}
 
 		vil->insert(vit, vi);
-		ver_data_size += vi.len;
+		ver_data_size += vi->len;
 		ver_mtx.unlock();
 		return VER_INSERT_SUCCESS;
 	} else {
 		// row_item not existed in ver_data, create a ver_list for the row_item
 		// and push the new version
-		ver_item_list vil = new std::list<ver_item>;
+		list<ver_item *> * vil = new list<ver_item *>;
 		vil->push_back(vi);
 		auto ret = ver_data.insert(make_pair(ri, vil));
 		if (ret.second) {
-			ver_data_size += vi.len;
+			ver_data_size += vi->len;
 		}
 		ver_mtx.unlock();
 		return ret.second ? VER_INSERT_SUCCESS : VER_INSERT_FAILURE;
@@ -61,12 +61,12 @@ int ver_mgr::del_ver(const row_item & ri, const ulong &ts) {
 	ver_mtx.lock();
 	auto it = ver_data.find(ri);
 	if (it != ver_data.end()) {
-		ver_item_list vil = it->second;
+		list<ver_item *> * vil = it->second;
 		bool found = false;
 		auto vit = vil->begin();
 		for (; !found && vit != vil->end(); ++vit) {
-			ver_item v = *vit;
-			found = (v.ts == ts);
+			ver_item * v = *vit;
+			found = (v->ts == ts);
 		}
 		if (found) {
 			vil->erase(vit);
@@ -91,14 +91,14 @@ int ver_mgr::gc(const ulong &ts) {
 	int r = sdb::SUCCESS;
 	ver_mtx.lock();
 	for (auto it = ver_data.begin(); it != ver_data.end(); ++it) {
-		ver_item_list vil = it->second;
+		list<ver_item *> * vil  = it->second;
 		row_item ri = it->first;
 		bool elder = false;
 		auto vit = vil->begin();
 
 		// move the ver_item element just elder than the timestamp specified with ts parameter
 		for (; !elder && vit != vil->end(); ++vit) {
-			elder = (*vit).ts > ts;
+			elder = (*vit)->ts > ts;
 		}
 
 		if (elder) {
@@ -106,16 +106,16 @@ int ver_mgr::gc(const ulong &ts) {
 			// merge the ver_item to segment, free ver_item_list, remove row_item from ver_data
 			// else free the memory of elder and remove them
 			if (vil->size() == 1) {
-				ver_item vi = *vil->begin();
-				_seg_mgr->write(&ri, vi.buff, vi.len);
-				vi.free();
+				ver_item * vi = *vil->begin();
+				_seg_mgr->write(&ri, vi->buff, vi->len);
+				vi->free();
 				delete it->second;
 				ver_data.erase(it);
 			} else {
 				for (; vit != vil->end(); vit++) {
-					(*vit).free();
+					(*vit)->free();
 				}
-				vil->remove_if([ts] (const ver_item & e) {return e.ts < ts;});
+				vil->remove_if([ts] (const ver_item * e) {return e->ts < ts;});
 			}
 		}
 	}
