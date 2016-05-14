@@ -26,7 +26,7 @@ class thread_pool;
 /*
  * represent a action object to be put thread pool
  */
-class Runnable {
+class runnable {
 public:
 	virtual void run() {
 	}
@@ -107,12 +107,12 @@ public:
 	thread_pool(int __coreSize, int __maxTask, long __timeout);
 	~thread_pool();
 	void init_thread_workers();
-	void push_back(Runnable & r);
-	void push_back(Runnable * r);
-	bool push_back(Runnable & r, const long milliseconds);
-	bool push_back(Runnable * r, const long milliseconds);
-	void insert(Runnable & r);
-	bool insert(Runnable & r, const long milliseconds);
+	void push_back(runnable & r);
+	void push_back(runnable * r);
+	bool push_back(runnable & r, const long milliseconds);
+	bool push_back(runnable * r, const long milliseconds);
+	void insert(runnable & r);
+	bool insert(runnable & r, const long milliseconds);
 
 	// convenience method for awaitTerminate(false)
 	void await_terminate();

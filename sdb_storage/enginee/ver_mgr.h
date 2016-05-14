@@ -58,6 +58,8 @@ public:
 
 	int del_ver(const row_item & ri, const ulong & ts);
 
+	int del_ver_for_trans(const trans * tr);
+
 	int read_ver(const row_item * ri, const timestamp & ts, ver_item * vi);
 
 	/*

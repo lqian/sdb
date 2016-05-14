@@ -39,33 +39,33 @@ void thread_pool::await_terminate(bool force) {
 	terminated = true;
 }
 
-void thread_pool::insert(Runnable & r) {
-	function<void()> f = bind(&Runnable::run, &r);
+void thread_pool::insert(runnable & r) {
+	function<void()> f = bind(&runnable::run, &r);
 	taskQueue.insert(f);
 }
 
-bool thread_pool::insert(Runnable &r, long ms) {
-	function<void()> f = bind(&Runnable::run, &r);
+bool thread_pool::insert(runnable &r, long ms) {
+	function<void()> f = bind(&runnable::run, &r);
 	return taskQueue.insert(f, chrono::milliseconds(ms));
 }
 
-void thread_pool::push_back(Runnable &r) {
-	function<void()> f = bind(&Runnable::run, &r);
+void thread_pool::push_back(runnable &r) {
+	function<void()> f = bind(&runnable::run, &r);
 	taskQueue.push_back(f);
 }
 
-void thread_pool::push_back(Runnable * r) {
-	function<void()> f = bind(&Runnable::run, r);
+void thread_pool::push_back(runnable * r) {
+	function<void()> f = bind(&runnable::run, r);
 	taskQueue.push_back(f);
 }
 
-bool thread_pool::push_back(Runnable &r, long ms) {
-	function<void()> f = bind(&Runnable::run, &r);
+bool thread_pool::push_back(runnable &r, long ms) {
+	function<void()> f = bind(&runnable::run, &r);
 	return taskQueue.push_back(f, chrono::milliseconds(ms));
 }
 
-bool thread_pool::push_back(Runnable *r, long ms) {
-	function<void()> f = bind(&Runnable::run, r);
+bool thread_pool::push_back(runnable *r, long ms) {
+	function<void()> f = bind(&runnable::run, r);
 	return taskQueue.push_back(f, chrono::milliseconds(ms));
 }
 

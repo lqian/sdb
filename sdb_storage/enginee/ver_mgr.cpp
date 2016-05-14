@@ -17,7 +17,7 @@ ver_mgr::ver_mgr(const ulong & max) {
 /**
  * ver_item list is order descent by timestamp
  */
-int ver_mgr::add_ver(const row_item &  ri,  ver_item * vi) {
+int ver_mgr::add_ver(const row_item & ri, ver_item * vi) {
 	ver_mtx.lock();
 	if (this->ver_data_size + vi->len > max_ver_data_size) {
 		return EXCEED_MAX_VER_DATA_SIZE;
@@ -84,6 +84,20 @@ int ver_mgr::del_ver(const row_item & ri, const ulong &ts) {
 	return r;
 }
 
+int ver_mgr::del_ver_for_trans(const trans* tr) {
+	auto vit = tr->actions_ptr->begin();
+	for (; vit != tr->actions_ptr->end(); vit++) {
+		action_ptr a = *vit;
+		if (a->op == action_op::WRITE) {
+			for (auto ril = a->row_items_ptr->begin();
+					ril != a->row_items_ptr->end(); ril++) {
+				row_item ri = (*ril);
+				this->del_ver(ri, tr->tid);
+			}
+		}
+	}
+}
+
 /*
  * scan all row_item's ver_data, remove the elder version and save to segment
  */
@@ -91,12 +105,12 @@ int ver_mgr::gc(const ulong &ts) {
 	int r = sdb::SUCCESS;
 	ver_mtx.lock();
 	for (auto it = ver_data.begin(); it != ver_data.end(); ++it) {
-		list<ver_item *> * vil  = it->second;
+		list<ver_item *> * vil = it->second;
 		row_item ri = it->first;
 		bool elder = false;
 		auto vit = vil->begin();
 
-		// move the ver_item element just elder than the timestamp specified with ts parameter
+		// move to the ver_item element just elder than the timestamp specified with ts parameter
 		for (; !elder && vit != vil->end(); ++vit) {
 			elder = (*vit)->ts > ts;
 		}

@@ -21,12 +21,10 @@ const int ACTION_HEADER_LENGTH = 15;
 
 const int NON_TRANSACTINAL_TIMESTAMP(0);
 
-
 struct row_item;
-struct action;
 struct trans;
 typedef row_item * row_item_ptr;
-typedef action * action_ptr;
+
 
 
 typedef unsigned long timestamp;
@@ -144,9 +142,11 @@ struct action {
 	trans * ref_trans;
 };
 
+typedef action * action_ptr;
+
 struct trans {
 
-	timestamp tid;
+	timestamp tid = NON_TRANSACTINAL_TIMESTAMP;
 
 	bool ar; // auto restart
 
