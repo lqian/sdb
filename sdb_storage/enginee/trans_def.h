@@ -21,10 +21,6 @@ const int ACTION_HEADER_LENGTH = 15;
 
 const int NON_TRANSACTINAL_TIMESTAMP(0);
 
-struct row_item;
-struct trans;
-typedef row_item * row_item_ptr;
-
 
 
 typedef unsigned long timestamp;
@@ -96,6 +92,8 @@ struct row_item {
 	}
 };
 
+typedef row_item * row_item_ptr;
+
 struct ver_item {
 	ulong ts;
 	int len;
@@ -122,6 +120,15 @@ struct ver_item {
 };
 
 
+struct row_item_ptr_comp {
+	bool operator()(const row_item * a, const row_item * b) const {
+		return  (a->seg_id < b->seg_id)
+				|| (a->seg_id == b->seg_id && a->blk_off < b->blk_off)
+				|| (a->seg_id == b->seg_id && a->blk_off == b->blk_off
+						&& a->row_idx < b->row_idx);
+	}
+};
+
 struct row_item_comp {
 	bool operator()(const row_item & a, const row_item & b) const {
 		return (a.seg_id < b.seg_id)
@@ -139,7 +146,6 @@ struct action {
 	timestamp aid;
 	action_op op;
 	std::list<row_item_ptr> * row_items_ptr;
-	trans * ref_trans;
 };
 
 typedef action * action_ptr;

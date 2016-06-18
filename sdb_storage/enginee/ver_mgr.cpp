@@ -17,7 +17,7 @@ ver_mgr::ver_mgr(const ulong & max) {
 /**
  * ver_item list is order descent by timestamp
  */
-int ver_mgr::add_ver(const row_item & ri, ver_item * vi) {
+int ver_mgr::add_ver(row_item * ri, ver_item * vi) {
 	ver_mtx.lock();
 	if (this->ver_data_size + vi->len > max_ver_data_size) {
 		return EXCEED_MAX_VER_DATA_SIZE;
@@ -56,7 +56,7 @@ int ver_mgr::add_ver(const row_item & ri, ver_item * vi) {
 	}
 }
 
-int ver_mgr::del_ver(const row_item & ri, const ulong &ts) {
+int ver_mgr::del_ver(row_item * ri, const ulong &ts) {
 	int r = VER_ITEM_DELETE_SUCCESS;
 	ver_mtx.lock();
 	auto it = ver_data.find(ri);
@@ -91,7 +91,7 @@ int ver_mgr::del_ver_for_trans(const trans* tr) {
 		if (a->op == action_op::WRITE) {
 			for (auto ril = a->row_items_ptr->begin();
 					ril != a->row_items_ptr->end(); ril++) {
-				row_item ri = (*ril);
+				row_item * ri = (*ril);
 				this->del_ver(ri, tr->tid);
 			}
 		}
@@ -106,7 +106,7 @@ int ver_mgr::gc(const ulong &ts) {
 	ver_mtx.lock();
 	for (auto it = ver_data.begin(); it != ver_data.end(); ++it) {
 		list<ver_item *> * vil = it->second;
-		row_item ri = it->first;
+		row_item * ri = it->first;
 		bool elder = false;
 		auto vit = vil->begin();
 
@@ -121,7 +121,7 @@ int ver_mgr::gc(const ulong &ts) {
 			// else free the memory of elder and remove them
 			if (vil->size() == 1) {
 				ver_item * vi = *vil->begin();
-				_seg_mgr->write(&ri, vi->buff, vi->len);
+				_seg_mgr->write(ri, vi->buff, vi->len);
 				vi->free();
 				delete it->second;
 				ver_data.erase(it);

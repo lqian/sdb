@@ -39,12 +39,9 @@ private:
 	bool gc_empty_row_item_immediately = false;
 	ulong ver_data_size = 0;
 	ulong max_ver_data_size;
-	map<row_item, list<ver_item *> *, row_item_comp> ver_data;
+	map<row_item *, list<ver_item *> *, row_item_ptr_comp> ver_data;
 	std::mutex ver_mtx;
-
 	seg_mgr * _seg_mgr = & sdb::enginee::LOCAL_SEG_MGR;
-
-
 
 public:
 	ver_mgr(const ulong & max = VER_MGR_DEFAULT_VER_DATA_SIZE);
@@ -54,9 +51,9 @@ public:
 	ver_mgr(const ver_mgr && another) = delete;
 	ver_mgr & operator=(const ver_mgr& antoher) = delete;
 
-	int add_ver(const row_item & ri,  ver_item * vi);
+	int add_ver(row_item * ri,  ver_item * vi);
 
-	int del_ver(const row_item & ri, const ulong & ts);
+	int del_ver(row_item * ri, const ulong & ts);
 
 	int del_ver_for_trans(const trans * tr);
 

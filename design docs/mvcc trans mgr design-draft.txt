@@ -15,3 +15,4 @@ mvcc trans mgr design draft
 
 7, trans_mgr的回收线程定期调用ver_mgr.gc函数时，传入att中最小的时间戳，回收老的版本
 
+trans : {ts, status, ar, action list}
