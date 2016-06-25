@@ -32,7 +32,20 @@ template<class T> class thread_pool;
  */
 class runnable {
 public:
+	virtual ~runnable(){};
+
 	virtual void run() {
+	}
+
+	virtual int status() {
+		return -1;
+	}
+
+	/*
+	 * when run method execution is not successful, get some hint via this method
+	 */
+	virtual string msg() {
+		return "no msg";
 	}
 };
 
@@ -59,6 +72,7 @@ private:
 		condition.notify_one();
 		mutex.unlock();
 	}
+
 	bool insert(T & t, long ms) {
 		bool success = false;
 		mutex.lock();
@@ -72,6 +86,7 @@ private:
 
 		return success;
 	}
+
 	void push_back(T &t) {
 		mutex.lock();
 		condition.wait(mutex, [this]() {return not_full();});
@@ -183,14 +198,13 @@ private:
 			function<void()> exec_runnable;
 			T t;
 			if (lock_timeout <= 0) {
-				if (inque.take_to(&t)) {
+				if (inque.take_to(t)) {
 					exec_runnable();
 					outque.push_back(t);
 				}
 			} else {
-
-				if (inque.take_to(&t, lock_timeout)) {
-					//				static_assert(std::is_base_of<runnable, T>::value, true);
+				if (inque.take_to(t, lock_timeout)) {
+					//static_assert(std::is_base_of<runnable, T>::value, true);
 					exec_runnable = std::bind(&runnable::run, &t);
 					exec_runnable();
 					outque.push_back(t, lock_timeout);

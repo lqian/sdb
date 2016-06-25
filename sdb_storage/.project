@@ -3,7 +3,6 @@
 	<name>sdb_storage</name>
 	<comment></comment>
 	<projects>
-		<project>sdb_thread_pool</project>
 	</projects>
 	<buildSpec>
 		<buildCommand>

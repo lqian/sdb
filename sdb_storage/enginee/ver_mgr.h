@@ -33,6 +33,11 @@ const int EXCEED_MAX_VER_DATA_SIZE(6);
 
 class ver_gc_thread;
 
+/*
+ * in MVCC control, a row_item/data_item has several versions represented by *ver_item* struct
+ *
+ * ver_mgr holds all ver_item in memory and manage it.
+ */
 class ver_mgr {
 	friend class ver_gc;
 private:

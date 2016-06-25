@@ -8,10 +8,10 @@
 #ifndef TRANS_MGR_H_
 #define TRANS_MGR_H_
 
-#include <thread_pool.h>
 #include <map>
 #include <thread>
 
+#include "../common/thread_pool.h"
 #include "trans_def.h"
 #include "ver_mgr.h"
 #include "log_mgr.h"
@@ -38,6 +38,8 @@ using namespace sdb::common;
 
 typedef trans * trans_ptr;
 
+class trans_task;
+
 enum trans_mgr_status {
 	INSTANTIAL, OPENED, CLOSING, CLOSED
 };
@@ -55,7 +57,7 @@ private:
 
 	map<timestamp, trans_ptr> att;  //active transaction table
 	ts_chrono * thp;  				// ts_chrono ptr
-	thread_pool * tpp;  			// thread pool ptr
+	thread_pool<trans_task> * tpp;  // thread pool ptr
 	ver_mgr * vmp;					// version manager ptr
 	log_mgr * lmp;					// log mgr ptr
 	thread * gc_thread;
@@ -137,14 +139,23 @@ class trans_task: public sdb::common::runnable {
 private:
 	trans_mgr * tm;
 	ver_mgr * vmp;
-	trans * t;
+	trans * t = nullptr;
 public:
+	trans_task(){};
 	trans_task(trans_mgr *_tm, trans* _t) :
 			tm(_tm), t(_t) {
 		this->vmp = _tm->vmp;
 	}
 
+	trans_task(const trans_task & another) {
+		this->tm = another.tm;
+		this->vmp = another.vmp;
+		this->t = another.t;
+	}
+
 	virtual void run();
+	virtual int status();
+	virtual string msg();
 
 };
 

@@ -14,7 +14,7 @@ int trans_mgr::open() {
 	int r = sdb::SUCCESS;
 
 	// init thread pool and gc thread
-	tpp = new thread_pool(core_num, max_queue, lock_timeout);
+	tpp = new thread_pool<trans_task>(core_num, max_queue, lock_timeout);
 	thp = &sdb::enginee::TS_CHRONO;
 	thp->renew_ts();
 	gc_thread = new thread(&trans_mgr::gc_version, this);
@@ -78,6 +78,9 @@ void trans_mgr::remove_att_trans(const timestamp & ts) {
 
 void trans_task::run() {
 //TODO implements mvcc trans execute logic
+	auto it = t->actions_ptr->iterator;
+
+	t->actions_ptr;
 }
 
 void trans_mgr::gc_version() {

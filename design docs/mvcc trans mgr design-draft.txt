@@ -11,8 +11,17 @@ mvcc trans mgr design draft
 
 5，trans_mgr支持 read_committed, repeat_read, searilizable隔离级别，不支持read_uncommitted, 默认repeat_read隔离级别
 
-6，trans_mgr内置线程池trans_mgr_thread_pool，trans被提交到trans_mgr的事务队列中trans_queue，有一个事务派发线程从trans_queue中取trans，变换成可被执行的线程池函数，提交到trans_mgr_thread_pool被执行。
+6，在trans_mgr中，提交的事务,trans被转换成事务任务，trans_task到trans_mgr内置线程池中去执行，trans_task的run方法实现单个事务的执行逻辑，并且在执行完成后给出事务任务的最终执行状态。
 
 7, trans_mgr的回收线程定期调用ver_mgr.gc函数时，传入att中最小的时间戳，回收老的版本
 
 trans : {ts, status, ar, action list}
+
+trans_trask:run方法逻辑
+1， 如果action表示一个读操作，其时间戳为t，首先从ver_mgr中查找，
+	如果没有找到，从seg_mgr中查找，并把seg_mgr中对应的data_item数据复制到action的buffer之中
+        如果找到，ver_list仅仅存在wts比ts大的ver_item的，终止当前事务 (从seg_mgr中读取相应的data_item数据)。
+	如果找到，ver_list存在wts比ts小的ver_item,从ver_list中选取wts恰恰比ts小的ver_item,复制数据到此action的buffer之中。      
+2， 如果action表示一个写操作，首先从ver_mgr中查找，如果没有找到，直接写入此action中所包含的数据，
+	如果找到，存在一个ver_item的rts比ts大，终止此事务。
+                否则，把action中的buffer根据ts写入到ver_list中合适的位置

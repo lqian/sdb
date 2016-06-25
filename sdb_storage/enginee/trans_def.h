@@ -94,6 +94,9 @@ struct row_item {
 
 typedef row_item * row_item_ptr;
 
+/*
+ *
+ */
 struct ver_item {
 	ulong ts;
 	int len;
