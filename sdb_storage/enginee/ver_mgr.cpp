@@ -15,45 +15,52 @@ ver_mgr::ver_mgr(const ulong & max) {
 }
 
 /**
- * ver_item list is order descent by timestamp
+ * ver_item list is order descent by rts
  */
 int ver_mgr::add_ver(row_item * ri, ver_item * vi) {
+	int r = sdb::FAILURE;
 	ver_mtx.lock();
-	if (this->ver_data_size + vi->len > max_ver_data_size) {
-		return EXCEED_MAX_VER_DATA_SIZE;
-	}
-	auto it = ver_data.find(ri);
-	if (it != ver_data.end()) {
-		list<ver_item *> * vil = it->second;
-		auto vit = vil->begin();
-		for (; vit != vil->end(); ++vit) {
-			ver_item * v = *vit;
-			if (vi->ts > v->ts) {
-				break;
-			} else if (v->ts == vi->ts) {
-				return VER_ITEM_EXISTED;
+	int len = vi->len;
+	if (cv_data_full.wait_for(ver_mtx, lock_timeout,
+			[this, len]() {return is_hold_for(len);})) {
+		auto it = ver_data.find(ri);
+		if (it != ver_data.end()) {
+			list<ver_item *> * vil = it->second;
+			auto vit = vil->begin();
+			for (; vit != vil->end(); ++vit) {
+				ver_item * v = *vit;
+				if (vi->ts > v->ts) {
+					break;
+				} else if (v->ts == vi->ts) {
+					r = VER_ITEM_EXISTED;
+				}
+				// vi.ts < v.ts, continue to move the iterator point
+				//else {
+				//}
 			}
-			// vi.ts < v.ts, continue to move the iterator point
-			//else {
-			//}
-		}
 
-		vil->insert(vit, vi);
-		ver_data_size += vi->len;
-		ver_mtx.unlock();
-		return VER_INSERT_SUCCESS;
-	} else {
-		// row_item not existed in ver_data, create a ver_list for the row_item
-		// and push the new version
-		list<ver_item *> * vil = new list<ver_item *>;
-		vil->push_back(vi);
-		auto ret = ver_data.insert(make_pair(ri, vil));
-		if (ret.second) {
+			vil->insert(vit, vi);
 			ver_data_size += vi->len;
+			r = VER_INSERT_SUCCESS;
+		} else {
+			// row_item not existed in ver_data, create a ver_list for the row_item
+			// and push the new version
+			list<ver_item *> * vil = new list<ver_item *>;
+			vil->push_back(vi);
+			auto ret = ver_data.insert(make_pair(ri, vil));
+			if (ret.second) {
+				ver_data_size += vi->len;
+			}
+			r = ret.second ? VER_INSERT_SUCCESS : VER_INSERT_FAILURE;
 		}
-		ver_mtx.unlock();
-		return ret.second ? VER_INSERT_SUCCESS : VER_INSERT_FAILURE;
+		cv_data_full.notify_one();
+
+	} else {
+		r =  LOCK_TIMEOUT;
 	}
+	ver_mtx.unlock();
+	return r;
+
 }
 
 int ver_mgr::del_ver(row_item * ri, const ulong &ts) {
@@ -66,7 +73,7 @@ int ver_mgr::del_ver(row_item * ri, const ulong &ts) {
 		auto vit = vil->begin();
 		for (; !found && vit != vil->end(); ++vit) {
 			ver_item * v = *vit;
-			found = (v->ts == ts);
+			found = (v->rts == ts);
 		}
 		if (found) {
 			vil->erase(vit);
@@ -98,6 +105,53 @@ int ver_mgr::del_ver_for_trans(const trans* tr) {
 	}
 }
 
+int ver_mgr::read_ver(row_item *ri, const timestamp & ts, ver_item * vi) {
+	int r = sdb::FAILURE;
+	ver_mtx.lock();
+	auto it = ver_data.find(ri);
+	if (it != ver_data.end()) {
+		list<ver_item *> * vil = it->second;
+		auto it = vil->begin();
+		for (; it != vil->end(); ++it) {
+			ver_item * v = *it;
+
+			// read the first ver_item'ts less then the ts and
+			// ver_item'cmt is true
+			if (v->ts < ts && v->cmt) {
+				vi->rts = ts;
+				vi->ts = ts;
+				vi->wts = v->wts;
+				if (v->ref_row_item) {
+					vi->ref_row_item = v->ref_row_item;
+					vi->p_row_item = v->p_row_item;
+				}
+				else {
+					vi->len = v->len;
+					vi->buff = v->buff;
+				}
+				break;
+			}
+		}
+
+		it = vil->erase(it);
+		vil->insert(it, vi);
+	} else {
+		char_buffer buff;
+		if (_seg_mgr->get_row(ri, buff) == sdb::SUCCESS) {
+			vi = new ver_item;
+			vi->ts = ts;
+			vi->rts = ts;
+			vi->ref_row_item = true;
+			vi->cmt = true;
+			vi->p_row_item = ri;
+			vi->len = buff.size();
+			r = sdb::SUCCESS;
+		}
+	}
+	ver_mtx.unlock();
+	return r;
+}
+
 /*
  * scan all row_item's ver_data, remove the elder version and save to segment
  */
@@ -112,7 +166,7 @@ int ver_mgr::gc(const ulong &ts) {
 
 		// move to the ver_item element just elder than the timestamp specified with ts parameter
 		for (; !elder && vit != vil->end(); ++vit) {
-			elder = (*vit)->ts > ts;
+			elder = (*vit)->rts > ts;
 		}
 
 		if (elder) {
@@ -129,7 +183,7 @@ int ver_mgr::gc(const ulong &ts) {
 				for (; vit != vil->end(); vit++) {
 					(*vit)->free();
 				}
-				vil->remove_if([ts] (const ver_item * e) {return e->ts < ts;});
+				vil->remove_if([ts] (const ver_item * e) {return e->rts < ts;});
 			}
 		}
 	}

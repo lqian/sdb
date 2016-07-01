@@ -1,6 +1,6 @@
 row_item = {seg_id, blk_off, row_idx}
 ver_item = {timestamp, len, char *}
-在版本数据区域内，vers_data_area，以row_item为key，以一个list<ver_item>为value，其中ver_item列表中按照timestamp顺序排列, 用红黑树保存row_item和list<ver_item>
+在版本数据区域内，vers_data_area，以row_item为key，以一个list<ver_item>为value，其中ver_item列表中按照rts倒排序, 用红黑树保存row_item和list<ver_item>
 
 当ver_item被写入segment时，如果它的row_item发生变化，用新的row_item替换vers_data_area中原row_item
 

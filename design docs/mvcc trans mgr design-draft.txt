@@ -14,13 +14,14 @@ mvcc trans mgr design draft
 6，在trans_mgr中，提交的事务,trans被转换成事务任务，trans_task到trans_mgr内置线程池中去执行，trans_task的run方法实现单个事务的执行逻辑，并且在执行完成后给出事务任务的最终执行状态。
 
 7, trans_mgr的回收线程定期调用ver_mgr.gc函数时，传入att中最小的时间戳，回收老的版本
+	ver_item具有rts、wts，目前是按照rts倒排序，回收t > rts的ver_time后，还需要扫描ver_list,回收t < wts的ver_item
 
 trans : {ts, status, ar, action list}
 
 trans_trask:run方法逻辑
 1， 如果action表示一个读操作，其时间戳为t，首先从ver_mgr中查找，
-	如果没有找到，从seg_mgr中查找，并把seg_mgr中对应的data_item数据复制到action的buffer之中
-        如果找到，ver_list仅仅存在wts比ts大的ver_item的，终止当前事务 (从seg_mgr中读取相应的data_item数据)。
+	如果没有找到，从seg_mgr中查找，并把seg_mgr中对应的data_item数据复制到action的buffer之中	 	
+        如果找到，ver_list仅仅存在wts比ts大的ver_item的，从seg_mgr中读取相应的data_item数据。新建一个ver_item, v,使得v.rts=t
 	如果找到，ver_list存在wts比ts小的ver_item,从ver_list中选取wts恰恰比ts小的ver_item,复制数据到此action的buffer之中。      
 2， 如果action表示一个写操作，首先从ver_mgr中查找，如果没有找到，直接写入此action中所包含的数据，
 	如果找到，存在一个ver_item的rts比ts大，终止此事务。

@@ -21,8 +21,6 @@ const int ACTION_HEADER_LENGTH = 15;
 
 const int NON_TRANSACTINAL_TIMESTAMP(0);
 
-
-
 typedef unsigned long timestamp;
 
 namespace sdb {
@@ -98,34 +96,38 @@ typedef row_item * row_item_ptr;
  *
  */
 struct ver_item {
-	ulong ts;
-	int len;
+	ulong ts; // a timestamp represent a transaction action operate on it. max(rts, wts)
+	ulong rts = NON_TRANSACTINAL_TIMESTAMP;   //read timestamp
+	ulong wts = NON_TRANSACTINAL_TIMESTAMP;   // write timestamp
+	bool ref_row_item = false;
+	bool cmt = false;   // commit flag
+	int len = 0;
 	char * buff;
 
 	row_item * p_row_item;
 
 	inline bool operator ==(const ver_item & vi) {
 		return this == &vi
-				|| (ts == vi.ts && len == vi.len && p_row_item == vi.p_row_item);
+				|| (ts == vi.ts && rts == vi.rts && wts == vi.wts
+						&& len == vi.len && vi.p_row_item == p_row_item);
 	}
 
-	inline bool free() {
-		if (len > 0) {
+	inline void free() {
+		if (ref_row_item) {
+			delete p_row_item;
+		} else if (len > 0) {
 			delete[] buff;
-			len = 0;
-			return true;
 		}
-		return false;
 	}
 
 	~ver_item() {
+
 	}
 };
 
-
 struct row_item_ptr_comp {
 	bool operator()(const row_item * a, const row_item * b) const {
-		return  (a->seg_id < b->seg_id)
+		return (a->seg_id < b->seg_id)
 				|| (a->seg_id == b->seg_id && a->blk_off < b->blk_off)
 				|| (a->seg_id == b->seg_id && a->blk_off == b->blk_off
 						&& a->row_idx < b->row_idx);
@@ -140,7 +142,6 @@ struct row_item_comp {
 						&& a.row_idx < b.row_idx);
 	}
 };
-
 
 /*
  * action in transaction represents operation on row items

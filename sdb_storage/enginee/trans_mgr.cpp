@@ -77,10 +77,26 @@ void trans_mgr::remove_att_trans(const timestamp & ts) {
 }
 
 void trans_task::run() {
-//TODO implements mvcc trans execute logic
-	auto it = t->actions_ptr->iterator;
+	//TODO implements mvcc trans execute logic
+	auto it = t->actions_ptr->begin();
+	auto end = t->actions_ptr->end();
+	while (it != end) {
+		action_ptr a = *it;
+		a->aid = this->tm->thp->next_ts();
+		switch (a->op) {
+		case action_op::READ: {
+			break;
+		}
+		case action_op::WRITE: {
+			break;
+		}
+		default: {
+			break;
+		}
+		}
 
-	t->actions_ptr;
+		it++;
+	}
 }
 
 void trans_mgr::gc_version() {
