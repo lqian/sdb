@@ -149,7 +149,8 @@ struct row_item_comp {
 struct action {
 	timestamp aid;
 	action_op op;
-	std::list<row_item_ptr> * row_items_ptr;
+	std::list<row_item_ptr> * row_items_ptr = nullptr;
+	std::list<ver_item *> * ver_items_prt = nullptr;
 };
 
 typedef action * action_ptr;
@@ -163,6 +164,8 @@ struct trans {
 	timestamp cid;
 
 	trans_status status;
+
+	isolation iso;
 
 	list<action_ptr> * actions_ptr;
 

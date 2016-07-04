@@ -59,7 +59,9 @@ private:
 	bool stopping_waiting;
 	int max_task_num;
 
-	void stopping();
+	void stopping() {
+		stopping_waiting = true;
+	}
 
 	condition_queue(int s = DEFAULT_QUEUE) :
 			max_task_num(s), stopping_waiting(false) {

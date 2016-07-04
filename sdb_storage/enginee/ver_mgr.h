@@ -28,14 +28,18 @@ using namespace std::chrono;
 
 const ulong VER_MGR_DEFAULT_VER_DATA_SIZE = 0x200000L;
 
-const int VER_INSERT_FAILURE(0);
-const int VER_INSERT_SUCCESS(1);
-const int VER_ITEM_EXISTED(2);
+
+const int VER_WRITE_SUCCESS(1);
+const int VER_READ_SUCCESS(2);
 const int VER_ITEM_DELETE_SUCCESS(3);
-const int ROW_ITEM_NOT_EXISTED(4);
-const int VER_NOT_EXISTED(5);
-const int EXCEED_MAX_VER_DATA_SIZE(6);
+
 const int LOCK_TIMEOUT(-0x700);
+const int VER_ITEM_EXISTED(-0x701);
+const int ROW_ITEM_NOT_EXISTED(-0x702);
+const int EXCEED_MAX_VER_DATA_SIZE(-0x703);
+const int VER_NOT_EXISTED(-0x704);
+const int VER_WRITE_FAILURE(-0x705);
+const int VER_ITEM_ABORTED(-0x706);
 
 class ver_gc_thread;
 
@@ -69,8 +73,8 @@ public:
 	ver_mgr(const ver_mgr && another) = delete;
 	ver_mgr & operator=(const ver_mgr& antoher) = delete;
 
-	int read_ver(row_item * ri, const timestamp & ts, ver_item * vi);
-	int write_ver(row_item * ri,  ver_item * vi);
+	int read_ver(row_item * ri, const timestamp & ts, ver_item * vi, isolation l);
+	int write_ver(ver_item * vi);
 
 	int del_ver(row_item * ri, const ulong & ts);
 

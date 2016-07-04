@@ -44,6 +44,10 @@ enum trans_mgr_status {
 	INSTANTIAL, OPENED, CLOSING, CLOSED
 };
 
+enum trans_task_status {
+	TTS_INITIALIZED, TTS_ACTIVE, TTS_RUNNING, TTS_CLOSED, TTS_EXCEPTIONAL
+};
+
 class trans_mgr {
 	friend class trans_task;
 private:
@@ -140,6 +144,7 @@ private:
 	trans_mgr * tm;
 	ver_mgr * vmp;
 	trans * t = nullptr;
+	trans_task_status tts = trans_task_status::TTS_INITIALIZED;
 public:
 	trans_task(){};
 	trans_task(trans_mgr *_tm, trans* _t) :

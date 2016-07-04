@@ -39,6 +39,7 @@ int trans_mgr::submit_trans(trans * tr) {
 		tr->tid = thp->next_ts();
 		trans_task tt(this, tr);
 		tpp->push_back(tt);
+		tr->status = trans_status::INITIAL;
 	} else {
 		r = ALREADY_SUBMIT_TRANSACTION;
 	}
@@ -77,17 +78,35 @@ void trans_mgr::remove_att_trans(const timestamp & ts) {
 }
 
 void trans_task::run() {
-	//TODO implements mvcc trans execute logic
+	bool flag = true;
 	auto it = t->actions_ptr->begin();
 	auto end = t->actions_ptr->end();
-	while (it != end) {
+	while (it != end && flag) {
 		action_ptr a = *it;
 		a->aid = this->tm->thp->next_ts();
 		switch (a->op) {
 		case action_op::READ: {
+			for (auto it = a->row_items_ptr->begin();
+					flag && it != a->row_items_ptr->end(); ++it) {
+				row_item * p_row_item = *it;
+				ver_item * p_ver_item = new ver_item;
+				p_ver_item->p_row_item = p_row_item;
+				flag = vmp->read_ver(p_row_item, t->tid, p_ver_item, t->iso)
+						> 0;
+				if (flag) {
+					a->ver_items_prt->push_back(p_ver_item);
+				}
+			}
 			break;
 		}
 		case action_op::WRITE: {
+			for (auto it = a->ver_items_prt->begin();
+					flag && it != a->ver_items_prt->end(); ++it) {
+				ver_item* p_ver_item = *it;
+				p_ver_item->ts = t->tid;
+				flag = vmp->write_ver(p_ver_item) > 0;
+
+			}
 			break;
 		}
 		default: {
@@ -97,6 +116,26 @@ void trans_task::run() {
 
 		it++;
 	}
+
+	if (flag) {
+		t->status = trans_status::PARTIALLY_COMMITTED;
+		if (tm->lmp->log_commit(t->tid) > 0) {
+			t->status = trans_status::COMMITTED;
+		} else {
+			t->status = trans_status::FAILED;
+		}
+	} else {
+		t->status = trans_status::FAILED;
+	}
+
+}
+
+string trans_task::msg(){
+	return ""; // TODO msg not define yet!
+}
+
+int trans_task::status() {
+	return tts;
 }
 
 void trans_mgr::gc_version() {

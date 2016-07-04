@@ -41,7 +41,7 @@ int ver_mgr::add_ver(row_item * ri, ver_item * vi) {
 
 			vil->insert(vit, vi);
 			ver_data_size += vi->len;
-			r = VER_INSERT_SUCCESS;
+			r = VER_WRITE_SUCCESS;
 		} else {
 			// row_item not existed in ver_data, create a ver_list for the row_item
 			// and push the new version
@@ -51,12 +51,12 @@ int ver_mgr::add_ver(row_item * ri, ver_item * vi) {
 			if (ret.second) {
 				ver_data_size += vi->len;
 			}
-			r = ret.second ? VER_INSERT_SUCCESS : VER_INSERT_FAILURE;
+			r = ret.second ? VER_WRITE_SUCCESS : VER_WRITE_FAILURE;
 		}
 		cv_data_full.notify_one();
 
 	} else {
-		r =  LOCK_TIMEOUT;
+		r = LOCK_TIMEOUT;
 	}
 	ver_mtx.unlock();
 	return r;
@@ -80,6 +80,7 @@ int ver_mgr::del_ver(row_item * ri, const ulong &ts) {
 			if (gc_empty_row_item_immediately && vil->empty()) {
 				delete vil;
 				ver_data.erase(ri);
+				cv_data_full.notify_one();
 			}
 		} else {
 			r = VER_NOT_EXISTED;
@@ -105,7 +106,8 @@ int ver_mgr::del_ver_for_trans(const trans* tr) {
 	}
 }
 
-int ver_mgr::read_ver(row_item *ri, const timestamp & ts, ver_item * vi) {
+int ver_mgr::read_ver(row_item *ri, const timestamp & ts, ver_item * vi,
+		isolation l) {
 	int r = sdb::FAILURE;
 	ver_mtx.lock();
 	auto it = ver_data.find(ri);
@@ -115,27 +117,44 @@ int ver_mgr::read_ver(row_item *ri, const timestamp & ts, ver_item * vi) {
 		for (; it != vil->end(); ++it) {
 			ver_item * v = *it;
 
-			// read the first ver_item'ts less then the ts and
-			// ver_item'cmt is true
-			if (v->ts < ts && v->cmt) {
-				vi->rts = ts;
-				vi->ts = ts;
-				vi->wts = v->wts;
-				if (v->ref_row_item) {
-					vi->ref_row_item = v->ref_row_item;
-					vi->p_row_item = v->p_row_item;
+			// read the first ver_item'ts less then the ts
+			if (isolation::READ_UNCOMMITTED == l) {
+				if (v->ts < ts) {
+					vi->rts = ts;
+					vi->ts = ts;
+					vi->wts = v->wts;
+					if (v->ref_row_item) {
+						vi->ref_row_item = v->ref_row_item;
+						vi->p_row_item = v->p_row_item;
+					} else {
+						vi->len = v->len;
+						vi->buff = v->buff;
+					}
+					break;
 				}
-				else {
-					vi->len = v->len;
-					vi->buff = v->buff;
+			}
+			// read the first ver_item'ts less then the ts and ver_item'cmt is true
+			else {
+				if (v->ts < ts && v->cmt) {
+					vi->rts = ts;
+					vi->ts = ts;
+					vi->wts = v->wts;
+					if (v->ref_row_item) {
+						vi->ref_row_item = v->ref_row_item;
+						vi->p_row_item = v->p_row_item;
+					} else {
+						vi->len = v->len;
+						vi->buff = v->buff;
+					}
+					break;
 				}
-				break;
 			}
 		}
 
 		it = vil->erase(it);
 		vil->insert(it, vi);
-	} else {
+		r = VER_READ_SUCCESS;
+	} else {  //row item must be committed status when found it in segment
 		char_buffer buff;
 		if (_seg_mgr->get_row(ri, buff) == sdb::SUCCESS) {
 			vi = new ver_item;
@@ -145,8 +164,38 @@ int ver_mgr::read_ver(row_item *ri, const timestamp & ts, ver_item * vi) {
 			vi->cmt = true;
 			vi->p_row_item = ri;
 			vi->len = buff.size();
-			r = sdb::SUCCESS;
+			r = VER_READ_SUCCESS;
 		}
+	}
+	ver_mtx.unlock();
+	return r;
+}
+
+int ver_mgr::write_ver(ver_item * vi) {
+	int r = sdb::FAILURE;
+	ver_mtx.lock();
+	auto it = ver_data.find(vi->p_row_item);
+	if (it != ver_data.end()) {
+		// check the ts whether exists in ver_item_list
+		auto vil = it->second;
+		bool found = false;
+		auto vit = vil->begin();
+		for (; !found && vit != vil->end(); ++vit) {
+			ver_item * v = *vit;
+			found = (v->ts == vi->ts);
+			if (found) {
+				r = VER_ITEM_EXISTED;
+			} else if (v->wts < vi->ts && v->rts > vi->ts) {
+				r = VER_ITEM_ABORTED;
+			}
+			else {
+				//insert ver_item to head of the list
+				//TODO need Saga rule?
+				r = add_ver(vi->p_row_item, vi);
+			}
+		}
+	} else {
+		r = add_ver(vi->p_row_item, vi);
 	}
 	ver_mtx.unlock();
 	return r;
