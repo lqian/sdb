@@ -171,31 +171,30 @@ int ver_mgr::read_ver(row_item *ri, const timestamp & ts, ver_item * vi,
 	return r;
 }
 
-int ver_mgr::write_ver(ver_item * vi) {
+int ver_mgr::write_ver(ver_item * nvi) {
 	int r = sdb::FAILURE;
 	ver_mtx.lock();
-	auto it = ver_data.find(vi->p_row_item);
+	auto it = ver_data.find(nvi->p_row_item);
 	if (it != ver_data.end()) {
 		// check the ts whether exists in ver_item_list
 		auto vil = it->second;
 		bool found = false;
 		auto vit = vil->begin();
 		for (; !found && vit != vil->end(); ++vit) {
-			ver_item * v = *vit;
-			found = (v->ts == vi->ts);
+			ver_item * vi = *vit;
+			found = (vi->ts == nvi->ts);
 			if (found) {
 				r = VER_ITEM_EXISTED;
-			} else if (v->wts < vi->ts && v->rts > vi->ts) {
+			} else if (vi->wts < nvi->ts && vi->rts > nvi->ts) {
 				r = VER_ITEM_ABORTED;
 			}
 			else {
 				//insert ver_item to head of the list
-				//TODO need Saga rule?
-				r = add_ver(vi->p_row_item, vi);
+				r = add_ver(nvi->p_row_item, nvi);
 			}
 		}
 	} else {
-		r = add_ver(vi->p_row_item, vi);
+		r = add_ver(nvi->p_row_item, nvi);
 	}
 	ver_mtx.unlock();
 	return r;

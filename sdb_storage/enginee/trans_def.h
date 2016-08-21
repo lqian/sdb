@@ -13,6 +13,7 @@
 #include <mutex>
 #include <list>
 #include <ctime>
+#include <string>
 
 const short NEW_VALUE_BIT = 7;
 const short OLD_VALUE_BIT = 6;
@@ -20,6 +21,7 @@ const short OLD_VALUE_BIT = 6;
 const int ACTION_HEADER_LENGTH = 15;
 
 const int NON_TRANSACTINAL_TIMESTAMP(0);
+
 
 typedef unsigned long timestamp;
 
@@ -44,6 +46,16 @@ enum isolation {
 	SERIALIZABLE, REPEAT_READ, READ_COMMITTED, READ_UNCOMMITTED
 };
 
+const std::string trans_status_msg[] = {
+		"transaction is in initialized",
+		"transaction is executing",
+		"transaction is aborted",
+		"transaction is ready aborted",
+		"transaction is committed",
+		"transaction is partially committed",
+        "transaction is failed",
+        "transaction is re-assigned"};
+
 /*
  * 1) Active – the initial state; the transaction stays in this state while it is executing
  *
@@ -66,6 +78,8 @@ enum trans_status {
 	FAILED,
 	PRE_ASSIGN
 };
+
+
 
 struct row_item {
 	ulong seg_id;

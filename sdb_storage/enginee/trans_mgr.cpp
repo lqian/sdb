@@ -85,33 +85,33 @@ void trans_task::run() {
 		action_ptr a = *it;
 		a->aid = this->tm->thp->next_ts();
 		switch (a->op) {
-		case action_op::READ: {
-			for (auto it = a->row_items_ptr->begin();
-					flag && it != a->row_items_ptr->end(); ++it) {
-				row_item * p_row_item = *it;
-				ver_item * p_ver_item = new ver_item;
-				p_ver_item->p_row_item = p_row_item;
-				flag = vmp->read_ver(p_row_item, t->tid, p_ver_item, t->iso)
-						> 0;
-				if (flag) {
-					a->ver_items_prt->push_back(p_ver_item);
+			case action_op::READ: {
+				for (auto it = a->row_items_ptr->begin();
+						flag && it != a->row_items_ptr->end(); ++it) {
+					row_item * p_row_item = *it;
+					ver_item * p_ver_item = new ver_item;
+					p_ver_item->p_row_item = p_row_item;
+					flag = vmp->read_ver(p_row_item, t->tid, p_ver_item, t->iso)
+							> 0;
+					if (flag) {
+						a->ver_items_prt->push_back(p_ver_item);
+					}
 				}
+				break;
 			}
-			break;
-		}
-		case action_op::WRITE: {
-			for (auto it = a->ver_items_prt->begin();
-					flag && it != a->ver_items_prt->end(); ++it) {
-				ver_item* p_ver_item = *it;
-				p_ver_item->ts = t->tid;
-				flag = vmp->write_ver(p_ver_item) > 0;
+			case action_op::WRITE: {
+				for (auto it = a->ver_items_prt->begin();
+						flag && it != a->ver_items_prt->end(); ++it) {
+					ver_item* p_ver_item = *it;
+					p_ver_item->ts = t->tid;
+					flag = vmp->write_ver(p_ver_item) > 0;
 
+				}
+				break;
 			}
-			break;
-		}
-		default: {
-			break;
-		}
+			default: {
+				break;
+			}
 		}
 
 		it++;
@@ -130,8 +130,8 @@ void trans_task::run() {
 
 }
 
-string trans_task::msg(){
-	return ""; // TODO msg not define yet!
+string trans_task::msg() {
+	return trans_status_msg[status];
 }
 
 int trans_task::status() {
