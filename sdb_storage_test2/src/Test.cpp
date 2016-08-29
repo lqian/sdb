@@ -6,7 +6,6 @@
 #include <iostream>
 #include "storage/datafile.h"
 #include <algorithm>
-#include "tree/avl.h"
 #include "enginee/table_desc.h"
 #include "enginee/field_value.h"
 #include "enginee/sys_seg.h"
@@ -16,7 +15,6 @@
 
 using namespace std;
 using namespace sdb::common;
-using namespace sdb::tree;
 using namespace sdb::storage;
 using namespace sdb::enginee;
 

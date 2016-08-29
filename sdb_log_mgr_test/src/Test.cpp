@@ -5,6 +5,7 @@
 #include <forward_list>
 #include "enginee/log_mgr.h"
 #include "enginee/trans_mgr.h"
+#include "enginee/trans_def.h"
 
 using namespace sdb::enginee;
 using namespace sdb::common;
@@ -308,7 +309,7 @@ void log_entry_mgr_test() {
 	lmg.set_log_file_max_size(65536);
 	ASSERT(lmg.load() == sdb::SUCCESS);
 
-	data_item di;
+	row_item di;
 	di.seg_id = 1L;
 	di.blk_off = 1;
 	di.row_idx = 0;

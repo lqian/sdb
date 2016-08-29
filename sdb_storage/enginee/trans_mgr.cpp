@@ -131,7 +131,7 @@ void trans_task::run() {
 }
 
 string trans_task::msg() {
-	return trans_status_msg[status];
+	return trans_status_msg[tts];
 }
 
 int trans_task::status() {

@@ -664,7 +664,7 @@ struct data_block {
 	data_block *pre_blk, *next_blk;
 	segment *seg;
 
-	inline virtual void init(int off, ushort w_len) {
+	inline virtual void init(int off, unsigned short w_len) {
 		offset = off;
 		length = w_len - block_head_size;
 		buffer = new char[length + block_head_size];

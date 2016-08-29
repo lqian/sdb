@@ -1,4 +1,3 @@
-#include <thread_pool.h>
 #include "cute.h"
 #include "ide_listener.h"
 #include "cute_runner.h"
@@ -7,6 +6,11 @@
 #include <atomic>
 #include <map>
 #include <iostream>
+
+
+#include "enginee/trans_def.h"
+#include "common/thread_pool.h"
+
 
 using namespace std;
 using namespace sdb::common;
